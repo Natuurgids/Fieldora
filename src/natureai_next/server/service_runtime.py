@@ -8,7 +8,6 @@ honours operator drain/stop/revoke state before accepting new work.
 from __future__ import annotations
 
 import threading
-import time
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -87,7 +86,7 @@ class ServiceRuntimeSupervisor:
         return RuntimeState(
             self.service_id,
             state,
-            state in {ServiceState.ENROLLED, ServiceState.ACTIVE},
+            state is ServiceState.ACTIVE,
             state is ServiceState.REVOKED,
         )
 
@@ -99,8 +98,9 @@ class ServiceRuntimeSupervisor:
     ) -> bool:
         """Wait without process churn until work may be claimed.
 
-        Draining and stopped services stay resident/warm but do not claim new work.
-        Revoked or disappeared identities fail closed and never resume automatically.
+        Enrolled, draining, and stopped services stay resident/warm but do not claim
+        work. Revoked or disappeared identities fail closed and never resume
+        automatically.
         """
         if not 0.1 <= poll_seconds <= 60:
             raise ValueError("poll_seconds must be between 0.1 and 60")

@@ -12,7 +12,7 @@ _HEALTH_ALIASES = {
     "/health/ready": "/api/v1/health/ready",
 }
 
-_WEB_PLATFORM_PATCH = br"""
+_WEB_PLATFORM_PATCH = bytes(r"""
 
 /* Fieldora Platform: Library-first intake, collaboration, and operator surfaces. */
 (()=>{
@@ -60,7 +60,7 @@ _WEB_PLATFORM_PATCH = br"""
  q("review-determine")?.addEventListener("click",async()=>{const id=q("review-case-id").value.trim();if(!id)return;try{await api(`/api/v1/review-cases/${encodeURIComponent(id)}/determinations`,{method:"POST",body:JSON.stringify({assertion:q("review-assertion").value,confidence:Number(q("review-confidence").value),evidence:{source:"web-expert-review"}})});loadReview(id);loadCollaboration()}catch(e){q("collab-status").textContent=e.message}});
  q("review-accept")?.addEventListener("click",async()=>{const id=q("review-case-id").value.trim(),det=q("review-accept-id").value.trim();if(!id||!det)return;try{await api(`/api/v1/review-cases/${encodeURIComponent(id)}/accept`,{method:"POST",body:JSON.stringify({determination_id:det})});loadReview(id);loadCollaboration()}catch(e){q("collab-status").textContent=e.message}});
 })();
-"""
+""", "utf-8")
 
 
 def rewrite_public_target(method: str, target: str) -> str:

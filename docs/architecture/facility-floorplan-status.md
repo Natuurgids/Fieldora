@@ -27,10 +27,9 @@ Implemented in the branch:
 
 Certification evidence:
 
-- focused workflow run `32587069658` initially reached the runtime suite after all Ruff stages passed; 15 tests passed and the only two failures were missing Ubuntu `libEGL.so.1` dependencies for PySide6;
+- focused workflow run `32587004864` reached the runtime suite after all Ruff stages passed; 15 tests passed and the only two failures were missing Ubuntu `libEGL.so.1` dependencies for PySide6;
 - the workflow was corrected to install the required Qt runtime libraries rather than changing application code;
-- focused workflow run `32587069658` was superseded by run `32587069658`'s corrected successor, and run `32587069658` evidence is retained as the infrastructure diagnosis;
-- corrected workflow run `32587069658` successor on commit `956e7bc77463a8a996c6279451ab2348709e99a4` completed successfully: Qt setup, all focused Ruff stages and the complete facility unit/migration suite passed.
+- corrected focused workflow run `32587069658`, on commit `956e7bc77463a8a996c6279451ab2348709e99a4`, completed successfully: Qt setup, all focused Ruff stages and the complete facility unit/migration suite passed.
 
 Release invariants:
 

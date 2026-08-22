@@ -7,9 +7,9 @@ hierarchy and service remain authoritative.
 """
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 from types import MethodType
-from typing import Callable
 
 from PySide6.QtWidgets import (
     QHBoxLayout,

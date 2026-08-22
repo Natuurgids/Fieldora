@@ -1,9 +1,9 @@
 """Project-independent scientific intake and expert determination records.
 
-Library evidence is authoritative independently of projects.  A submission records how
-material entered the institution; a review case records a request for interpretation;
-determinations are immutable expert assertions that may later be accepted or superseded.
-Projects are optional references rather than ownership containers.
+Library evidence is authoritative independently of projects. Submissions preserve how
+material entered Fieldora. Review cases request interpretation. Determinations are
+immutable expert assertions; accepting one changes only the case decision, never the
+historical assertions.
 """
 
 from __future__ import annotations
@@ -76,16 +76,22 @@ class Determination:
 class CollaborationRepository(Protocol):
     def create_submission(self, **kwargs: Any) -> SubmissionRecord: ...
     def submission(self, submission_id: str) -> SubmissionRecord | None: ...
-    def submissions(self, organization_id: str, limit: int = 100) -> tuple[SubmissionRecord, ...]: ...
+    def submissions(
+        self, organization_id: str, limit: int = 100
+    ) -> tuple[SubmissionRecord, ...]: ...
     def create_review_case(self, **kwargs: Any) -> ReviewCase: ...
     def review_case(self, review_case_id: str) -> ReviewCase | None: ...
-    def review_cases(self, organization_id: str, limit: int = 100) -> tuple[ReviewCase, ...]: ...
+    def review_cases(
+        self, organization_id: str, limit: int = 100
+    ) -> tuple[ReviewCase, ...]: ...
     def add_determination(self, **kwargs: Any) -> Determination: ...
     def determinations(self, review_case_id: str) -> tuple[Determination, ...]: ...
-    def accept_determination(self, review_case_id: str, determination_id: str) -> ReviewCase: ...
+    def accept_determination(
+        self, review_case_id: str, determination_id: str
+    ) -> ReviewCase: ...
 
 
-_SCHEMA_SQLITE = """
+_SQLITE_SCHEMA = """
 CREATE TABLE IF NOT EXISTS scientific_submissions(
     submission_id TEXT PRIMARY KEY,
     organization_id TEXT NOT NULL,
@@ -132,14 +138,6 @@ CREATE TABLE IF NOT EXISTS scientific_determinations(
 );
 CREATE INDEX IF NOT EXISTS ix_scientific_determinations_case
     ON scientific_determinations(review_case_id,created_at_epoch,determination_id);
-CREATE TABLE IF NOT EXISTS scientific_review_events(
-    sequence INTEGER PRIMARY KEY AUTOINCREMENT,
-    review_case_id TEXT NOT NULL,
-    event_type TEXT NOT NULL,
-    actor_id TEXT NOT NULL,
-    detail_json TEXT NOT NULL,
-    occurred_at_epoch INTEGER NOT NULL
-);
 """
 
 
@@ -148,10 +146,12 @@ class SqliteCollaborationRepository:
         self._database_path = database_path
         database_path.parent.mkdir(parents=True, exist_ok=True)
         with self._connect() as connection:
-            connection.executescript(_SCHEMA_SQLITE)
+            connection.executescript(_SQLITE_SCHEMA)
 
     def _connect(self) -> sqlite3.Connection:
-        connection = sqlite3.connect(self._database_path, isolation_level=None, timeout=30)
+        connection = sqlite3.connect(
+            self._database_path, isolation_level=None, timeout=30
+        )
         connection.row_factory = sqlite3.Row
         connection.execute("PRAGMA foreign_keys=ON")
         connection.execute("PRAGMA journal_mode=WAL")
@@ -159,7 +159,7 @@ class SqliteCollaborationRepository:
         return connection
 
     def create_submission(self, **kwargs: Any) -> SubmissionRecord:
-        record = _submission_from_kwargs(kwargs)
+        record = _submission(kwargs)
         with self._connect() as connection:
             connection.execute(
                 "INSERT INTO scientific_submissions VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
@@ -178,29 +178,20 @@ class SqliteCollaborationRepository:
     def submissions(
         self, organization_id: str, limit: int = 100
     ) -> tuple[SubmissionRecord, ...]:
-        limit = max(1, min(int(limit), 500))
         with self._connect() as connection:
             rows = connection.execute(
                 "SELECT * FROM scientific_submissions WHERE organization_id=? "
                 "ORDER BY created_at_epoch DESC,submission_id DESC LIMIT ?",
-                (organization_id, limit),
+                (organization_id, _limit(limit)),
             ).fetchall()
         return tuple(SubmissionRecord(*row) for row in rows)
 
     def create_review_case(self, **kwargs: Any) -> ReviewCase:
-        record = _review_case_from_kwargs(kwargs)
+        record = _review_case(kwargs)
         with self._connect() as connection:
             connection.execute(
                 "INSERT INTO scientific_review_cases VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 tuple(asdict(record).values()),
-            )
-            self._event(
-                connection,
-                record.review_case_id,
-                "review_requested",
-                record.requested_by,
-                {"domain": record.domain, "specialty": record.specialty},
-                record.created_at_epoch,
             )
         return record
 
@@ -215,60 +206,46 @@ class SqliteCollaborationRepository:
     def review_cases(
         self, organization_id: str, limit: int = 100
     ) -> tuple[ReviewCase, ...]:
-        limit = max(1, min(int(limit), 500))
         with self._connect() as connection:
             rows = connection.execute(
                 "SELECT * FROM scientific_review_cases WHERE organization_id=? "
                 "ORDER BY updated_at_epoch DESC,review_case_id DESC LIMIT ?",
-                (organization_id, limit),
+                (organization_id, _limit(limit)),
             ).fetchall()
         return tuple(ReviewCase(*row) for row in rows)
 
     def add_determination(self, **kwargs: Any) -> Determination:
-        determination = _determination_from_kwargs(kwargs)
+        record = _determination(kwargs)
         with self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
             case = connection.execute(
-                "SELECT organization_id,state FROM scientific_review_cases "
-                "WHERE review_case_id=?",
-                (determination.review_case_id,),
+                "SELECT state FROM scientific_review_cases WHERE review_case_id=?",
+                (record.review_case_id,),
             ).fetchone()
             if case is None:
-                raise KeyError(determination.review_case_id)
+                raise KeyError(record.review_case_id)
             if str(case["state"]) == "closed":
                 raise ValueError("review case is closed")
             connection.execute(
-                "INSERT INTO scientific_determinations VALUES(?,?,?,?,?,?,?)",
+                "INSERT INTO scientific_determinations VALUES(?,?,?,?,?,?,?,?)",
                 (
-                    determination.determination_id,
-                    determination.review_case_id,
-                    determination.expert_id,
-                    determination.assertion,
-                    determination.confidence,
-                    json.dumps(
-                        determination.evidence_json,
-                        sort_keys=True,
-                        separators=(",", ":"),
-                    ),
-                    determination.created_at_epoch,
-                    determination.supersedes_id,
+                    record.determination_id,
+                    record.review_case_id,
+                    record.expert_id,
+                    record.assertion,
+                    record.confidence,
+                    json.dumps(record.evidence_json, sort_keys=True, separators=(",", ":")),
+                    record.created_at_epoch,
+                    record.supersedes_id,
                 ),
             )
             connection.execute(
-                "UPDATE scientific_review_cases SET state='under_review',updated_at_epoch=? "
-                "WHERE review_case_id=?",
-                (determination.created_at_epoch, determination.review_case_id),
-            )
-            self._event(
-                connection,
-                determination.review_case_id,
-                "determination_added",
-                determination.expert_id,
-                {"determination_id": determination.determination_id},
-                determination.created_at_epoch,
+                "UPDATE scientific_review_cases SET state='under_review',"
+                "updated_at_epoch=? WHERE review_case_id=?",
+                (record.created_at_epoch, record.review_case_id),
             )
             connection.commit()
-        return determination
+        return record
 
     def determinations(self, review_case_id: str) -> tuple[Determination, ...]:
         with self._connect() as connection:
@@ -277,7 +254,7 @@ class SqliteCollaborationRepository:
                 "ORDER BY created_at_epoch,determination_id",
                 (review_case_id,),
             ).fetchall()
-        return tuple(_determination_from_row(row) for row in rows)
+        return tuple(_determination_row(row) for row in rows)
 
     def accept_determination(
         self, review_case_id: str, determination_id: str
@@ -285,57 +262,28 @@ class SqliteCollaborationRepository:
         now = int(time.time())
         with self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
-            row = connection.execute(
-                "SELECT expert_id FROM scientific_determinations "
+            exists = connection.execute(
+                "SELECT 1 FROM scientific_determinations "
                 "WHERE review_case_id=? AND determination_id=?",
                 (review_case_id, determination_id),
             ).fetchone()
-            if row is None:
+            if exists is None:
                 raise KeyError(determination_id)
-            connection.execute(
+            cursor = connection.execute(
                 "UPDATE scientific_review_cases SET accepted_determination_id=?,"
                 "state='accepted',updated_at_epoch=? WHERE review_case_id=?",
                 (determination_id, now, review_case_id),
             )
-            self._event(
-                connection,
-                review_case_id,
-                "determination_accepted",
-                str(row["expert_id"]),
-                {"determination_id": determination_id},
-                now,
-            )
+            if cursor.rowcount != 1:
+                raise KeyError(review_case_id)
             connection.commit()
         result = self.review_case(review_case_id)
-        if result is None:
-            raise KeyError(review_case_id)
+        assert result is not None
         return result
-
-    @staticmethod
-    def _event(
-        connection: sqlite3.Connection,
-        review_case_id: str,
-        event_type: str,
-        actor_id: str,
-        detail: dict[str, object],
-        now: int,
-    ) -> None:
-        connection.execute(
-            "INSERT INTO scientific_review_events("
-            "review_case_id,event_type,actor_id,detail_json,occurred_at_epoch"
-            ") VALUES(?,?,?,?,?)",
-            (
-                review_case_id,
-                event_type,
-                actor_id,
-                json.dumps(detail, sort_keys=True, separators=(",", ":")),
-                now,
-            ),
-        )
 
 
 class PostgresCollaborationRepository:
-    """Shared collaboration repository intended for multi-node deployments."""
+    """Shared collaboration repository for multi-node Fieldora deployments."""
 
     def __init__(self, connect: Callable[[], Any]) -> None:
         self._connect = connect
@@ -380,10 +328,6 @@ class PostgresCollaborationRepository:
                     """
                 )
                 cursor.execute(
-                    "CREATE INDEX IF NOT EXISTS ix_scientific_review_cases_route_pg "
-                    "ON scientific_review_cases(organization_id,state,domain,specialty,geography)"
-                )
-                cursor.execute(
                     """
                     CREATE TABLE IF NOT EXISTS scientific_determinations(
                         determination_id TEXT PRIMARY KEY,
@@ -400,12 +344,12 @@ class PostgresCollaborationRepository:
                     """
                 )
                 cursor.execute(
-                    "CREATE INDEX IF NOT EXISTS ix_scientific_determinations_case_pg "
-                    "ON scientific_determinations(review_case_id,created_at_epoch,determination_id)"
+                    "CREATE INDEX IF NOT EXISTS ix_scientific_review_cases_route_pg "
+                    "ON scientific_review_cases(organization_id,state,domain,specialty)"
                 )
 
     def create_submission(self, **kwargs: Any) -> SubmissionRecord:
-        record = _submission_from_kwargs(kwargs)
+        record = _submission(kwargs)
         with self._connect() as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
@@ -427,19 +371,18 @@ class PostgresCollaborationRepository:
     def submissions(
         self, organization_id: str, limit: int = 100
     ) -> tuple[SubmissionRecord, ...]:
-        limit = max(1, min(int(limit), 500))
         with self._connect() as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
                     "SELECT * FROM scientific_submissions WHERE organization_id=%s "
                     "ORDER BY created_at_epoch DESC,submission_id DESC LIMIT %s",
-                    (organization_id, limit),
+                    (organization_id, _limit(limit)),
                 )
                 rows = cursor.fetchall()
         return tuple(SubmissionRecord(*row) for row in rows)
 
     def create_review_case(self, **kwargs: Any) -> ReviewCase:
-        record = _review_case_from_kwargs(kwargs)
+        record = _review_case(kwargs)
         with self._connect() as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
@@ -461,62 +404,62 @@ class PostgresCollaborationRepository:
     def review_cases(
         self, organization_id: str, limit: int = 100
     ) -> tuple[ReviewCase, ...]:
-        limit = max(1, min(int(limit), 500))
         with self._connect() as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
                     "SELECT * FROM scientific_review_cases WHERE organization_id=%s "
                     "ORDER BY updated_at_epoch DESC,review_case_id DESC LIMIT %s",
-                    (organization_id, limit),
+                    (organization_id, _limit(limit)),
                 )
                 rows = cursor.fetchall()
         return tuple(ReviewCase(*row) for row in rows)
 
     def add_determination(self, **kwargs: Any) -> Determination:
-        determination = _determination_from_kwargs(kwargs)
+        record = _determination(kwargs)
         with self._connect() as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
                     "SELECT state FROM scientific_review_cases WHERE review_case_id=%s "
                     "FOR UPDATE",
-                    (determination.review_case_id,),
+                    (record.review_case_id,),
                 )
-                row = cursor.fetchone()
-                if row is None:
-                    raise KeyError(determination.review_case_id)
-                if str(row[0]) == "closed":
+                case = cursor.fetchone()
+                if case is None:
+                    raise KeyError(record.review_case_id)
+                if str(case[0]) == "closed":
                     raise ValueError("review case is closed")
                 cursor.execute(
                     "INSERT INTO scientific_determinations VALUES(%s,%s,%s,%s,%s,%s,%s,%s)",
                     (
-                        determination.determination_id,
-                        determination.review_case_id,
-                        determination.expert_id,
-                        determination.assertion,
-                        determination.confidence,
-                        json.dumps(determination.evidence_json),
-                        determination.created_at_epoch,
-                        determination.supersedes_id,
+                        record.determination_id,
+                        record.review_case_id,
+                        record.expert_id,
+                        record.assertion,
+                        record.confidence,
+                        json.dumps(record.evidence_json),
+                        record.created_at_epoch,
+                        record.supersedes_id,
                     ),
                 )
                 cursor.execute(
                     "UPDATE scientific_review_cases SET state='under_review',"
                     "updated_at_epoch=%s WHERE review_case_id=%s",
-                    (determination.created_at_epoch, determination.review_case_id),
+                    (record.created_at_epoch, record.review_case_id),
                 )
-        return determination
+        return record
 
     def determinations(self, review_case_id: str) -> tuple[Determination, ...]:
         with self._connect() as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
                     "SELECT determination_id,review_case_id,expert_id,assertion,confidence,"
-                    "evidence_json,created_at_epoch,supersedes_id FROM scientific_determinations "
-                    "WHERE review_case_id=%s ORDER BY created_at_epoch,determination_id",
+                    "evidence_json,created_at_epoch,supersedes_id "
+                    "FROM scientific_determinations WHERE review_case_id=%s "
+                    "ORDER BY created_at_epoch,determination_id",
                     (review_case_id,),
                 )
                 rows = cursor.fetchall()
-        return tuple(_determination_from_row(row) for row in rows)
+        return tuple(_determination_row(row) for row in rows)
 
     def accept_determination(
         self, review_case_id: str, determination_id: str
@@ -543,18 +486,22 @@ class PostgresCollaborationRepository:
         return result
 
 
-def _submission_from_kwargs(values: dict[str, Any]) -> SubmissionRecord:
+def _limit(value: int) -> int:
+    return max(1, min(int(value), 500))
+
+
+def _submission(values: dict[str, Any]) -> SubmissionRecord:
     now = int(values.get("now_epoch") or time.time())
-    organization_id = str(values.get("organization_id", "")).strip()
-    submitted_by = str(values.get("submitted_by", "")).strip()
+    organization = str(values.get("organization_id", "")).strip()
+    contributor = str(values.get("submitted_by", "")).strip()
     source_type = str(values.get("source_type", "")).strip()
     purpose = str(values.get("purpose", "research")).strip()
-    if not all((organization_id, submitted_by, source_type, purpose)):
+    if not all((organization, contributor, source_type, purpose)):
         raise ValueError("submission organization, contributor, source, and purpose are required")
     return SubmissionRecord(
         str(values.get("submission_id") or uuid4()),
-        organization_id,
-        submitted_by,
+        organization,
+        contributor,
         source_type,
         str(values.get("source_reference", "")).strip()[:500],
         str(values.get("project_id", "")).strip(),
@@ -568,11 +515,17 @@ def _submission_from_kwargs(values: dict[str, Any]) -> SubmissionRecord:
     )
 
 
-def _review_case_from_kwargs(values: dict[str, Any]) -> ReviewCase:
+def _review_case(values: dict[str, Any]) -> ReviewCase:
     now = int(values.get("now_epoch") or time.time())
     required = {
         name: str(values.get(name, "")).strip()
-        for name in ("organization_id", "subject_type", "subject_id", "domain", "requested_by")
+        for name in (
+            "organization_id",
+            "subject_type",
+            "subject_id",
+            "domain",
+            "requested_by",
+        )
     }
     if not all(required.values()):
         raise ValueError("review organization, subject, domain, and requester are required")
@@ -593,20 +546,20 @@ def _review_case_from_kwargs(values: dict[str, Any]) -> ReviewCase:
     )
 
 
-def _determination_from_kwargs(values: dict[str, Any]) -> Determination:
-    review_case_id = str(values.get("review_case_id", "")).strip()
-    expert_id = str(values.get("expert_id", "")).strip()
+def _determination(values: dict[str, Any]) -> Determination:
+    case_id = str(values.get("review_case_id", "")).strip()
+    expert = str(values.get("expert_id", "")).strip()
     assertion = str(values.get("assertion", "")).strip()
-    confidence = float(values.get("confidence", 0.0))
+    confidence = float(values.get("confidence", 0))
     evidence = values.get("evidence_json", {})
-    if not review_case_id or not expert_id or not assertion:
+    if not all((case_id, expert, assertion)):
         raise ValueError("determination case, expert, and assertion are required")
     if not 0 <= confidence <= 1 or not isinstance(evidence, dict):
         raise ValueError("invalid determination confidence or evidence")
     return Determination(
         str(values.get("determination_id") or uuid4()),
-        review_case_id,
-        expert_id,
+        case_id,
+        expert,
         assertion,
         confidence,
         dict(evidence),
@@ -615,10 +568,10 @@ def _determination_from_kwargs(values: dict[str, Any]) -> Determination:
     )
 
 
-def _determination_from_row(row: Any) -> Determination:
+def _determination_row(row: Any) -> Determination:
     values = list(row)
-    evidence = values[5]
-    if isinstance(evidence, str):
-        evidence = json.loads(evidence)
-    values[5] = dict(evidence)
+    if isinstance(values[5], str):
+        values[5] = json.loads(values[5])
+    else:
+        values[5] = dict(values[5])
     return Determination(*values)

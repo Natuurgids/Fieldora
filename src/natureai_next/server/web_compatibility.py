@@ -45,7 +45,7 @@ _WEB_PLATFORM_PATCH = bytes(r"""
  }
  function replace(id,handler){const old=q(id);if(!old)return;const fresh=old.cloneNode(true);old.replaceWith(fresh);fresh.onclick=handler;}
  replace("upload-start",generalUpload);replace("stage-start",stagedUploadGeneral);
- document.querySelectorAll(".go-import").forEach(b=>b.onclick=()=>{showPage("library");q("import-card")?.scrollIntoView({behavior:"smooth",block:"start"});const p=q("upload-file");if(p){p.focus();p.click();}});
+ document.querySelectorAll(".go-import").forEach(b=>b.onclick=()=>{showPage("library");q("import-card")?.scrollIntoView({behavior:"smooth",block:"start"});const picker=q("upload-file");if(picker){picker.focus();picker.click();}});
 
  function addPage(name,icon,title,html,loader){const nav=document.querySelector(".sidebar nav"),main=document.querySelector("main.main");if(!nav||!main||q(`page-${name}`))return;const b=document.createElement("button");b.className="nav";b.dataset.page=name;b.innerHTML=`<span class="nav-icon">${icon}</span>${esc(title)}`;b.onclick=()=>{showPage(name);loader()};nav.appendChild(b);const p=document.createElement("section");p.className="page";p.id=`page-${name}`;p.hidden=true;p.innerHTML=html;main.appendChild(p);}
  async function loadCollaboration(){try{const [s,r]=await Promise.all([api("/api/v1/submissions?limit=100"),api("/api/v1/review-cases?limit=100")]);q("platform-submissions").innerHTML=(s.items||[]).map(x=>`<div class="row"><strong>${esc(x.source_type)}</strong><span>${esc(x.project_id||"General Library")}</span><span>${esc(x.state)}</span><span>${esc(x.submission_id)}</span></div>`).join("")||'<div class="empty">No submissions.</div>';q("platform-reviews").innerHTML=(r.items||[]).map(x=>`<button class="row review-row" data-id="${esc(x.review_case_id)}"><strong>${esc(x.domain)}</strong><span>${esc(x.specialty||"General")}</span><span>${esc(x.state)}</span><span>${esc(x.subject_id)}</span></button>`).join("")||'<div class="empty">No review cases.</div>';document.querySelectorAll(".review-row").forEach(b=>b.onclick=()=>{q("review-case-id").value=b.dataset.id;loadReview(b.dataset.id)})}catch(e){q("collab-status").textContent=e.message}}
@@ -118,6 +118,7 @@ def openapi_document() -> dict[str, object]:
             "/api/v1/status": {"get": {"summary": "Server status", "responses": {"200": {"description": "OK"}}}},
             "/api/v1/health/live": {"get": {"summary": "Liveness", "responses": {"200": {"description": "Live"}}}},
             "/api/v1/health/ready": {"get": {"summary": "Readiness", "responses": {"200": {"description": "Ready"}, "503": {"description": "Unavailable"}}}},
+            "/api/v1/me": {"get": {"summary": "Current authenticated identity", "security": secured, "responses": {"200": {"description": "Identity"}, "401": {"description": "Unauthorized"}}}},
             "/api/v1/media": {"get": {"summary": "List Library media", "security": secured, "responses": {"200": {"description": "Items"}}}},
             "/api/v1/uploads": {"post": {"summary": "Begin resumable Library upload; project optional", "security": secured, "responses": {"201": {"description": "Upload"}}}},
             "/api/v1/staged-submissions": {"post": {"summary": "Begin staged Library intake; project optional", "security": secured, "responses": {"201": {"description": "Submission"}}}},

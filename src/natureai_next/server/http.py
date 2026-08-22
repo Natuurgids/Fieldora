@@ -11,6 +11,11 @@ from pathlib import Path
 
 from natureai_next.server.api import FieldoraApi
 from natureai_next.server.lifecycle import ShutdownCoordinator
+from natureai_next.server.web_compatibility import (
+    patch_web_response,
+    public_response,
+    rewrite_public_target,
+)
 
 
 def handler_for(
@@ -41,9 +46,13 @@ def handler_for(
                 key.casefold(): value for key, value in self.headers.items()
             }
             request_headers["remote-address"] = self.client_address[0]
-            response = application.dispatch(
-                self.command, self.path, request_headers, body,
-            )
+            response = public_response(self.command, self.path)
+            if response is None:
+                target = rewrite_public_target(self.command, self.path)
+                response = application.dispatch(
+                    self.command, target, request_headers, body,
+                )
+                response = patch_web_response(target, response)
             self.send_response(response.status)
             self.send_header("Content-Type", response.content_type)
             if not any(
@@ -116,6 +125,7 @@ def serve(
     server = create_server(
         application, host, port, certificate=certificate, private_key=private_key
     )
+
     def stop_after_drain() -> None:
         def stop() -> None:
             if shutdown_grace_seconds:

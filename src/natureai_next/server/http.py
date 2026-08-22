@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import socket
 import ssl
 import threading
 import time
@@ -17,6 +19,66 @@ from natureai_next.server.web_compatibility import (
     public_response,
     rewrite_public_target,
 )
+
+
+class ReloadingCertificateChain:
+    """Reload replaced TLS material for subsequent connections without a restart."""
+
+    def __init__(
+        self,
+        context: ssl.SSLContext,
+        certificate: Path,
+        private_key: Path,
+    ) -> None:
+        self.context = context
+        self.certificate = certificate.resolve(strict=True)
+        self.private_key = private_key.resolve(strict=True)
+        self._lock = threading.Lock()
+        self._fingerprint = b""
+        self.reload_if_changed(force=True)
+
+    def reload_if_changed(self, *, force: bool = False) -> bool:
+        certificate_bytes = self.certificate.read_bytes()
+        key_bytes = self.private_key.read_bytes()
+        fingerprint = hashlib.sha256(
+            certificate_bytes + b"\0" + key_bytes
+        ).digest()
+        with self._lock:
+            if not force and fingerprint == self._fingerprint:
+                return False
+            self.context.load_cert_chain(str(self.certificate), str(self.private_key))
+            self._fingerprint = fingerprint
+            return True
+
+
+class ReloadingTLSServer(ThreadingHTTPServer):
+    """Threading server that adopts renewed certificates on new connections."""
+
+    def __init__(
+        self,
+        server_address: tuple[str, int],
+        handler: type[BaseHTTPRequestHandler],
+        certificate: Path,
+        private_key: Path,
+    ) -> None:
+        super().__init__(server_address, handler)
+        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        context.minimum_version = ssl.TLSVersion.TLSv1_2
+        self.certificate_chain = ReloadingCertificateChain(
+            context, certificate, private_key
+        )
+
+    def get_request(self) -> tuple[socket.socket, tuple[str, int]]:
+        request, address = super().get_request()
+        try:
+            self.certificate_chain.reload_if_changed()
+            wrapped = self.certificate_chain.context.wrap_socket(
+                request, server_side=True
+            )
+        except BaseException:
+            request.close()
+            raise
+        return wrapped, address
 
 
 def handler_for(
@@ -94,22 +156,10 @@ def create_server(
     if (certificate is None) != (private_key is None):
         raise ValueError("TLS certificate and private key must be configured together")
     tls_enabled = certificate is not None
-    server = ThreadingHTTPServer(
-        (host, port), handler_for(application, tls_enabled=tls_enabled)
-    )
-    if tls_enabled:
-        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-        context.minimum_version = ssl.TLSVersion.TLSv1_2
-        try:
-            context.load_cert_chain(
-                str(certificate.resolve(strict=True)),
-                str(private_key.resolve(strict=True)),
-            )
-            server.socket = context.wrap_socket(server.socket, server_side=True)
-        except BaseException:
-            server.server_close()
-            raise
-    return server
+    handler = handler_for(application, tls_enabled=tls_enabled)
+    if certificate is not None and private_key is not None:
+        return ReloadingTLSServer((host, port), handler, certificate, private_key)
+    return ThreadingHTTPServer((host, port), handler)
 
 
 def serve(

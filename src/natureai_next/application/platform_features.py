@@ -7,9 +7,9 @@ be marked certified after platform-specific evidence is recorded.
 """
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass
 from enum import StrEnum
-from typing import Iterable
 
 
 class Platform(StrEnum):

@@ -49,6 +49,8 @@ fieldora-retention = "natureai_next.bootstrap.retention_cli:main"
 fieldora-secret-rotation = "natureai_next.bootstrap.secret_rotation_cli:main"
 fieldora-audit-export = "natureai_next.bootstrap.audit_export_cli:main"
 fieldora-phase-f-certification = "natureai_next.bootstrap.phase_f_certification_cli:main"
+fieldora-service-trust = "natureai_next.bootstrap.service_trust_cli:main"
+fieldora-operator = "natureai_next.bootstrap.operator_cli:main"
 aperture-updater = "natureai_next.bootstrap.native_updater:main"
 aperture-recovery = "natureai_next.bootstrap.native_recovery:main"
 

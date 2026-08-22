@@ -4,6 +4,10 @@ Service identity is durable and independent of process/container lifetime. Certi
 are short-lived authentication material for that identity and may be renewed in place
 without changing the service ID. Revocation remains an operator-registry decision in
 addition to ordinary certificate expiry.
+
+The installation root CA is deliberately separated from the online service issuer.
+Long-lived processes need only the constrained issuer key/certificate, never the root
+private key.
 """
 
 from __future__ import annotations
@@ -35,19 +39,23 @@ class ServiceCertificate:
 
 
 class ServiceTrustAuthority:
-    """Small installation-local CA used only for Fieldora internal service trust."""
+    """Installation-local root plus constrained issuer for Fieldora service trust."""
 
     def __init__(self, root: Path) -> None:
         self.root = root
         self.ca_key_path = root / "ca-private.pem"
         self.ca_certificate_path = root / "ca-certificate.pem"
+        self.issuer_key_path = root / "issuer-private.pem"
+        self.issuer_certificate_path = root / "issuer-certificate.pem"
 
     def initialize(self, common_name: str = "Fieldora Internal Service CA") -> Path:
         self.root.mkdir(parents=True, exist_ok=True)
         if self.ca_key_path.exists() or self.ca_certificate_path.exists():
-            if self.ca_key_path.is_file() and self.ca_certificate_path.is_file():
-                return self.ca_certificate_path
-            raise FileExistsError("incomplete Fieldora service CA already exists")
+            if not self.ca_key_path.is_file() or not self.ca_certificate_path.is_file():
+                raise FileExistsError("incomplete Fieldora service root CA already exists")
+            self._ensure_issuer(common_name)
+            return self.ca_certificate_path
+
         key = rsa.generate_private_key(public_exponent=65537, key_size=3072)
         now = datetime.now(UTC)
         subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, common_name)])
@@ -59,7 +67,7 @@ class ServiceTrustAuthority:
             .serial_number(x509.random_serial_number())
             .not_valid_before(now - timedelta(minutes=5))
             .not_valid_after(now + timedelta(days=3650))
-            .add_extension(x509.BasicConstraints(ca=True, path_length=0), critical=True)
+            .add_extension(x509.BasicConstraints(ca=True, path_length=1), critical=True)
             .add_extension(
                 x509.KeyUsage(
                     digital_signature=True,
@@ -82,6 +90,7 @@ class ServiceTrustAuthority:
             certificate.public_bytes(serialization.Encoding.PEM),
             0o644,
         )
+        self._ensure_issuer(common_name)
         return self.ca_certificate_path
 
     def issue(
@@ -101,7 +110,7 @@ class ServiceTrustAuthority:
             raise ValueError("service certificate lifetime must be 1 hour to 30 days")
         if not all(value.strip() for value in (service_id, organization_id, common_name)):
             raise ValueError("service identity fields are required")
-        ca_key, ca_certificate = self._load_ca()
+        issuer_key, issuer_certificate = self._load_issuer()
         key = (
             _load_private_key(private_key_path)
             if reuse_private_key and private_key_path.is_file()
@@ -130,7 +139,7 @@ class ServiceTrustAuthority:
         certificate = (
             x509.CertificateBuilder()
             .subject_name(subject)
-            .issuer_name(ca_certificate.subject)
+            .issuer_name(issuer_certificate.subject)
             .public_key(key.public_key())
             .serial_number(x509.random_serial_number())
             .not_valid_before(now - timedelta(minutes=5))
@@ -143,12 +152,13 @@ class ServiceTrustAuthority:
                 ),
                 critical=False,
             )
-            .sign(ca_key, hashes.SHA256())
+            .sign(issuer_key, hashes.SHA256())
         )
         _atomic_private_key(private_key_path, key)
         _atomic_bytes(
             certificate_path,
-            certificate.public_bytes(serialization.Encoding.PEM),
+            certificate.public_bytes(serialization.Encoding.PEM)
+            + issuer_certificate.public_bytes(serialization.Encoding.PEM),
             0o644,
         )
         return ServiceCertificate(
@@ -188,12 +198,83 @@ class ServiceTrustAuthority:
             ca_certificate_path=self.ca_certificate_path,
         )
 
-    def _load_ca(self):
+    def export_issuer(self, destination: Path) -> None:
+        """Export only material needed by a constrained online renewal service."""
+        self._load_issuer()
+        destination.mkdir(parents=True, exist_ok=True)
+        _atomic_bytes(
+            destination / self.ca_certificate_path.name,
+            self.ca_certificate_path.read_bytes(),
+            0o644,
+        )
+        _atomic_bytes(
+            destination / self.issuer_certificate_path.name,
+            self.issuer_certificate_path.read_bytes(),
+            0o644,
+        )
+        _atomic_bytes(
+            destination / self.issuer_key_path.name,
+            self.issuer_key_path.read_bytes(),
+            0o600,
+        )
+
+    def _ensure_issuer(self, common_name: str) -> None:
+        if self.issuer_key_path.exists() or self.issuer_certificate_path.exists():
+            if self.issuer_key_path.is_file() and self.issuer_certificate_path.is_file():
+                return
+            raise FileExistsError("incomplete Fieldora service issuer already exists")
+        root_key, root_certificate = self._load_root()
+        key = rsa.generate_private_key(public_exponent=65537, key_size=3072)
+        now = datetime.now(UTC)
+        subject = x509.Name(
+            [x509.NameAttribute(NameOID.COMMON_NAME, f"{common_name} Service Issuer")]
+        )
+        certificate = (
+            x509.CertificateBuilder()
+            .subject_name(subject)
+            .issuer_name(root_certificate.subject)
+            .public_key(key.public_key())
+            .serial_number(x509.random_serial_number())
+            .not_valid_before(now - timedelta(minutes=5))
+            .not_valid_after(now + timedelta(days=365))
+            .add_extension(x509.BasicConstraints(ca=True, path_length=0), critical=True)
+            .add_extension(
+                x509.KeyUsage(
+                    digital_signature=True,
+                    content_commitment=False,
+                    key_encipherment=False,
+                    data_encipherment=False,
+                    key_agreement=False,
+                    key_cert_sign=True,
+                    crl_sign=True,
+                    encipher_only=False,
+                    decipher_only=False,
+                ),
+                critical=True,
+            )
+            .sign(root_key, hashes.SHA256())
+        )
+        _atomic_private_key(self.issuer_key_path, key)
+        _atomic_bytes(
+            self.issuer_certificate_path,
+            certificate.public_bytes(serialization.Encoding.PEM),
+            0o644,
+        )
+
+    def _load_root(self):
         if not self.ca_key_path.is_file() or not self.ca_certificate_path.is_file():
-            raise FileNotFoundError("Fieldora service CA has not been initialized")
+            raise FileNotFoundError("Fieldora service root CA has not been initialized")
         return (
             _load_private_key(self.ca_key_path),
             x509.load_pem_x509_certificate(self.ca_certificate_path.read_bytes()),
+        )
+
+    def _load_issuer(self):
+        if not self.issuer_key_path.is_file() or not self.issuer_certificate_path.is_file():
+            raise FileNotFoundError("Fieldora service issuer has not been initialized")
+        return (
+            _load_private_key(self.issuer_key_path),
+            x509.load_pem_x509_certificate(self.issuer_certificate_path.read_bytes()),
         )
 
 

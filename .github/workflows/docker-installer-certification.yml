@@ -6,6 +6,7 @@ on:
       - "Install-Fieldora-Clean.ps1"
       - "src/natureai_next/server/service_trust.py"
       - "src/natureai_next/bootstrap/service_trust_cli.py"
+      - "src/natureai_next/bootstrap/certificate_renewer_cli.py"
       - "src/natureai_next/bootstrap/operator_cli.py"
       - ".github/workflows/docker-installer-certification.yml"
   workflow_dispatch:
@@ -33,16 +34,24 @@ jobs:
           $required = @(
             'FIELDORA_SERVICE_ID: fieldora-api-local',
             'FIELDORA_SERVICE_ID: fieldora-worker-local',
+            'fieldora-postgres-local',
+            'fieldora-cert-renewer-local',
             'sslmode=verify-full',
             'clientcert=verify-full',
             'fieldora-service-trust',
+            'fieldora-certificate-renewer',
             'fieldora-operator',
             '--tls-certificate',
             '--tls-private-key',
             'restart: unless-stopped',
             'fieldora-postgres-trust',
             'fieldora-worker-trust',
-            'fieldora-api-trust'
+            'fieldora-api-trust',
+            'fieldora-renewer-trust',
+            'fieldora-issuer-authority',
+            'issuer-private.pem',
+            'pg_reload_conf()',
+            'Running live no-restart certificate renewal test'
           )
           foreach ($needle in $required) {
             if (-not $text.Contains($needle)) {
@@ -52,7 +61,28 @@ jobs:
           if ($text.Contains('--allow-insecure-http')) {
             throw 'Clean installer must not enable insecure HTTP.'
           }
-          Write-Host "Service enrollment, HTTPS and PostgreSQL mTLS contract: OK"
+          Write-Host "Service enrollment, HTTPS, mTLS and live renewal contract: OK"
+
+      - name: Ensure root CA is not mounted into running renewal service
+        shell: pwsh
+        run: |
+          $text = Get-Content -LiteralPath ./Install-Fieldora-Clean.ps1 -Raw
+          if (-not $text.Contains('Root CA private key: offline from running containers')) {
+            throw 'Installer does not certify offline root-key separation.'
+          }
+          $renewerStart = $text.IndexOf('fieldora-cert-renewer:')
+          $volumesStart = $text.IndexOf("`nvolumes:", $renewerStart)
+          if ($renewerStart -lt 0 -or $volumesStart -lt 0) {
+            throw 'Cannot locate renewal-service Compose section.'
+          }
+          $renewerSection = $text.Substring($renewerStart, $volumesStart - $renewerStart)
+          if ($renewerSection.Contains('./service-trust:')) {
+            throw 'Renewal service must not mount the offline root CA directory.'
+          }
+          if (-not $renewerSection.Contains('fieldora-issuer-authority:/run/fieldora-authority:ro')) {
+            throw 'Renewal service must use the constrained issuer volume.'
+          }
+          Write-Host "Offline root / constrained online issuer separation: OK"
 
       - name: Ensure plaintext PostgreSQL network access is rejected
         shell: pwsh

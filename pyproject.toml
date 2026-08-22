@@ -39,7 +39,7 @@ server-postgresql = ["psycopg[binary]>=3.2,<4"]
 natureai-next = "natureai_next.bootstrap.cli:main"
 natureai-next-admin = "natureai_next.bootstrap.admin_cli:main"
 natureai-next-resources = "natureai_next.bootstrap.resource_cli:main"
-fieldora-server = "natureai_next.bootstrap.server_cli:main"
+fieldora-server = "natureai_next.bootstrap.platform_server_cli:main"
 fieldora-server-recovery = "natureai_next.bootstrap.server_recovery_cli:main"
 fieldora-deployment-assessment = "natureai_next.bootstrap.deployment_assessment_cli:main"
 fieldora-record-phase-f-evidence = "natureai_next.bootstrap.phase_f_evidence_cli:main"

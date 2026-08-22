@@ -6,8 +6,8 @@ page integrations are imported lazily after the structural contract succeeds.
 """
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
-from typing import Iterable, Mapping
 
 
 @dataclass(frozen=True, slots=True)

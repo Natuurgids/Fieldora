@@ -4,13 +4,15 @@ Fieldora clean Docker installer for Windows 11 + Docker Desktop.
 This is a destructive clean-room installer for the disposable test root
 (default D:\FDTEST). Keep this script outside that root, for example D:\DF.
 
-Security model of this installer:
-- HTTPS is enabled for the Fieldora listener.
-- PostgreSQL accepts network connections only over TLS.
-- Fieldora API and worker use distinct short-lived service certificates.
-- PostgreSQL requires a trusted client certificate as well as the database password.
-- API and worker are explicitly enrolled in the durable Operator service registry.
-- API and worker are long-lived services with restart: unless-stopped.
+Security and lifecycle model:
+- Fieldora browser/API listener is HTTPS.
+- PostgreSQL network access requires TLS plus a trusted client certificate.
+- API, worker, PostgreSQL and certificate-renewal controller have durable identities.
+- Short-lived service certificates renew automatically without changing identity.
+- The long-lived installation root CA key is never mounted into running services.
+- A constrained issuer performs online renewal; the API hot-reloads renewed TLS keys.
+- PostgreSQL reloads renewed TLS material with pg_reload_conf(), not a container restart.
+- Long-lived services use restart: unless-stopped and explicit Operator lifecycle state.
 #>
 
 [CmdletBinding()]
@@ -28,7 +30,10 @@ $ProgressPreference = "SilentlyContinue"
 
 $ApiServiceId = "fieldora-api-local"
 $WorkerServiceId = "fieldora-worker-local"
+$PostgresServiceId = "fieldora-postgres-local"
+$RenewerServiceId = "fieldora-cert-renewer-local"
 $CertificateHours = 168
+$RenewBeforeHours = 48
 
 function Step([string]$Text) {
     Write-Host ""
@@ -74,12 +79,10 @@ if ($PSVersionTable.PSVersion.Major -lt 7) {
 $installFull = [IO.Path]::GetFullPath($InstallRoot).TrimEnd('\')
 $currentFull = [IO.Path]::GetFullPath((Get-Location).Path).TrimEnd('\')
 $scriptDir = [IO.Path]::GetFullPath((Split-Path -Parent $PSCommandPath)).TrimEnd('\')
-
 function Inside([string]$Candidate, [string]$Parent) {
     if ($Candidate.Equals($Parent,[StringComparison]::OrdinalIgnoreCase)) { return $true }
     return $Candidate.StartsWith($Parent + '\',[StringComparison]::OrdinalIgnoreCase)
 }
-
 if ((Inside $currentFull $installFull) -or (Inside $scriptDir $installFull)) {
     throw "Do not run this installer from inside $InstallRoot. Keep it somewhere such as D:\DF."
 }
@@ -88,7 +91,7 @@ Write-Host ""
 Write-Host "Fieldora V5 Clean Docker Installer" -ForegroundColor Green
 Write-Host "Target : $InstallRoot"
 Write-Host "Ref    : $FieldoraRef"
-Write-Host "Trust  : mandatory HTTPS + PostgreSQL mutual TLS"
+Write-Host "Trust  : mandatory HTTPS + PostgreSQL mutual TLS + automatic renewal"
 Write-Host ""
 Write-Host "WARNING: this deletes the complete disposable installation and PostgreSQL data under $InstallRoot." -ForegroundColor Yellow
 if ((Read-Host "Type CLEAN to continue").Trim().ToUpperInvariant() -ne "CLEAN") {
@@ -116,11 +119,17 @@ $oldCompose = Join-Path $InstallRoot "compose.yaml"
 if (Test-Path -LiteralPath $oldCompose) {
     & docker compose -f $oldCompose down --volumes --remove-orphans --timeout 30 2>$null
 }
-foreach ($name in @("fieldora-server","fieldora-worker","fieldora-postgres")) {
+foreach ($name in @("fieldora-server","fieldora-worker","fieldora-cert-renewer","fieldora-postgres")) {
     $found = (@(& docker ps -a --filter "name=^/${name}$" --format "{{.Names}}") -join "").Trim()
     if ($found -eq $name) { & docker rm -f $name *> $null }
 }
-foreach ($volume in @("fieldora-api-trust","fieldora-worker-trust","fieldora-postgres-trust")) {
+foreach ($volume in @(
+    "fieldora-api-trust",
+    "fieldora-worker-trust",
+    "fieldora-postgres-trust",
+    "fieldora-renewer-trust",
+    "fieldora-issuer-authority"
+)) {
     $found = (@(& docker volume ls --filter "name=^${volume}$" --format "{{.Name}}") -join "").Trim()
     if ($found -eq $volume) { & docker volume rm $volume *> $null }
 }
@@ -139,7 +148,8 @@ $SecretsRoot = Join-Path $InstallRoot "secrets"
 $InitRoot = Join-Path $InstallRoot "postgres-init"
 $TrustRoot = Join-Path $InstallRoot "service-trust"
 $PgTlsConfigRoot = Join-Path $InstallRoot "postgres-mtls"
-foreach ($p in @($InstallRoot,$SourceRoot,$PgDataRoot,$FieldoraData,$SecretsRoot,$InitRoot,$TrustRoot,$PgTlsConfigRoot)) {
+$RenewalRoot = Join-Path $InstallRoot "certificate-renewal"
+foreach ($p in @($InstallRoot,$SourceRoot,$PgDataRoot,$FieldoraData,$SecretsRoot,$InitRoot,$TrustRoot,$PgTlsConfigRoot,$RenewalRoot)) {
     New-Item -ItemType Directory -Force -Path $p | Out-Null
 }
 
@@ -175,7 +185,6 @@ for ($i=0; $i -lt $databases.Count; $i++) {
     $n = "{0:D2}" -f ($i+1)
     Set-Content -Path (Join-Path $InitRoot "$n-create-$($databases[$i]).sql") -Encoding utf8NoBOM -Value "CREATE DATABASE $($databases[$i]);"
 }
-
 Set-Content -Path (Join-Path $PgTlsConfigRoot "pg_hba.conf") -Encoding ascii -Value @'
 local   all   all                                 trust
 hostssl all   all   0.0.0.0/0   scram-sha-256 clientcert=verify-full
@@ -381,6 +390,38 @@ services:
       - fieldora-worker-trust:/run/fieldora-trust:ro
     networks: [fieldora-network]
 
+  fieldora-cert-renewer:
+    image: fieldora-v5-rocky:local
+    container_name: fieldora-cert-renewer
+    user: "0:0"
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command:
+      - fieldora-certificate-renewer
+      - --authority-root
+      - /run/fieldora-authority
+      - --postgres-dsn-file
+      - /run/secrets/fieldora-governance-dsn
+      - --config
+      - /run/fieldora-renewal/config.json
+      - --interval-seconds
+      - "3600"
+      - --renew-before-hours
+      - "48"
+      - --lifetime-hours
+      - "168"
+    volumes:
+      - ./secrets/fieldora-governance-dsn:/run/secrets/fieldora-governance-dsn:ro
+      - ./certificate-renewal/config.json:/run/fieldora-renewal/config.json:ro
+      - fieldora-issuer-authority:/run/fieldora-authority:ro
+      - fieldora-renewer-trust:/run/fieldora-trust
+      - fieldora-api-trust:/targets/api
+      - fieldora-worker-trust:/targets/worker
+      - fieldora-postgres-trust:/targets/postgres
+    networks: [fieldora-network]
+
 networks:
   fieldora-network:
     driver: bridge
@@ -392,6 +433,10 @@ volumes:
     name: fieldora-worker-trust
   fieldora-postgres-trust:
     name: fieldora-postgres-trust
+  fieldora-renewer-trust:
+    name: fieldora-renewer-trust
+  fieldora-issuer-authority:
+    name: fieldora-issuer-authority
 '@
 Set-Content (Join-Path $InstallRoot "compose.yaml") -Encoding utf8NoBOM -Value $compose
 
@@ -404,9 +449,21 @@ try {
     & docker compose build --pull --no-cache fieldora-server
     Assert-Exit "Fieldora image build failed"
 
-    Step "Creating Fieldora internal service trust"
+    $FieldoraUid = [int](Docker-Output { docker run --rm fieldora-v5-rocky:local id -u fieldora })
+    Assert-Exit "Unable to determine Fieldora container uid"
+    $FieldoraGid = [int](Docker-Output { docker run --rm fieldora-v5-rocky:local id -g fieldora })
+    Assert-Exit "Unable to determine Fieldora container gid"
+    $PostgresUid = [int](Docker-Output { docker run --rm postgres:16 id -u postgres })
+    Assert-Exit "Unable to determine PostgreSQL container uid"
+    $PostgresGid = [int](Docker-Output { docker run --rm postgres:16 id -g postgres })
+    Assert-Exit "Unable to determine PostgreSQL container gid"
+
+    Step "Creating Fieldora internal root and constrained service issuer"
     & docker run --rm --user 0 -v "${TrustRoot}:/trust" fieldora-v5-rocky:local fieldora-service-trust --root /trust init-ca --common-name "Fieldora Internal Service CA - $Organization"
     Assert-Exit "Internal CA creation failed"
+    foreach ($requiredTrustFile in @("ca-private.pem","ca-certificate.pem","issuer-private.pem","issuer-certificate.pem")) {
+        if (-not (Test-Path (Join-Path $TrustRoot $requiredTrustFile))) { throw "Trust initialization is missing $requiredTrustFile" }
+    }
 
     $apiJson = Docker-Output { docker run --rm --user 0 -v "${TrustRoot}:/trust" fieldora-v5-rocky:local fieldora-service-trust --root /trust issue --service-id $ApiServiceId --organization $Organization --common-name fieldora --certificate /trust/api.crt --private-key /trust/api.key --dns fieldora-server --dns localhost --ip 127.0.0.1 --hours $CertificateHours }
     Assert-Exit "API service certificate creation failed"
@@ -416,22 +473,43 @@ try {
     Assert-Exit "Worker service certificate creation failed"
     $workerCertificate = $workerJson | ConvertFrom-Json
 
-    & docker run --rm --user 0 -v "${TrustRoot}:/trust" fieldora-v5-rocky:local fieldora-service-trust --root /trust issue --service-id fieldora-postgres-local --organization $Organization --common-name postgres --certificate /trust/postgres.crt --private-key /trust/postgres.key --dns postgres --hours $CertificateHours *> $null
+    $postgresJson = Docker-Output { docker run --rm --user 0 -v "${TrustRoot}:/trust" fieldora-v5-rocky:local fieldora-service-trust --root /trust issue --service-id $PostgresServiceId --organization $Organization --common-name postgres --certificate /trust/postgres.crt --private-key /trust/postgres.key --dns postgres --hours $CertificateHours }
     Assert-Exit "PostgreSQL service certificate creation failed"
+    $postgresCertificate = $postgresJson | ConvertFrom-Json
 
-    foreach ($volume in @("fieldora-api-trust","fieldora-worker-trust","fieldora-postgres-trust")) {
+    $renewerJson = Docker-Output { docker run --rm --user 0 -v "${TrustRoot}:/trust" fieldora-v5-rocky:local fieldora-service-trust --root /trust issue --service-id $RenewerServiceId --organization $Organization --common-name fieldora --certificate /trust/renewer.crt --private-key /trust/renewer.key --dns fieldora-cert-renewer --hours $CertificateHours }
+    Assert-Exit "Certificate renewer identity creation failed"
+    $renewerCertificate = $renewerJson | ConvertFrom-Json
+
+    foreach ($volume in @("fieldora-api-trust","fieldora-worker-trust","fieldora-postgres-trust","fieldora-renewer-trust","fieldora-issuer-authority")) {
         & docker volume create $volume *> $null
         Assert-Exit "Unable to create trust volume $volume"
     }
 
-    & docker run --rm --user 0 -v "${TrustRoot}:/source:ro" -v fieldora-api-trust:/target fieldora-v5-rocky:local sh -lc "cp /source/ca-certificate.pem /target/ca-certificate.pem && cp /source/api.crt /target/service.crt && cp /source/api.key /target/service.key && chown fieldora:fieldora /target/* && chmod 644 /target/ca-certificate.pem /target/service.crt && chmod 600 /target/service.key"
+    & docker run --rm --user 0 -v "${TrustRoot}:/source:ro" -v fieldora-api-trust:/target fieldora-v5-rocky:local sh -lc "cp /source/ca-certificate.pem /target/ca-certificate.pem && cp /source/api.crt /target/service.crt && cp /source/api.key /target/service.key && chown ${FieldoraUid}:${FieldoraGid} /target/* && chmod 644 /target/ca-certificate.pem /target/service.crt && chmod 600 /target/service.key"
     Assert-Exit "Unable to provision API trust volume"
 
-    & docker run --rm --user 0 -v "${TrustRoot}:/source:ro" -v fieldora-worker-trust:/target fieldora-v5-rocky:local sh -lc "cp /source/ca-certificate.pem /target/ca-certificate.pem && cp /source/worker.crt /target/service.crt && cp /source/worker.key /target/service.key && chown fieldora:fieldora /target/* && chmod 644 /target/ca-certificate.pem /target/service.crt && chmod 600 /target/service.key"
+    & docker run --rm --user 0 -v "${TrustRoot}:/source:ro" -v fieldora-worker-trust:/target fieldora-v5-rocky:local sh -lc "cp /source/ca-certificate.pem /target/ca-certificate.pem && cp /source/worker.crt /target/service.crt && cp /source/worker.key /target/service.key && chown ${FieldoraUid}:${FieldoraGid} /target/* && chmod 644 /target/ca-certificate.pem /target/service.crt && chmod 600 /target/service.key"
     Assert-Exit "Unable to provision worker trust volume"
 
-    & docker run --rm --user 0 -v "${TrustRoot}:/source:ro" -v "${PgTlsConfigRoot}:/config:ro" -v fieldora-postgres-trust:/target postgres:16 bash -lc "cp /source/ca-certificate.pem /target/ca-certificate.pem && cp /source/postgres.crt /target/postgres.crt && cp /source/postgres.key /target/postgres.key && cp /config/pg_hba.conf /target/pg_hba.conf && chown postgres:postgres /target/* && chmod 644 /target/ca-certificate.pem /target/postgres.crt /target/pg_hba.conf && chmod 600 /target/postgres.key"
+    & docker run --rm --user 0 -v "${TrustRoot}:/source:ro" -v "${PgTlsConfigRoot}:/config:ro" -v fieldora-postgres-trust:/target postgres:16 bash -lc "cp /source/ca-certificate.pem /target/ca-certificate.pem && cp /source/postgres.crt /target/postgres.crt && cp /source/postgres.key /target/postgres.key && cp /config/pg_hba.conf /target/pg_hba.conf && chown ${PostgresUid}:${PostgresGid} /target/* && chmod 644 /target/ca-certificate.pem /target/postgres.crt /target/pg_hba.conf && chmod 600 /target/postgres.key"
     Assert-Exit "Unable to provision PostgreSQL trust volume"
+
+    & docker run --rm --user 0 -v "${TrustRoot}:/source:ro" -v fieldora-renewer-trust:/target fieldora-v5-rocky:local sh -lc "cp /source/ca-certificate.pem /target/ca-certificate.pem && cp /source/renewer.crt /target/service.crt && cp /source/renewer.key /target/service.key && chown 0:0 /target/* && chmod 644 /target/ca-certificate.pem /target/service.crt && chmod 600 /target/service.key"
+    Assert-Exit "Unable to provision renewer trust volume"
+
+    & docker run --rm --user 0 -v "${TrustRoot}:/source:ro" -v fieldora-issuer-authority:/target fieldora-v5-rocky:local sh -lc "cp /source/ca-certificate.pem /target/ca-certificate.pem && cp /source/issuer-certificate.pem /target/issuer-certificate.pem && cp /source/issuer-private.pem /target/issuer-private.pem && chown 0:0 /target/* && chmod 644 /target/ca-certificate.pem /target/issuer-certificate.pem && chmod 600 /target/issuer-private.pem"
+    Assert-Exit "Unable to provision constrained issuer authority"
+
+    $renewalConfig = @{
+        services = @(
+            @{ service_id=$ApiServiceId; organization_id=$Organization; common_name="fieldora"; certificate="/targets/api/service.crt"; private_key="/targets/api/service.key"; dns_names=@("fieldora-server","localhost"); ip_addresses=@("127.0.0.1"); uid=$FieldoraUid; gid=$FieldoraGid },
+            @{ service_id=$WorkerServiceId; organization_id=$Organization; common_name="fieldora"; certificate="/targets/worker/service.crt"; private_key="/targets/worker/service.key"; dns_names=@("fieldora-worker"); ip_addresses=@(); uid=$FieldoraUid; gid=$FieldoraGid },
+            @{ service_id=$PostgresServiceId; organization_id=$Organization; common_name="postgres"; certificate="/targets/postgres/postgres.crt"; private_key="/targets/postgres/postgres.key"; dns_names=@("postgres"); ip_addresses=@(); uid=$PostgresUid; gid=$PostgresGid; reload_postgres=$true },
+            @{ service_id=$RenewerServiceId; organization_id=$Organization; common_name="fieldora"; certificate="/run/fieldora-trust/service.crt"; private_key="/run/fieldora-trust/service.key"; dns_names=@("fieldora-cert-renewer"); ip_addresses=@(); uid=0; gid=0 }
+        )
+    }
+    $renewalConfig | ConvertTo-Json -Depth 8 | Set-Content -Path (Join-Path $RenewalRoot "config.json") -Encoding utf8NoBOM
 
     Step "Starting PostgreSQL with mandatory mutual TLS"
     & docker compose up -d postgres
@@ -476,6 +554,16 @@ try {
     & docker compose run --rm --no-deps fieldora-worker fieldora-operator --postgres-dsn-file /run/secrets/fieldora-governance-dsn activate --service-id $WorkerServiceId *> $null
     Assert-Exit "Worker service activation failed"
 
+    & docker compose run --rm --no-deps fieldora-server fieldora-operator --postgres-dsn-file /run/secrets/fieldora-governance-dsn enroll --organization $Organization --service-id $PostgresServiceId --name "Fieldora PostgreSQL (local)" --type database --node docker-desktop --certificate-serial $postgresCertificate.serial_number --certificate-not-after-epoch $postgresCertificate.not_after_epoch
+    Assert-Exit "PostgreSQL service enrollment failed"
+    & docker compose run --rm --no-deps fieldora-server fieldora-operator --postgres-dsn-file /run/secrets/fieldora-governance-dsn activate --service-id $PostgresServiceId *> $null
+    Assert-Exit "PostgreSQL service activation failed"
+
+    & docker compose run --rm --no-deps fieldora-cert-renewer fieldora-operator --postgres-dsn-file /run/secrets/fieldora-governance-dsn enroll --organization $Organization --service-id $RenewerServiceId --name "Fieldora Certificate Renewer (local)" --type trust-renewer --node docker-desktop --certificate-serial $renewerCertificate.serial_number --certificate-not-after-epoch $renewerCertificate.not_after_epoch
+    Assert-Exit "Certificate renewer enrollment failed"
+    & docker compose run --rm --no-deps fieldora-cert-renewer fieldora-operator --postgres-dsn-file /run/secrets/fieldora-governance-dsn activate --service-id $RenewerServiceId *> $null
+    Assert-Exit "Certificate renewer activation failed"
+
     Step "Bootstrapping Fieldora administrator"
     & docker compose run --rm --no-deps fieldora-server fieldora-server --data-root /var/lib/fieldora --access-backend postgresql --postgres-access-dsn-file /run/secrets/fieldora-access-dsn init-user --organization $Organization --name $AdminName --username $AdminUsername --password $AdminPassword
     Assert-Exit "Administrator bootstrap failed"
@@ -490,7 +578,9 @@ Fieldora: https://127.0.0.1:8765
 Source ref: $FieldoraRef
 API service: $ApiServiceId
 Worker service: $WorkerServiceId
-Internal CA: $TrustRoot\ca-certificate.pem
+PostgreSQL service: $PostgresServiceId
+Certificate renewer: $RenewerServiceId
+Internal root CA: $TrustRoot\ca-certificate.pem
 "@
 
     Step "Trusting the local Fieldora HTTPS certificate for the current Windows user"
@@ -498,9 +588,9 @@ Internal CA: $TrustRoot\ca-certificate.pem
         $existing = Get-ChildItem Cert:\CurrentUser\Root | Where-Object { $_.Subject -eq "CN=Fieldora Internal Service CA - $Organization" }
         foreach ($certificate in $existing) { Remove-Item -LiteralPath $certificate.PSPath -Force }
         Import-Certificate -FilePath (Join-Path $TrustRoot "ca-certificate.pem") -CertStoreLocation Cert:\CurrentUser\Root | Out-Null
-        Write-Host "Fieldora internal CA trusted for CurrentUser." -ForegroundColor Green
+        Write-Host "Fieldora internal root CA trusted for CurrentUser." -ForegroundColor Green
     } catch {
-        Write-Warning "Could not add the Fieldora CA to CurrentUser trust. The server will still use TLS; your browser may require manual trust. $($_.Exception.Message)"
+        Write-Warning "Could not add the Fieldora CA to CurrentUser trust. The server still uses TLS; your browser may require manual trust. $($_.Exception.Message)"
     }
 
     Step "Starting complete Fieldora stack"
@@ -516,8 +606,14 @@ Internal CA: $TrustRoot\ca-certificate.pem
     }
     if (-not $serverHealthy) { docker compose logs --tail 300 fieldora-server; throw "Fieldora did not become healthy." }
 
-    $workerRunning = (@(& docker inspect --format "{{.State.Status}}" fieldora-worker 2>$null) -join "").Trim()
-    if ($workerRunning -ne "running") { docker compose logs --tail 300 fieldora-worker; throw "Fieldora worker is not running." }
+    foreach ($container in @("fieldora-worker","fieldora-cert-renewer")) {
+        $state = (@(& docker inspect --format "{{.State.Status}}" $container 2>$null) -join "").Trim()
+        if ($state -ne "running") { docker compose logs --tail 300 $container; throw "$container is not running." }
+    }
+
+    Step "Running live no-restart certificate renewal test"
+    & docker compose run --rm --no-deps fieldora-cert-renewer fieldora-certificate-renewer --authority-root /run/fieldora-authority --postgres-dsn-file /run/secrets/fieldora-governance-dsn --config /run/fieldora-renewal/config.json --interval-seconds 3600 --renew-before-hours 168 --lifetime-hours 168 --once
+    Assert-Exit "Forced certificate renewal test failed"
 
     Step "Running clean-install smoke tests"
     & docker compose exec -T postgres pg_isready -U fieldora -d postgres
@@ -527,7 +623,7 @@ Internal CA: $TrustRoot\ca-certificate.pem
     if (-not $curl) { throw "curl.exe is required for TLS smoke testing on Windows 11." }
     $caFile = Join-Path $TrustRoot "ca-certificate.pem"
     & curl.exe --fail --silent --show-error --cacert $caFile https://127.0.0.1:8765/ -o $null
-    Assert-Exit "Fieldora HTTPS root test failed"
+    Assert-Exit "Fieldora HTTPS root test failed after live certificate renewal"
     $live = (& curl.exe --fail --silent --show-error --cacert $caFile https://127.0.0.1:8765/health/live) | ConvertFrom-Json
     Assert-Exit "Fieldora liveness test failed"
     $ready = (& curl.exe --fail --silent --show-error --cacert $caFile https://127.0.0.1:8765/health/ready) | ConvertFrom-Json
@@ -541,9 +637,12 @@ Internal CA: $TrustRoot\ca-certificate.pem
     $servicesJson = Docker-Output { docker compose run --rm --no-deps fieldora-server fieldora-operator --postgres-dsn-file /run/secrets/fieldora-governance-dsn list --organization $Organization }
     Assert-Exit "Operator registry verification failed"
     $services = @($servicesJson | ConvertFrom-Json)
-    if (($services.service_id -notcontains $ApiServiceId) -or ($services.service_id -notcontains $WorkerServiceId)) {
-        throw "Operator registry does not contain both required local services."
+    foreach ($requiredService in @($ApiServiceId,$WorkerServiceId,$PostgresServiceId,$RenewerServiceId)) {
+        if ($services.service_id -notcontains $requiredService) { throw "Operator registry is missing $requiredService" }
     }
+
+    $rootKeyMountCheck = Docker-Output { docker inspect fieldora-cert-renewer --format '{{range .Mounts}}{{println .Destination}}{{end}}' }
+    if ($rootKeyMountCheck -match 'service-trust') { throw "Root CA directory must never be mounted into the renewal service." }
 
     Write-Host ""
     Write-Host "FIELDORA CLEAN INSTALL PASSED" -ForegroundColor Green
@@ -552,9 +651,12 @@ Internal CA: $TrustRoot\ca-certificate.pem
     Write-Host "User:     $AdminUsername"
     Write-Host "Password: $AdminPassword"
     Write-Host "Credentials: $InstallRoot\ADMIN-CREDENTIALS.txt"
-    Write-Host "API service: $ApiServiceId (enrolled, long-lived)"
-    Write-Host "Worker:      $WorkerServiceId (enrolled, long-lived)"
-    Write-Host "PostgreSQL:  network TLS requires trusted client certificate"
+    Write-Host "API service:       $ApiServiceId"
+    Write-Host "Worker service:    $WorkerServiceId"
+    Write-Host "PostgreSQL service:$PostgresServiceId"
+    Write-Host "Trust renewer:     $RenewerServiceId"
+    Write-Host "Certificate renewal: automatic, no routine service restart"
+    Write-Host "Root CA private key: offline from running containers"
     Write-Host "Restart policy: unless-stopped"
 }
 finally {

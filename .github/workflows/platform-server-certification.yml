@@ -3,9 +3,11 @@ name: Fieldora Platform server certification
 on:
   pull_request:
     paths:
+      - "pyproject.toml"
       - "src/natureai_next/bootstrap/platform_server_cli.py"
       - "src/natureai_next/bootstrap/operator_cli.py"
       - "src/natureai_next/bootstrap/service_trust_cli.py"
+      - "src/natureai_next/bootstrap/certificate_renewer_cli.py"
       - "src/natureai_next/server/operator_control.py"
       - "src/natureai_next/server/platform_api.py"
       - "src/natureai_next/server/platform_extensions.py"
@@ -19,6 +21,7 @@ on:
       - "src/natureai_next/server/http.py"
       - "tests/test_platform_server_extensions.py"
       - "tests/test_service_tls_reload.py"
+      - "tests/test_certificate_renewal.py"
       - ".github/workflows/platform-server-certification.yml"
   workflow_dispatch:
 
@@ -48,6 +51,7 @@ jobs:
           src/natureai_next/bootstrap/platform_server_cli.py
           src/natureai_next/bootstrap/operator_cli.py
           src/natureai_next/bootstrap/service_trust_cli.py
+          src/natureai_next/bootstrap/certificate_renewer_cli.py
           src/natureai_next/server/operator_control.py
           src/natureai_next/server/platform_api.py
           src/natureai_next/server/platform_extensions.py
@@ -61,6 +65,7 @@ jobs:
           src/natureai_next/server/http.py
           tests/test_platform_server_extensions.py
           tests/test_service_tls_reload.py
+          tests/test_certificate_renewal.py
 
       - name: Platform server tests
         run: >-
@@ -69,3 +74,4 @@ jobs:
           tests/test_server_web_compatibility.py
           tests/test_facility_server_api.py
           tests/test_service_tls_reload.py
+          tests/test_certificate_renewal.py

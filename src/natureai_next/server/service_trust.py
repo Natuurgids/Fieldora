@@ -105,11 +105,15 @@ class ServiceTrustAuthority:
         ip_addresses: tuple[str, ...] = (),
         lifetime_hours: int = 168,
         reuse_private_key: bool = True,
+        file_uid: int | None = None,
+        file_gid: int | None = None,
     ) -> ServiceCertificate:
         if not 1 <= lifetime_hours <= 24 * 30:
             raise ValueError("service certificate lifetime must be 1 hour to 30 days")
         if not all(value.strip() for value in (service_id, organization_id, common_name)):
             raise ValueError("service identity fields are required")
+        if (file_uid is None) != (file_gid is None):
+            raise ValueError("certificate file uid and gid must be configured together")
         issuer_key, issuer_certificate = self._load_issuer()
         key = (
             _load_private_key(private_key_path)
@@ -154,12 +158,16 @@ class ServiceTrustAuthority:
             )
             .sign(issuer_key, hashes.SHA256())
         )
-        _atomic_private_key(private_key_path, key)
+        _atomic_private_key(
+            private_key_path, key, uid=file_uid, gid=file_gid
+        )
         _atomic_bytes(
             certificate_path,
             certificate.public_bytes(serialization.Encoding.PEM)
             + issuer_certificate.public_bytes(serialization.Encoding.PEM),
             0o644,
+            uid=file_uid,
+            gid=file_gid,
         )
         return ServiceCertificate(
             service_id=service_id,
@@ -309,7 +317,13 @@ def _load_private_key(path: Path):
     return serialization.load_pem_private_key(path.read_bytes(), password=None)
 
 
-def _atomic_private_key(path: Path, key) -> None:
+def _atomic_private_key(
+    path: Path,
+    key,
+    *,
+    uid: int | None = None,
+    gid: int | None = None,
+) -> None:
     _atomic_bytes(
         path,
         key.private_bytes(
@@ -318,10 +332,19 @@ def _atomic_private_key(path: Path, key) -> None:
             serialization.NoEncryption(),
         ),
         0o600,
+        uid=uid,
+        gid=gid,
     )
 
 
-def _atomic_bytes(path: Path, value: bytes, mode: int) -> None:
+def _atomic_bytes(
+    path: Path,
+    value: bytes,
+    mode: int,
+    *,
+    uid: int | None = None,
+    gid: int | None = None,
+) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     descriptor, temp_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
     try:
@@ -330,9 +353,13 @@ def _atomic_bytes(path: Path, value: bytes, mode: int) -> None:
             handle.flush()
             os.fsync(handle.fileno())
         os.chmod(temp_name, mode)
+        if uid is not None and gid is not None:
+            os.chown(temp_name, uid, gid)
         os.replace(temp_name, path)
         try:
             os.chmod(path, mode)
+            if uid is not None and gid is not None:
+                os.chown(path, uid, gid)
         except OSError:
             pass
     except BaseException:

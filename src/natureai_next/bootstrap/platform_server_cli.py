@@ -17,12 +17,12 @@ from typing import Any
 from natureai_next import __version__
 from natureai_next.bootstrap.paths import resolve_application_paths
 from natureai_next.domain.access_control import PolicyEffect, PolicySource
-from natureai_next.server.facility_platform_api import CompletePlatformFieldoraApi
 from natureai_next.server.operator_control import (
     PostgresOperatorRepository,
     SqliteOperatorRepository,
 )
 from natureai_next.server.platform_extensions import ProjectOptionalStagedIngestionStore
+from natureai_next.server.runtime_api import RuntimeGovernedFieldoraApi
 from natureai_next.server.service_runtime import ServiceRuntimeSupervisor
 
 
@@ -59,7 +59,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             return None
         return base_run_one_job(*args, **kwargs)
 
-    server_cli.FieldoraApi = CompletePlatformFieldoraApi
+    server_cli.FieldoraApi = RuntimeGovernedFieldoraApi
     server_cli.StagedIngestionStore = ProjectOptionalStagedIngestionStore
     server_cli.AccessAdministrationService = TrackingAdministration
     if command == "run-job-worker" and supervisor is not None:
@@ -71,7 +71,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     finally:
         if supervisor is not None:
             supervisor.stop()
-        server_cli.FieldoraApi = CompletePlatformFieldoraApi
+        server_cli.FieldoraApi = RuntimeGovernedFieldoraApi
         server_cli.StagedIngestionStore = ProjectOptionalStagedIngestionStore
         server_cli.AccessAdministrationService = base_administration
         server_cli.run_one_job = base_run_one_job

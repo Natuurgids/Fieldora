@@ -1,7 +1,8 @@
 """Central navigation contracts for the Fieldora desktop.
 
 This module intentionally has no Qt imports so release tooling can validate the
-workspace and route inventory even when PySide6 is unavailable.
+workspace and route inventory even when PySide6 is unavailable.  Runtime-only
+page integrations are imported lazily after the structural contract succeeds.
 """
 from __future__ import annotations
 
@@ -84,6 +85,26 @@ def is_supported_route(route: str, workspaces: Iterable[str]) -> bool:
     return normalized in set(workspaces) or is_context_route(route)
 
 
+def _apply_runtime_page_integrations(pages: Mapping[str, object]) -> None:
+    """Attach optional Qt integrations only to real V5 runtime page objects.
+
+    Keeping this lazy preserves the import-free navigation contract for release
+    tooling while allowing the large legacy V5 desktop module to be extended by
+    focused, testable components.
+    """
+    operations = pages.get("Asset & Equipment Operations")
+    if operations is None:
+        return
+    page_type = type(operations)
+    if page_type.__module__ != "natureai_next.ui.qt.v5_desktop" or page_type.__name__ != "AssetEquipmentOperations":
+        return
+    from natureai_next.ui.qt.facility_operations_integration import (
+        integrate_asset_equipment_operations,
+    )
+
+    integrate_asset_equipment_operations(operations)
+
+
 def validate_page_mapping(pages: Mapping[str, object]) -> None:
     expected = workspace_names()
     actual = tuple(pages)
@@ -106,3 +127,4 @@ def validate_page_mapping(pages: Mapping[str, object]) -> None:
     duplicates = [names for names in duplicate_objects.values() if len(names) > 1]
     if duplicates:
         raise RuntimeError(f"V5 workspace registry reuses page instances: {duplicates!r}")
+    _apply_runtime_page_integrations(pages)

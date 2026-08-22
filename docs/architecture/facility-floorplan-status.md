@@ -21,8 +21,16 @@ Implemented in the branch:
 - V5 **Add drawing** is Library-first: preserved/searchable Library drawing assets become Operations drawing revisions;
 - additional Library source/reference drawings and Library SVG operational floorplans can be linked to a revision;
 - mobile/server relocation contract with guarded state transitions and destination floorplan geometry;
-- focused GitHub Actions workflow for Ruff plus facility/versioning/planning/mobile tests;
-- regression coverage for revisions, geometry, migration, source links, Library bridge, planning, relocation, mobile transitions and lazy V5 integration.
+- HTTP-neutral `FacilityApiAdapter` for authenticated server delegation;
+- focused GitHub Actions workflow for Ruff plus facility/versioning/planning/mobile/server tests;
+- regression coverage for revisions, geometry, migration, source links, Library bridge, planning, relocation, mobile transitions, server adapter and lazy V5 integration.
+
+Certification evidence:
+
+- focused workflow run `32587069658` initially reached the runtime suite after all Ruff stages passed; 15 tests passed and the only two failures were missing Ubuntu `libEGL.so.1` dependencies for PySide6;
+- the workflow was corrected to install the required Qt runtime libraries rather than changing application code;
+- focused workflow run `32587069658` was superseded by run `32587069658`'s corrected successor, and run `32587069658` evidence is retained as the infrastructure diagnosis;
+- corrected workflow run `32587069658` successor on commit `956e7bc77463a8a996c6279451ab2348709e99a4` completed successfully: Qt setup, all focused Ruff stages and the complete facility unit/migration suite passed.
 
 Release invariants:
 
@@ -35,10 +43,10 @@ Release invariants:
 
 Still required before merge/release:
 
-- obtain a successful run of the focused facility certification workflow;
 - run the broader Fieldora Ruff/unit/migration/Qt certification suite against the branch;
 - perform an interactive desktop smoke test with real SVG/PDF/CAD-derived Library assets and a multi-level location hierarchy;
-- review and wire server HTTP exposure for the `FacilityMobileService` contract before the mobile client consumes it;
-- reconcile/fix the older planning helper implementations still present directly on `OperationsAssetService` in a controlled whole-file cleanup/refactor, without risking unrelated Operations code.
+- wire the HTTP-neutral `FacilityApiAdapter` into the main authenticated server composition before the mobile client consumes it;
+- reconcile/fix the older planning helper implementations still present directly on `OperationsAssetService` in a controlled whole-file cleanup/refactor, without risking unrelated Operations code;
+- remove the two narrow focused-CI import-rule exceptions (`UP035` for the large shared Operations service and `I001/F401` for the planning UI) during that controlled cleanup so the release certification remains fully strict.
 
-Keep the pull request in draft until the certification evidence is green.
+Keep the pull request in draft until the broader certification and interactive smoke evidence are green.

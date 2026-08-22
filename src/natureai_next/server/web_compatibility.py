@@ -12,7 +12,7 @@ _HEALTH_ALIASES = {
     "/health/ready": "/api/v1/health/ready",
 }
 
-_WEB_PLATFORM_PATCH = r"""
+_WEB_PLATFORM_PATCH = br"""
 
 /* Fieldora Platform: Library-first intake, collaboration, and operator surfaces. */
 (()=>{
@@ -60,7 +60,7 @@ _WEB_PLATFORM_PATCH = r"""
  q("review-determine")?.addEventListener("click",async()=>{const id=q("review-case-id").value.trim();if(!id)return;try{await api(`/api/v1/review-cases/${encodeURIComponent(id)}/determinations`,{method:"POST",body:JSON.stringify({assertion:q("review-assertion").value,confidence:Number(q("review-confidence").value),evidence:{source:"web-expert-review"}})});loadReview(id);loadCollaboration()}catch(e){q("collab-status").textContent=e.message}});
  q("review-accept")?.addEventListener("click",async()=>{const id=q("review-case-id").value.trim(),det=q("review-accept-id").value.trim();if(!id||!det)return;try{await api(`/api/v1/review-cases/${encodeURIComponent(id)}/accept`,{method:"POST",body:JSON.stringify({determination_id:det})});loadReview(id);loadCollaboration()}catch(e){q("collab-status").textContent=e.message}});
 })();
-""".encode("utf-8")
+"""
 
 
 def rewrite_public_target(method: str, target: str) -> str:
@@ -118,10 +118,8 @@ def openapi_document() -> dict[str, object]:
             "/api/v1/status": {"get": {"summary": "Server status", "responses": {"200": {"description": "OK"}}}},
             "/api/v1/health/live": {"get": {"summary": "Liveness", "responses": {"200": {"description": "Live"}}}},
             "/api/v1/health/ready": {"get": {"summary": "Readiness", "responses": {"200": {"description": "Ready"}, "503": {"description": "Unavailable"}}}},
-            "/api/v1/session": {"post": {"summary": "Create session", "responses": {"200": {"description": "Session"}}}, "delete": {"summary": "Revoke session", "security": secured, "responses": {"204": {"description": "Revoked"}}}},
-            "/api/v1/me": {"get": {"summary": "Current identity", "security": secured, "responses": {"200": {"description": "Identity"}}}},
-            "/api/v1/media": {"get": {"summary": "List governed Library evidence", "security": secured, "responses": {"200": {"description": "Media"}}}},
-            "/api/v1/uploads": {"post": {"summary": "Begin Library upload; project optional", "security": secured, "responses": {"201": {"description": "Upload"}}}},
+            "/api/v1/media": {"get": {"summary": "List Library media", "security": secured, "responses": {"200": {"description": "Items"}}}},
+            "/api/v1/uploads": {"post": {"summary": "Begin resumable Library upload; project optional", "security": secured, "responses": {"201": {"description": "Upload"}}}},
             "/api/v1/staged-submissions": {"post": {"summary": "Begin staged Library intake; project optional", "security": secured, "responses": {"201": {"description": "Submission"}}}},
             "/api/v1/submissions": {"get": {"summary": "List intake records", "security": secured, "responses": {"200": {"description": "Items"}}}, "post": {"summary": "Register submission provenance", "security": secured, "responses": {"201": {"description": "Created"}}}},
             "/api/v1/review-cases": {"get": {"summary": "List expert review cases", "security": secured, "responses": {"200": {"description": "Items"}}}, "post": {"summary": "Request expert review", "security": secured, "responses": {"201": {"description": "Created"}}}},
@@ -134,4 +132,4 @@ def openapi_document() -> dict[str, object]:
 
 
 def _documentation_html() -> bytes:
-    return """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Fieldora API</title></head><body><main><h1>Fieldora Server API</h1><p><a href="/openapi.json">OpenAPI 3.1 contract</a></p><ul><li><a href="/health/live">Liveness</a></li><li><a href="/health/ready">Readiness</a></li></ul><p>Library uploads may be organization-scoped without a project. Scientific collaboration and operator endpoints remain governed by authentication and PBAC.</p></main></body></html>""".encode("utf-8")
+    return b"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Fieldora API</title></head><body><main><h1>Fieldora Server API</h1><p><a href="/openapi.json">OpenAPI 3.1 contract</a></p><ul><li><a href="/health/live">Liveness</a></li><li><a href="/health/ready">Readiness</a></li></ul><p>Library uploads may be organization-scoped without a project. Scientific collaboration and operator endpoints remain governed by authentication and PBAC.</p></main></body></html>"""

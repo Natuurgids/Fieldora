@@ -17,8 +17,6 @@ jobs:
     timeout-minutes: 60
     env:
       QT_QPA_PLATFORM: offscreen
-      FIELDORA_IDENTITY_ID: local-user
-      FIELDORA_PROFILE_ROLE: administrator
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

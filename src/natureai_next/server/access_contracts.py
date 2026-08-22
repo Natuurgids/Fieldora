@@ -1,7 +1,8 @@
 """Governed data-access contracts and information-barrier defaults.
 
 Intake scope is derived from the authenticated actor that introduces data. Widening
-access is a contract amendment; it is never an implicit ACL side effect.
+access is a contract amendment; it is never an implicit ACL side effect. Contract
+changes may target an individual governed object or an entire collection/dataset.
 """
 
 from __future__ import annotations
@@ -23,6 +24,21 @@ class AccessTargetKind(StrEnum):
     ORGANIZATION = "organization"
     PROJECT = "project"
     ORGANIZATION_PROJECT = "organization_project"
+
+
+class ContractSubjectKind(StrEnum):
+    ASSET = "asset"
+    COLLECTION = "collection"
+
+
+@dataclass(frozen=True, slots=True)
+class ContractSubject:
+    kind: ContractSubjectKind
+    subject_id: str
+
+    def __post_init__(self) -> None:
+        if not self.subject_id.strip():
+            raise ValueError("contract subject_id is required")
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,6 +81,7 @@ class ContractDraft:
     requires_project_owner_approval: bool
     required_owner_signatures: int
     source_project_id: str = ""
+    subject: ContractSubject | None = None
 
     @property
     def unrestricted(self) -> bool:
@@ -117,6 +134,34 @@ def default_intake_contract(context: IntakeContext) -> ContractDraft:
     )
 
 
+def restrict_contract(
+    base: ContractDraft,
+    *,
+    subject: ContractSubject,
+    replacement_targets: tuple[AccessTarget, ...],
+    administrator: bool,
+) -> ContractDraft:
+    """Replace a broader contract with a narrower one for one asset or a collection.
+
+    This is the administrative path for changing an originally unrestricted import
+    into, for example, organization-only access. It does not copy or re-import data.
+    """
+    if not administrator:
+        raise PermissionError("contract restriction/replacement requires administrator authority")
+    if not replacement_targets:
+        raise ValueError("replacement contract requires at least one access target")
+    if any(target.kind is AccessTargetKind.ALL for target in replacement_targets):
+        raise ValueError("restriction replacement cannot contain all-access")
+    return ContractDraft(
+        _deduplicate(replacement_targets),
+        base.inherited_contract_id,
+        False,
+        0,
+        source_project_id=base.source_project_id,
+        subject=subject,
+    )
+
+
 def sharing_amendment(
     base: ContractDraft,
     *,
@@ -137,13 +182,13 @@ def sharing_amendment(
     combined = _deduplicate(base.targets + requested_targets)
     project_governed = bool(base.source_project_id)
     if project_governed:
-        # A project owner allowing broader sharing must make two explicit attestations.
         return ContractDraft(
             combined,
             base.inherited_contract_id,
             True,
             2,
             source_project_id=base.source_project_id,
+            subject=base.subject,
         )
     return ContractDraft(
         combined,
@@ -151,6 +196,7 @@ def sharing_amendment(
         False,
         0,
         source_project_id=base.source_project_id,
+        subject=base.subject,
     )
 
 

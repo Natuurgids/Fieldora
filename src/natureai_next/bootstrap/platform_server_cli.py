@@ -1,19 +1,29 @@
 """Composition wrapper for the governed Fieldora Platform server.
 
 The established reference server remains the authentication, PBAC, persistence, job,
-and transport composition. This wrapper replaces only deliberate extension points and
-bootstraps explicit privileges for the first clean-install administrator.
+and transport composition. This wrapper replaces deliberate extension points, adds
+long-lived service supervision, and bootstraps explicit privileges for the first
+clean-install administrator.
 """
 
 from __future__ import annotations
 
+import os
 import sys
 from collections.abc import Sequence
+from pathlib import Path
 from typing import Any
 
+from natureai_next import __version__
+from natureai_next.bootstrap.paths import resolve_application_paths
 from natureai_next.domain.access_control import PolicyEffect, PolicySource
 from natureai_next.server.facility_platform_api import CompletePlatformFieldoraApi
+from natureai_next.server.operator_control import (
+    PostgresOperatorRepository,
+    SqliteOperatorRepository,
+)
 from natureai_next.server.platform_extensions import ProjectOptionalStagedIngestionStore
+from natureai_next.server.service_runtime import ServiceRuntimeSupervisor
 
 
 _LAST_REPOSITORY: Any = None
@@ -27,7 +37,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     if "register-media" in arguments and "--project" not in arguments:
         arguments.extend(("--project", ""))
 
+    command = _command(arguments)
+    supervisor = _runtime_supervisor(arguments, command)
     base_administration = server_cli.AccessAdministrationService
+    base_run_one_job = server_cli.run_one_job
 
     class TrackingAdministration(base_administration):
         def __init__(self, repository: Any) -> None:
@@ -41,19 +54,117 @@ def main(argv: Sequence[str] | None = None) -> int:
             _LAST_IDENTITY = identity
             return identity
 
+    def guarded_run_one_job(*args: Any, **kwargs: Any):
+        if supervisor is not None and not supervisor.state().may_accept_work:
+            return None
+        return base_run_one_job(*args, **kwargs)
+
     server_cli.FieldoraApi = CompletePlatformFieldoraApi
     server_cli.StagedIngestionStore = ProjectOptionalStagedIngestionStore
     server_cli.AccessAdministrationService = TrackingAdministration
+    if command == "run-job-worker" and supervisor is not None:
+        server_cli.run_one_job = guarded_run_one_job
     try:
+        if supervisor is not None:
+            supervisor.start()
         result = server_cli.main(arguments)
     finally:
+        if supervisor is not None:
+            supervisor.stop()
         server_cli.FieldoraApi = CompletePlatformFieldoraApi
         server_cli.StagedIngestionStore = ProjectOptionalStagedIngestionStore
         server_cli.AccessAdministrationService = base_administration
+        server_cli.run_one_job = base_run_one_job
 
-    if result == 0 and "init-user" in arguments:
+    if result == 0 and command == "init-user":
         _bootstrap_initial_operator(base_administration)
     return result
+
+
+def _runtime_supervisor(
+    arguments: list[str], command: str
+) -> ServiceRuntimeSupervisor | None:
+    if command not in {"serve", "run-job-worker"}:
+        return None
+    service_id = os.environ.get("FIELDORA_SERVICE_ID", "").strip()
+    if not service_id:
+        raise SystemExit(
+            "FIELDORA_SERVICE_ID is required for managed server and worker processes"
+        )
+    repository = _operator_repository(arguments)
+    return ServiceRuntimeSupervisor(
+        repository,
+        service_id,
+        heartbeat_seconds=float(os.environ.get("FIELDORA_HEARTBEAT_SECONDS", "30")),
+        software_version=__version__,
+        configuration_sha256=os.environ.get("FIELDORA_CONFIGURATION_SHA256", "").strip(),
+    )
+
+
+def _operator_repository(arguments: list[str]):
+    governance_backend = _argument_value(arguments, "--governance-backend") or "sqlite"
+    if governance_backend == "postgresql":
+        dsn_name = _argument_value(arguments, "--postgres-governance-dsn-file")
+        if not dsn_name:
+            raise SystemExit(
+                "service supervision requires --postgres-governance-dsn-file"
+            )
+        dsn_file = Path(dsn_name)
+        if not dsn_file.is_file() or dsn_file.stat().st_size > 16_384:
+            raise SystemExit("PostgreSQL governance DSN file is invalid")
+        dsn = dsn_file.read_text(encoding="utf-8").strip()
+        if not dsn:
+            raise SystemExit("PostgreSQL governance DSN file is empty")
+        try:
+            import psycopg
+        except ImportError as exc:
+            raise SystemExit(
+                "service supervision requires the server-postgresql dependency"
+            ) from exc
+        return PostgresOperatorRepository(
+            lambda: psycopg.connect(dsn, connect_timeout=10)
+        )
+    root_name = _argument_value(arguments, "--data-root")
+    root = None if not root_name else Path(root_name)
+    paths = resolve_application_paths(root)
+    paths.ensure_directories()
+    return SqliteOperatorRepository(
+        paths.subsystem_databases_dir / "operator-control.sqlite3"
+    )
+
+
+def _argument_value(arguments: list[str], name: str) -> str:
+    try:
+        index = arguments.index(name)
+    except ValueError:
+        return ""
+    if index + 1 >= len(arguments):
+        return ""
+    return arguments[index + 1]
+
+
+def _command(arguments: list[str]) -> str:
+    commands = {
+        "serve",
+        "init-user",
+        "register-media",
+        "create-service-key",
+        "revoke-service-key",
+        "create-device-key",
+        "map-oidc-user",
+        "verify-audit",
+        "rebuild-search",
+        "run-jobs-once",
+        "run-job-worker",
+        "purge-expired-exports",
+        "create-project-contract",
+        "set-contract-status",
+        "init-export-signing-key",
+        "verify-project-export",
+        "generate-export-recipient-key",
+        "decrypt-project-export",
+    }
+    return next((item for item in arguments if item in commands), "")
 
 
 def _bootstrap_initial_operator(administration_type: Any) -> None:
@@ -79,8 +190,10 @@ def _bootstrap_initial_operator(administration_type: Any) -> None:
             "view_review",
             "determine",
             "accept_determination",
+            "link",
+            "unlink",
         ),
-        resource_types=("asset", "submission", "review_case"),
+        resource_types=("asset", "submission", "review_case", "media_association"),
         organization_id=organization_id,
         purposes=("research",),
     )
@@ -111,8 +224,12 @@ def _bootstrap_initial_operator(administration_type: Any) -> None:
             "service.drain",
             "service.stop",
             "service.revoke",
+            "bulk_ingest.create",
+            "bulk_ingest.view",
+            "logs.view",
+            "capacity.view",
         ),
-        resource_types=("infrastructure",),
+        resource_types=("infrastructure", "bulk_ingest"),
         organization_id=organization_id,
         purposes=("administration",),
     )

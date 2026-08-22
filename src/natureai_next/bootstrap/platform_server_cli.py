@@ -1,9 +1,8 @@
 """Composition wrapper for the governed Fieldora Platform server.
 
-This module deliberately reuses the established reference-server composition. It swaps
-only extension points: the enhanced API and project-optional staged intake. The initial
-local administrator receives explicit evidence and operator policies; no client-side
-administrator flag is introduced.
+The established reference server remains the authentication, PBAC, persistence, job,
+and transport composition. This wrapper replaces only deliberate extension points and
+bootstraps explicit privileges for the first clean-install administrator.
 """
 
 from __future__ import annotations
@@ -13,7 +12,7 @@ from collections.abc import Sequence
 from typing import Any
 
 from natureai_next.domain.access_control import PolicyEffect, PolicySource
-from natureai_next.server.platform_api import PlatformFieldoraApi
+from natureai_next.server.facility_platform_api import CompletePlatformFieldoraApi
 from natureai_next.server.platform_extensions import ProjectOptionalStagedIngestionStore
 
 
@@ -25,8 +24,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     from natureai_next.bootstrap import server_cli
 
     arguments = list(sys.argv[1:] if argv is None else argv)
-    # The legacy CLI parser marks --project required for register-media. Preserve
-    # compatibility while making an omitted project mean institution Library scope.
     if "register-media" in arguments and "--project" not in arguments:
         arguments.extend(("--project", ""))
 
@@ -44,13 +41,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             _LAST_IDENTITY = identity
             return identity
 
-    server_cli.FieldoraApi = PlatformFieldoraApi
+    server_cli.FieldoraApi = CompletePlatformFieldoraApi
     server_cli.StagedIngestionStore = ProjectOptionalStagedIngestionStore
     server_cli.AccessAdministrationService = TrackingAdministration
     try:
         result = server_cli.main(arguments)
     finally:
-        server_cli.FieldoraApi = PlatformFieldoraApi
+        server_cli.FieldoraApi = CompletePlatformFieldoraApi
         server_cli.StagedIngestionStore = ProjectOptionalStagedIngestionStore
         server_cli.AccessAdministrationService = base_administration
 
@@ -86,6 +83,20 @@ def _bootstrap_initial_operator(administration_type: Any) -> None:
         resource_types=("asset", "submission", "review_case"),
         organization_id=organization_id,
         purposes=("research",),
+    )
+    administration.create_policy(
+        name="Initial facilities planning and relocation access",
+        effect=PolicyEffect.ALLOW,
+        source=PolicySource.ROLE,
+        role_id="project-manager",
+        actions=("view", "create", "edit", "update"),
+        resource_types=(
+            "operations.drawing",
+            "operations.layout",
+            "operations.relocation",
+        ),
+        organization_id=organization_id,
+        purposes=("operations",),
     )
     administration.create_policy(
         name="Initial Fieldora infrastructure operator",

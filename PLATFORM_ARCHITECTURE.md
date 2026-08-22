@@ -17,6 +17,26 @@ A Library asset may independently participate in:
 
 Projects organize work. They do not own or duplicate the scientific evidence they reference.
 
+## Contract-derived information barriers
+
+Library-first ownership does not mean unrestricted access. Every intake receives an access contract from the authenticated intake identity before the data becomes generally usable. Access widening is a new or amended contract, never an informal ACL shortcut.
+
+Default intake rules are:
+
+- administrator or installation-wide generic service import: unrestricted/all-access unless the administrator explicitly supplies a narrower contract;
+- organization service import: automatically restricted to that organization;
+- phone, Aperture client, field device, or other contracted client: inherits the supplied contract;
+- project member upload: the member must choose one project from their actual memberships, and the project contract becomes the governing context for that intake;
+- uncontracted ordinary user intake outside a project: organization-scoped by default rather than globally visible.
+
+The normal user/supervisor sharing choices are explicit contract targets: another project, the entire current organization, another organization, or a specific project in another organization. Administrative/bulk import tooling may construct contracts containing multiple organizations and projects in one governed operation.
+
+Project information barriers are fail-closed. A project member may request wider sharing, but that request does not itself grant access. Widening a project-governed contract requires project-owner approval. When the project owner authorizes the widening, Fieldora requires two separate owner attestations/signatures for the same contract amendment before it becomes effective. The two attestations are independently recorded and must have distinct signature/attestation identifiers.
+
+A project owner may not bypass this rule by initiating the sharing request personally; approval of project-data sharing still uses the same two-step owner confirmation. Administrator-created unrestricted data is different because it did not originate under a project information barrier.
+
+Cross-organization and cross-project grants are additive views over the same governed Library evidence. They do not copy the scientific asset into another project or organization, and revoking a grant removes that access path without rewriting the evidence or its provenance.
+
 ## Submission and expert review are first-class domains
 
 Fieldora accepts governed evidence without forcing a project. A Submission records intake provenance such as contributor/source, rights, consent, collection/project context, and receipt state.

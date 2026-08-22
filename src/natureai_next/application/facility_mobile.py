@@ -29,7 +29,7 @@ class FacilityMobileService:
             "schema": "fieldora.facility-relocation.v1",
             "campaign": dict(campaign),
             "progress": progress,
-            "steps": tuple(self._step_payload(row, actor) for row in steps),
+            "steps": tuple(self._step_payload(row) for row in steps),
         }
 
     def step(self, step_id: str, actor: str = "local-user") -> dict[str, Any]:
@@ -44,7 +44,7 @@ class FacilityMobileService:
         step = next((item for item in steps if str(item.get("id")) == step_id), None)
         if step is None:
             raise KeyError(step_id)
-        return self._step_payload(step, actor)
+        return self._step_payload(step)
 
     def steps_for_resource(
         self,
@@ -66,7 +66,7 @@ class FacilityMobileService:
         with self.planning._connect() as cx:
             rows = cx.execute(sql, args).fetchall()
         result: list[dict[str, Any]] = []
-        for campaign_id, step_id in rows:
+        for _campaign_id, step_id in rows:
             try:
                 result.append(self.step(str(step_id), actor))
             except KeyError:
@@ -83,18 +83,29 @@ class FacilityMobileService:
         evidence_library_asset_id: str = "",
         occurred_at: str = "",
     ) -> dict[str, Any]:
+        requested = str(state or "").casefold().strip()
+        before = self.step(step_id, actor)
+        current = str(before.get("status") or "pending")
+        allowed = tuple(str(item) for item in before.get("next_actions") or ())
+        # Repeating the same state is accepted so an offline/mobile client may
+        # safely retry a request after losing the response.
+        if requested != current and requested not in allowed:
+            raise ValueError(
+                f"Invalid relocation transition {current!r} -> {requested!r}; "
+                f"allowed next states: {', '.join(allowed) or 'none'}"
+            )
         timestamp = occurred_at or datetime.now().isoformat(timespec="seconds")
         movement_id = self.planning.record_relocation_step_state(
             step_id,
-            state,
+            requested,
             actor=actor,
             notes=notes,
             evidence_library_asset_id=evidence_library_asset_id,
             moved_at=timestamp,
         )
         payload = self.step(step_id, actor)
-        payload["recorded_state"] = state
-        payload["movement_id"] = movement_id or ""
+        payload["recorded_state"] = requested
+        payload["movement_id"] = movement_id or str(payload.get("movement_id") or "")
         payload["recorded_at"] = timestamp
         return payload
 
@@ -121,6 +132,7 @@ class FacilityMobileService:
             "title": context.get("title"),
             "version": context.get("version"),
             "status": context.get("status"),
+            "operational_svg_asset_id": context.get("operational_svg_asset_id"),
             "operational_svg_path": context.get("operational_svg_path"),
             "geometry_id": context.get("geometry_id"),
             "geometry_type": context.get("geometry_type"),
@@ -129,9 +141,10 @@ class FacilityMobileService:
             "target_path": step.get("to_path"),
         }
 
-    def _step_payload(self, row: dict[str, Any], actor: str) -> dict[str, Any]:
+    @staticmethod
+    def _step_payload(row: dict[str, Any]) -> dict[str, Any]:
         status = str(row.get("status") or "pending")
-        next_actions = self._next_actions(status)
+        next_actions = FacilityMobileService._next_actions(status)
         return {
             "step_id": str(row.get("id") or ""),
             "campaign_id": str(row.get("campaign_id") or ""),
@@ -147,6 +160,7 @@ class FacilityMobileService:
             "action": str(row.get("action") or "move"),
             "status": status,
             "assigned_to": str(row.get("assigned_to") or ""),
+            "movement_id": str(row.get("movement_id") or ""),
             "notes": str(row.get("notes") or ""),
             "next_actions": next_actions,
             "is_final": status in {"stored", "placed", "displayed", "completed", "cancelled"},

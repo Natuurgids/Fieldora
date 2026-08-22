@@ -5,7 +5,7 @@ from urllib.parse import urlsplit
 
 from natureai_next.server.api import ApiResponse
 
-_FACILITY_WEB_PATCH = r"""
+_FACILITY_WEB_PATCH = br"""
 
 /* Fieldora Facilities Planning browser workspace. */
 (()=>{
@@ -21,7 +21,7 @@ _FACILITY_WEB_PATCH = r"""
  q("facility-campaign-create").onclick=async()=>{try{const x=await api("/api/v1/facility-planning/campaigns",{method:"POST",purpose:"operations",body:JSON.stringify({name:q("facility-campaign-name").value,plan_id:q("facility-campaign-plan").value})});q("facility-campaign-id").value=x.campaign.id;loadAll();openCampaign(x.campaign.id)}catch(e){q("facility-planning-status").textContent=e.message}};
  q("facility-campaign-open").onclick=()=>openCampaign(q("facility-campaign-id").value.trim());document.querySelectorAll('.nav[data-page="operations"]').forEach(b=>b.addEventListener("click",loadAll));
 })();
-""".encode()
+"""
 
 
 def patch_facility_web_response(target: str, response: ApiResponse) -> ApiResponse:

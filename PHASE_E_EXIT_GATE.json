@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "phase": "E",
+  "release": "0.11.21",
+  "status": "pass",
+  "checks": [
+    {
+      "check_id": "interrupted-sync",
+      "status": "pass",
+      "evidence": [
+        "tests/test_fieldora_009_desktop_sync_foundation.py::test_outbox_resumes_after_interrupted_lease_and_is_idempotent"
+      ]
+    },
+    {
+      "check_id": "revoked-rights",
+      "status": "pass",
+      "evidence": [
+        "tests/test_fieldora_009_sync_protocol.py::test_revoked_rights_block_transport"
+      ]
+    },
+    {
+      "check_id": "offline-provenance",
+      "status": "pass",
+      "evidence": [
+        "tests/test_fieldora_009_contribution_review.py::test_preview_and_current_terms_acknowledgment_gate_push"
+      ]
+    },
+    {
+      "check_id": "governed-deltas",
+      "status": "pass",
+      "evidence": [
+        "tests/test_fieldora_009_governed_packs.py::test_delta_requires_exact_installed_base_and_updates_isolated_store"
+      ]
+    },
+    {
+      "check_id": "pack-security",
+      "status": "pass",
+      "evidence": [
+        "tests/test_fieldora_009_governed_pack_security.py::test_tamper_is_rejected_and_revocation_destroys_key_and_envelope"
+      ]
+    }
+  ]
+}

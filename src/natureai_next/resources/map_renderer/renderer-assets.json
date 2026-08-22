@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "approval_status": "approved",
+  "approved_for": "Aperture Build 3.329 Windows MBTiles renderer",
+  "assets": [
+    {
+      "filename": "maplibre-gl.js",
+      "package": "maplibre-gl",
+      "version": "5.24.0",
+      "license": "BSD-3-Clause",
+      "source": "npm:maplibre-gl@5.24.0/dist/maplibre-gl.js",
+      "sha256": "45a9b07a9189ce56054c620a947ccf41e291e58c95e9b61533b740aaa65ee5cb"
+    },
+    {
+      "filename": "maplibre-gl.css",
+      "package": "maplibre-gl",
+      "version": "5.24.0",
+      "license": "BSD-3-Clause",
+      "source": "npm:maplibre-gl@5.24.0/dist/maplibre-gl.css",
+      "sha256": "ab1e70d59ec40465bae7e7030da2f3ccf28133fd502e62bd598eefbadfd7a732"
+    }
+  ]
+}

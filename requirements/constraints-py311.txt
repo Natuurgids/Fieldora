@@ -1,0 +1,28 @@
+# NatureAI Next Python 3.11 compatibility constraints.
+# These pins make source installations repeatable without sharing packages with
+# NatureAI Legacy. Update deliberately and validate before changing.
+
+packaging==24.2
+platformdirs==4.3.6
+Pillow==11.1.0
+numpy==1.26.4
+rawpy==0.19.1
+pyshp==2.4.2
+cryptography==44.0.3
+typing-extensions==4.12.2
+
+PySide6==6.8.3
+
+# AI stack. Torch and torchvision must remain a compatible pair.
+torch==2.5.1
+torchvision==0.20.1
+open-clip-torch==2.30.0
+hnswlib==0.8.0
+
+# Development and validation tools.
+coverage==7.6.12
+import-linter==2.1
+mypy==1.15.0
+pytest==8.3.5
+pytest-cov==6.0.0
+ruff==0.9.10

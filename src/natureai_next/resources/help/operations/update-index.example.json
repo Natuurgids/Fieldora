@@ -1,0 +1,11 @@
+{
+  "format": "natureai-next.update-index",
+  "format_version": 1,
+  "product": "Aperture",
+  "channel": "stable",
+  "version": "0.17.3",
+  "minimum_supported_version": "0.17.0",
+  "package": "NatureAI-Next-0.17.3-Aperture-Offline-Update-Manager.zip",
+  "sha256": "REPLACE_WITH_RELEASE_SHA256",
+  "release_notes": "RELEASE_NOTES-0.17.3.md"
+}

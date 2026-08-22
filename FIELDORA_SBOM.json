@@ -1,0 +1,164 @@
+{
+  "bomFormat": "CycloneDX",
+  "components": [
+    {
+      "name": "boto3",
+      "requirement": "boto3>=1.35,<2",
+      "scope": "optional:server-s3",
+      "type": "library"
+    },
+    {
+      "name": "coverage",
+      "requirement": "coverage[toml]>=7.6,<8",
+      "scope": "optional:dev",
+      "type": "library"
+    },
+    {
+      "name": "cryptography",
+      "requirement": "cryptography>=44,<47",
+      "scope": "required",
+      "type": "library"
+    },
+    {
+      "name": "hnswlib",
+      "requirement": "hnswlib>=0.8,<0.9",
+      "scope": "optional:ai",
+      "type": "library"
+    },
+    {
+      "name": "huggingface-hub",
+      "requirement": "huggingface-hub>=0.27,<1",
+      "scope": "optional:ai",
+      "type": "library"
+    },
+    {
+      "name": "import-linter",
+      "requirement": "import-linter>=2.1,<3",
+      "scope": "optional:dev",
+      "type": "library"
+    },
+    {
+      "name": "mypy",
+      "requirement": "mypy>=1.11,<2",
+      "scope": "optional:dev",
+      "type": "library"
+    },
+    {
+      "name": "numpy",
+      "requirement": "numpy>=1.26,<3",
+      "scope": "optional:document-ai",
+      "type": "library"
+    },
+    {
+      "name": "open-clip-torch",
+      "requirement": "open-clip-torch>=2.30,<3",
+      "scope": "optional:ai",
+      "type": "library"
+    },
+    {
+      "name": "packaging",
+      "requirement": "packaging>=24,<26",
+      "scope": "required",
+      "type": "library"
+    },
+    {
+      "name": "Pillow",
+      "requirement": "Pillow>=11,<13",
+      "scope": "required",
+      "type": "library"
+    },
+    {
+      "name": "platformdirs",
+      "requirement": "platformdirs>=4.2,<5",
+      "scope": "required",
+      "type": "library"
+    },
+    {
+      "name": "psycopg",
+      "requirement": "psycopg[binary]>=3.2,<4",
+      "scope": "optional:server-postgresql",
+      "type": "library"
+    },
+    {
+      "name": "pybioclip",
+      "requirement": "pybioclip==2.1.5",
+      "scope": "optional:ai",
+      "type": "library"
+    },
+    {
+      "name": "PyMuPDF",
+      "requirement": "PyMuPDF>=1.24,<2",
+      "scope": "optional:document-ai",
+      "type": "library"
+    },
+    {
+      "name": "pyshp",
+      "requirement": "pyshp>=2.3,<3",
+      "scope": "required",
+      "type": "library"
+    },
+    {
+      "name": "PySide6",
+      "requirement": "PySide6>=6.8,<6.9",
+      "scope": "optional:gui",
+      "type": "library"
+    },
+    {
+      "name": "pytest",
+      "requirement": "pytest>=8.3,<9",
+      "scope": "optional:dev",
+      "type": "library"
+    },
+    {
+      "name": "pytest-cov",
+      "requirement": "pytest-cov>=5,<7",
+      "scope": "optional:dev",
+      "type": "library"
+    },
+    {
+      "name": "rapidocr-onnxruntime",
+      "requirement": "rapidocr-onnxruntime>=1.4,<2",
+      "scope": "optional:document-ai",
+      "type": "library"
+    },
+    {
+      "name": "rawpy",
+      "requirement": "rawpy>=0.19.1,<0.26",
+      "scope": "required",
+      "type": "library"
+    },
+    {
+      "name": "ruff",
+      "requirement": "ruff>=0.7,<1",
+      "scope": "optional:dev",
+      "type": "library"
+    },
+    {
+      "name": "torch",
+      "requirement": "torch>=2.5,<2.8",
+      "scope": "optional:ai",
+      "type": "library"
+    },
+    {
+      "name": "torchvision",
+      "requirement": "torchvision>=0.20,<0.23",
+      "scope": "optional:ai",
+      "type": "library"
+    },
+    {
+      "name": "typing-extensions",
+      "requirement": "typing-extensions>=4.12,<5; python_version < '3.12'",
+      "scope": "required",
+      "type": "library"
+    }
+  ],
+  "metadata": {
+    "component": {
+      "name": "Fieldora",
+      "type": "application",
+      "version": "0.11.21"
+    }
+  },
+  "specVersion": "1.5",
+  "version": 1
+}

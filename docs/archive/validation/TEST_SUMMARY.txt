@@ -1,0 +1,5 @@
+Aperture 4.0.0.dev1+build33.5 — Phase 6 Models Page
+
+Automated validation: 326 passed, 1 skipped.
+Skipped test: Qt activity scheduling test because PySide6 is unavailable in the Linux validation environment.
+Python compilation: passed.

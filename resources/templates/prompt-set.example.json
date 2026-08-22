@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "identity": "local-bioclip-taxonomy-prompts",
+  "semantic_version": "1.0.0",
+  "model_family": "bioclip",
+  "minimum_application_version": "0.13.5",
+  "prompts": [
+    {
+      "label": "Example species",
+      "text": "a wildlife photograph of Example species",
+      "taxon_public_id": "replace-with-installed-taxon-public-id",
+      "broad_group": null
+    }
+  ]
+}

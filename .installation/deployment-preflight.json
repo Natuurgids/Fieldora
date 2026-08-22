@@ -1,0 +1,60 @@
+{
+  "checks": [
+    {
+      "detail": "pyproject.toml",
+      "name": "required:pyproject.toml",
+      "passed": true
+    },
+    {
+      "detail": "RELEASE_NOTES.md",
+      "name": "required:RELEASE_NOTES.md",
+      "passed": true
+    },
+    {
+      "detail": "RELEASE_MANIFEST.json",
+      "name": "required:RELEASE_MANIFEST.json",
+      "passed": true
+    },
+    {
+      "detail": "scripts/install_windows.ps1",
+      "name": "required:scripts/install_windows.ps1",
+      "passed": true
+    },
+    {
+      "detail": "scripts/uninstall_windows.ps1",
+      "name": "required:scripts/uninstall_windows.ps1",
+      "passed": true
+    },
+    {
+      "detail": "scripts/verify_install.py",
+      "name": "required:scripts/verify_install.py",
+      "passed": true
+    },
+    {
+      "detail": "resources/fieldora.ico",
+      "name": "required:resources/fieldora.ico",
+      "passed": true
+    },
+    {
+      "detail": "1507 files; exact package inventory",
+      "name": "release_manifest",
+      "passed": true
+    },
+    {
+      "detail": "1507 manifest paths are Windows-safe",
+      "name": "windows_paths",
+      "passed": true
+    },
+    {
+      "detail": "3.13.5 (main, May  5 2026, 21:05:52) [GCC 14.2.0]",
+      "name": "bootstrap_python",
+      "passed": true
+    }
+  ],
+  "engine": "Fieldora Engine",
+  "passed": true,
+  "platform": "Linux-6.18.35-x86_64-with-glibc2.41",
+  "product": "Fieldora",
+  "release_root": "/mnt/data/r28fix/Fieldora-5.4.0-operations-stabilization-r28",
+  "version": "5.4.0"
+}

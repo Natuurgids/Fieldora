@@ -1,0 +1,13 @@
+name: natureai-next
+channels:
+  - conda-forge
+channel_priority: strict
+dependencies:
+  - python=3.11
+  - pip=24.*
+  - setuptools
+  - wheel
+  - pip:
+      - -r requirements/ai.txt
+      - --no-deps
+      - -e .

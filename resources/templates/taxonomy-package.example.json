@@ -1,0 +1,13 @@
+{
+  "key_id": "natureai-local",
+  "package_id": "local-europe-taxonomy-1",
+  "source_name": "Local curated taxonomy",
+  "source_version": "1.0.0",
+  "minimum_app_version": "0.13.5",
+  "license": {
+    "name": "User supplied",
+    "url": null,
+    "attribution": "Curated locally by the NatureAI user.",
+    "redistribution_allowed": false
+  }
+}

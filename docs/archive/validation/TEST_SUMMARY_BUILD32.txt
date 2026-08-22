@@ -1,0 +1,12 @@
+Aperture Build 32 automated validation
+
+Full available suite: 306 passed, 1 skipped.
+Skipped: tests/test_activity_scheduling.py because PySide6 is not installed in the packaging environment.
+
+Build 32-specific coverage:
+- multimodal Knowledge Base AI Review tabs;
+- capability-scoped model activation presentation;
+- current generation model versus historical result provenance;
+- persisted BioCLIP model-input image retained in Photo review;
+- canonical Sound, Video, Document and Accepted Knowledge review queues;
+- all previous available regression contracts.

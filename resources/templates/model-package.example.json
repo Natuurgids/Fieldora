@@ -1,0 +1,27 @@
+{
+  "package_id": "local-bioclip-1.0.0",
+  "model_identity": "bioclip",
+  "semantic_version": "1.0.0",
+  "model_family": "bioclip",
+  "upstream_source": "https://imageomics.github.io/bioclip",
+  "license_name": "See upstream model license",
+  "attribution_text": "BioCLIP by the Imageomics Institute and collaborators.",
+  "minimum_application_version": "0.13.5",
+  "signing_key_id": "natureai-local",
+  "artifact_files": {
+    "model.pt": "bioclip-model.pt"
+  },
+  "variants": [
+    {
+      "identity": "torch-cuda-fp16",
+      "runtime": "torch",
+      "precision": "fp16",
+      "providers": ["cuda"],
+      "preprocessing_identity": "openclip-vit-b-16-default-v1",
+      "embedding_dimension": 512,
+      "input_size": 224,
+      "normalized_output": true,
+      "artifact_path": "model.pt"
+    }
+  ]
+}

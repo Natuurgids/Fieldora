@@ -1,0 +1,7 @@
+Aperture 4 Build 30 automated validation
+========================================
+281 passed, 1 skipped
+
+Skipped: Qt scheduling test because PySide6 is unavailable in the packaging environment.
+Validated: Python compilation, federated activity contracts, explicit storage retry/cancellation, durable derivative profile identity, cache-only gallery regressions, package manifest and deployment preflight.
+Native Windows/Linux Qt execution and 3,500-asset field performance remain field-test gates.

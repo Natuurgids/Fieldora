@@ -1,0 +1,191 @@
+{
+  "version": 8,
+  "name": "Aperture Streets v2",
+  "metadata": {
+    "aperture:schema": "aperture-streets-v2",
+    "aperture:offline": true,
+    "aperture:labels": "offline-dom-labels"
+  },
+  "sources": {
+    "aperture": {
+      "type": "vector",
+      "url": "__APERTURE_PMTILES_URL__",
+      "maxzoom": 14,
+      "attribution": "\u00a9 OpenStreetMap contributors"
+    }
+  },
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": {
+        "background-color": "#eef1e8"
+      }
+    },
+    {
+      "id": "landuse",
+      "type": "fill",
+      "source": "aperture",
+      "source-layer": "landuse",
+      "paint": {
+        "fill-color": "#dce8d2",
+        "fill-opacity": 0.72
+      }
+    },
+    {
+      "id": "water",
+      "type": "fill",
+      "source": "aperture",
+      "source-layer": "water",
+      "paint": {
+        "fill-color": "#a8cfe0"
+      }
+    },
+    {
+      "id": "buildings",
+      "type": "fill",
+      "source": "aperture",
+      "source-layer": "building",
+      "minzoom": 13,
+      "paint": {
+        "fill-color": "#d8cbc0",
+        "fill-outline-color": "#b8a99c"
+      }
+    },
+    {
+      "id": "road-casing",
+      "type": "line",
+      "source": "aperture",
+      "source-layer": "transportation",
+      "filter": [
+        "in",
+        [
+          "get",
+          "class"
+        ],
+        [
+          "literal",
+          [
+            "motorway",
+            "trunk",
+            "primary",
+            "secondary",
+            "tertiary",
+            "minor",
+            "service",
+            "track"
+          ]
+        ]
+      ],
+      "paint": {
+        "line-color": "#b7aa96",
+        "line-width": [
+          "interpolate",
+          [
+            "linear"
+          ],
+          [
+            "zoom"
+          ],
+          6,
+          1.2,
+          12,
+          2.5,
+          18,
+          10
+        ]
+      }
+    },
+    {
+      "id": "major-roads",
+      "type": "line",
+      "source": "aperture",
+      "source-layer": "transportation",
+      "filter": [
+        "in",
+        [
+          "get",
+          "class"
+        ],
+        [
+          "literal",
+          [
+            "motorway",
+            "trunk",
+            "primary",
+            "secondary",
+            "tertiary"
+          ]
+        ]
+      ],
+      "paint": {
+        "line-color": "#f7d7a0",
+        "line-width": [
+          "interpolate",
+          [
+            "linear"
+          ],
+          [
+            "zoom"
+          ],
+          6,
+          0.8,
+          12,
+          1.8,
+          18,
+          8
+        ]
+      }
+    },
+    {
+      "id": "minor-roads",
+      "type": "line",
+      "source": "aperture",
+      "source-layer": "transportation",
+      "minzoom": 11,
+      "filter": [
+        "in",
+        [
+          "get",
+          "class"
+        ],
+        [
+          "literal",
+          [
+            "minor",
+            "service",
+            "track"
+          ]
+        ]
+      ],
+      "paint": {
+        "line-color": "#ffffff",
+        "line-width": [
+          "interpolate",
+          [
+            "linear"
+          ],
+          [
+            "zoom"
+          ],
+          11,
+          0.7,
+          18,
+          5
+        ]
+      }
+    },
+    {
+      "id": "places",
+      "type": "circle",
+      "source": "aperture",
+      "source-layer": "place",
+      "minzoom": 5,
+      "paint": {
+        "circle-radius": 2,
+        "circle-color": "#59636b",
+        "circle-opacity": 0.65
+      }
+    }
+  ]
+}

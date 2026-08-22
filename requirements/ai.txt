@@ -1,0 +1,5 @@
+-r gui.txt
+torch
+torchvision
+open-clip-torch
+hnswlib

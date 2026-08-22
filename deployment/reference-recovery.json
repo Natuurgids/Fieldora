@@ -1,0 +1,40 @@
+{
+  "format": "fieldora.production-recovery",
+  "format_version": 1,
+  "environment_id": "replace-with-production-environment-id",
+  "objectives": {
+    "rpo_seconds": 300,
+    "rto_seconds": 3600
+  },
+  "postgresql": {
+    "base_backups": true,
+    "continuous_wal_archive": true,
+    "encrypted": true,
+    "immutable": true,
+    "retention_days": 30,
+    "restore_to_new_target": true,
+    "integrity_verification": true
+  },
+  "object_storage": {
+    "versioning": true,
+    "cross_zone_replication": true,
+    "inventory_digest": true,
+    "legal_holds_preserved": true,
+    "delete_markers_preserved": true
+  },
+  "search": {
+    "rebuild_from_authority": true,
+    "atomic_alias_switch": true
+  },
+  "key_custody": {
+    "provider": "cloud-kms",
+    "separate_from_backups": true,
+    "rotation_tested": true
+  },
+  "drills": {
+    "maximum_interval_days": 90,
+    "authorization_probe": true,
+    "audit_chain_verification": true,
+    "source_untouched": true
+  }
+}

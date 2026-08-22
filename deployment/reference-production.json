@@ -1,0 +1,53 @@
+{
+  "format": "fieldora.production-deployment",
+  "format_version": 1,
+  "mode": "multi-server",
+  "api": {
+    "replicas": 3,
+    "zones": 3,
+    "readiness_probe": true,
+    "pod_disruption_budget": true
+  },
+  "workers": {
+    "replicas": 3,
+    "zones": 3,
+    "fenced_leases": true
+  },
+  "database": {
+    "backend": "postgresql",
+    "tls": true,
+    "automatic_failover": true,
+    "point_in_time_recovery": true,
+    "synchronous_replicas": 1
+  },
+  "object_storage": {
+    "backend": "s3",
+    "tls": true,
+    "versioning": true,
+    "encryption_at_rest": true,
+    "replicas": 3
+  },
+  "search": {
+    "backend": "opensearch",
+    "tls": true,
+    "nodes": 3,
+    "zone_awareness": true
+  },
+  "ingress": {
+    "tls": true,
+    "minimum_tls": "1.3",
+    "hsts": true
+  },
+  "secrets": {
+    "provider": "external-secrets",
+    "rotation_days": 30
+  },
+  "upgrades": {
+    "strategy": "rolling",
+    "max_unavailable": 0,
+    "automatic_rollback": true
+  },
+  "certification_evidence": {
+    "completed_exercises": []
+  }
+}

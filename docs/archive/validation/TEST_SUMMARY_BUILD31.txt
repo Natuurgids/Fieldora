@@ -1,0 +1,13 @@
+Aperture Build 31 automated validation
+
+285 passed, 1 skipped
+
+Skipped: PySide6-only activity scheduling test because PySide6 was unavailable in the build environment.
+
+Additional validation:
+- Python source compilation passed
+- Exact release manifest passed
+- Deployment preflight passed
+- Release-candidate hygiene passed
+- Linux installer and uninstaller shell syntax passed
+- Federated activity, health, resource, recovery and diagnostics contracts passed

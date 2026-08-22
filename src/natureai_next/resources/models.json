@@ -1,0 +1,1019 @@
+{
+  "schema_version": 2,
+  "models": [
+    {
+      "key": "bioclip-v1",
+      "display_name": "BioCLIP / OpenCLIP",
+      "family": "bioclip",
+      "factory": "natureai_next.infrastructure.ai.openclip_provider:OpenClipExecutionProvider",
+      "requirements": [
+        {
+          "import": "torch",
+          "pip": "torch>=2.5,<2.8"
+        },
+        {
+          "import": "open_clip",
+          "pip": "open-clip-torch>=2.30,<3"
+        }
+      ],
+      "input": {
+        "subject_types": [
+          "asset"
+        ],
+        "asset_types": [
+          "photo"
+        ],
+        "parameters": {
+          "limit": {
+            "type": "integer",
+            "title": "Suggestions",
+            "default": 10,
+            "minimum": 1,
+            "maximum": 50
+          }
+        }
+      },
+      "output": {
+        "enrichment_type": "taxonomy.classification",
+        "schema_version": 1,
+        "review_mode": "taxonomy_candidates"
+      },
+      "ui": {
+        "workspace": "ai_review",
+        "renderer": "taxonomy_review",
+        "category": "Classification",
+        "purpose": "General biodiversity taxonomy classification for photographs.",
+        "best_for": [
+          "Plants, fungi, animals and mixed nature photographs",
+          "Whole-image or detected-region classification"
+        ],
+        "not_for": [
+          "Locating subjects or drawing masks"
+        ],
+        "works_with": [
+          "YOLO 11 Detection",
+          "YOLO 11 Instance Segmentation",
+          "MegaDetector 5a",
+          "Segment Anything ViT-B"
+        ],
+        "workflow": [
+          "Photo or detected crop",
+          "BioCLIP classification",
+          "Knowledge Base review"
+        ],
+        "dependencies": [
+          "pybioclip / OpenCLIP runtime",
+          "Tree-of-Life taxonomy resources"
+        ],
+        "produces": [
+          "Ranked taxon candidates with confidence scores",
+          "Reviewable taxonomy suggestions",
+          "Model provenance for accepted or rejected candidates"
+        ]
+      },
+      "default": true,
+      "built_in": true,
+      "description": "Aperture's installed TreeOfLife-10M photo-classification provider.",
+      "license": "See installed BioCLIP bundle licence",
+      "offline_execution": true,
+      "installation_contract": "Dependencies and model artifacts are acquired and verified by Load model; enrichment performs no network access."
+    },
+    {
+      "key": "birdnet-v2.4",
+      "display_name": "BirdNET Sound Identification",
+      "family": "birdnet",
+      "version": "2.4.0",
+      "factory": "natureai_next.synthesis_core.optional_models:BirdNETCapability",
+      "requirements": [
+        {
+          "import": "birdnet_analyzer",
+          "pip": "birdnet-analyzer==2.4.0"
+        },
+        {
+          "import": "imageio_ffmpeg",
+          "pip": "imageio-ffmpeg>=0.6,<0.7"
+        }
+      ],
+      "input": {
+        "subject_types": [
+          "asset"
+        ],
+        "asset_types": [
+          "sound",
+          "video"
+        ],
+        "parameters": {
+          "minimum_confidence": {
+            "type": "real",
+            "title": "Minimum confidence",
+            "default": 0.25,
+            "minimum": 0,
+            "maximum": 1
+          },
+          "threads": {
+            "type": "integer",
+            "title": "CPU threads",
+            "default": 4,
+            "minimum": 1,
+            "maximum": 32
+          }
+        }
+      },
+      "output": {
+        "enrichment_type": "taxonomy.audio_detection",
+        "schema_version": 1,
+        "review_mode": "temporal_candidates"
+      },
+      "ui": {
+        "workspace": "sounds_videos",
+        "renderer": "temporal_review",
+        "category": "Audio",
+        "purpose": "Offline bird-vocalization identification from sound recordings.",
+        "best_for": [
+          "Bird calls and songs",
+          "Long field recordings"
+        ],
+        "not_for": [
+          "Photographs or speech transcription"
+        ],
+        "works_with": [],
+        "workflow": [
+          "Sound recording",
+          "BirdNET detects vocalizations",
+          "Knowledge Base sound review"
+        ],
+        "dependencies": [
+          "BirdNET runtime and model files",
+          "Audio decoder"
+        ],
+        "produces": [
+          "Time-coded species candidates",
+          "Detection confidence and temporal evidence",
+          "Reviewable audio enrichment with model provenance"
+        ]
+      },
+      "description": "Identifies bird vocalisations in sounds and video audio tracks and produces time-coded review suggestions.",
+      "license": "CC BY-NC-SA 4.0 model; MIT source",
+      "license_url": "https://github.com/birdnet-team/BirdNET-Analyzer#license",
+      "requires_license_acceptance": true,
+      "estimated_download_mb": 900,
+      "default": false,
+      "built_in": false,
+      "offline_execution": true,
+      "installation_contract": "Dependencies and model artifacts are acquired and verified by Load model; enrichment performs no network access."
+    },
+    {
+      "key": "wildlife-video-speciesnet-v5",
+      "display_name": "Wildlife Video Review",
+      "family": "speciesnet",
+      "version": "5.0.5",
+      "factory": "natureai_next.synthesis_core.optional_models:WildlifeVideoCapability",
+      "requirements": [
+        {
+          "import": "speciesnet",
+          "pip": "speciesnet==5.0.5"
+        },
+        {
+          "import": "cv2",
+          "pip": "opencv-python-headless>=4.10,<5"
+        }
+      ],
+      "input": {
+        "subject_types": [
+          "asset"
+        ],
+        "asset_types": [
+          "photo",
+          "video"
+        ],
+        "parameters": {
+          "sample_interval_seconds": {
+            "type": "real",
+            "title": "Frame interval (seconds)",
+            "default": 2,
+            "minimum": 0.25,
+            "maximum": 60
+          },
+          "minimum_confidence": {
+            "type": "real",
+            "title": "Minimum confidence",
+            "default": 0.2,
+            "minimum": 0,
+            "maximum": 1
+          },
+          "batch_size": {
+            "type": "integer",
+            "title": "Inference batch size",
+            "default": 4,
+            "minimum": 1,
+            "maximum": 32
+          }
+        }
+      },
+      "output": {
+        "enrichment_type": "taxonomy.video_detection",
+        "schema_version": 1,
+        "review_mode": "spatiotemporal_candidates"
+      },
+      "ui": {
+        "workspace": "photos_videos",
+        "renderer": "spatiotemporal_review",
+        "category": "Video",
+        "purpose": "Wildlife analysis for video samples using locally installed detection and classification resources.",
+        "best_for": [
+          "Wildlife video review"
+        ],
+        "not_for": [
+          "General document or sound analysis"
+        ],
+        "works_with": [
+          "MegaDetector 5a"
+        ],
+        "workflow": [
+          "Video sampling",
+          "Wildlife detector and classifier",
+          "Knowledge Base video review"
+        ],
+        "dependencies": [
+          "SpeciesNet runtime",
+          "MegaDetector-compatible detector resources",
+          "FFmpeg video decoding"
+        ],
+        "produces": [
+          "Time-coded species candidates and frame evidence",
+          "Spatiotemporal detections",
+          "Reviewable video enrichment with model provenance"
+        ]
+      },
+      "description": "Samples video frames, detects wildlife and classifies detections using SpeciesNet's detector/classifier pipeline.",
+      "license": "Apache-2.0 software; upstream model and dataset terms apply",
+      "license_url": "https://github.com/google/cameratrapai",
+      "requires_license_acceptance": true,
+      "estimated_download_mb": 2500,
+      "default": false,
+      "built_in": false,
+      "offline_execution": true,
+      "installation_contract": "Dependencies and model artifacts are acquired and verified by Load model; enrichment performs no network access."
+    },
+    {
+      "key": "megadetector-v6",
+      "display_name": "MegaDetector 5a",
+      "family": "megadetector",
+      "version": "5a",
+      "factory": "natureai_next.synthesis_core.optional_models:MegaDetectorCapability",
+      "requirements": [
+        {
+          "import": "megadetector",
+          "pip": "megadetector>=5,<7"
+        },
+        {
+          "import": "cv2",
+          "pip": "opencv-python-headless>=4.10,<5"
+        }
+      ],
+      "input": {
+        "subject_types": [
+          "asset"
+        ],
+        "asset_types": [
+          "photo",
+          "video"
+        ],
+        "parameters": {
+          "minimum_confidence": {
+            "type": "real",
+            "title": "Minimum confidence",
+            "default": 0.2,
+            "minimum": 0,
+            "maximum": 1
+          },
+          "sample_interval_seconds": {
+            "type": "real",
+            "title": "Frame interval (seconds)",
+            "default": 2,
+            "minimum": 0.25,
+            "maximum": 60
+          }
+        }
+      },
+      "output": {
+        "enrichment_type": "detection.wildlife",
+        "schema_version": 1,
+        "review_mode": "spatiotemporal_candidates"
+      },
+      "ui": {
+        "workspace": "photos_videos",
+        "renderer": "spatiotemporal_review",
+        "category": "Detection",
+        "purpose": "Detects animals, people and vehicles in camera-trap photographs. It does not identify species.",
+        "best_for": [
+          "Camera traps and trail cameras",
+          "Empty-frame filtering",
+          "Distant or infrared wildlife"
+        ],
+        "not_for": [
+          "Species identification",
+          "Flowers, fungi or detailed insect taxonomy"
+        ],
+        "works_with": [
+          "BioCLIP 2",
+          "BioCLIP 2.5 Huge"
+        ],
+        "workflow": [
+          "Camera-trap photograph",
+          "MegaDetector finds animal region",
+          "BioCLIP identifies the animal",
+          "Knowledge Base review"
+        ],
+        "dependencies": [
+          "MegaDetector runtime",
+          "MegaDetector 5a checkpoint",
+          "BioCLIP 2 or 2.5 is required for species identification"
+        ],
+        "produces": [
+          "Wildlife bounding boxes and confidence scores",
+          "Frame or photo detection evidence",
+          "Regions suitable for downstream taxon classification",
+          "Reviewable enrichment with model and run provenance"
+        ]
+      },
+      "description": "Detects and boxes animals, people and vehicles using the stable official MDv5a model, acquired during installation and reused fully offline.",
+      "license": "MIT",
+      "license_url": "https://github.com/microsoft/MegaDetector",
+      "estimated_download_mb": 300,
+      "default": false,
+      "built_in": false,
+      "offline_execution": true,
+      "installation_contract": "Dependencies and model artifacts are acquired and verified by Load model; enrichment performs no network access."
+    },
+    {
+      "key": "yolo11n-detect",
+      "display_name": "YOLO 11 Detection",
+      "family": "yolo",
+      "version": "11n",
+      "factory": "natureai_next.synthesis_core.optional_models:Yolo11DetectionCapability",
+      "requirements": [
+        {
+          "import": "ultralytics",
+          "pip": "ultralytics>=8.3,<9"
+        }
+      ],
+      "input": {
+        "subject_types": [
+          "asset"
+        ],
+        "asset_types": [
+          "photo",
+          "video"
+        ],
+        "parameters": {
+          "minimum_confidence": {
+            "type": "real",
+            "title": "Minimum confidence",
+            "default": 0.25,
+            "minimum": 0,
+            "maximum": 1
+          },
+          "sample_interval_seconds": {
+            "type": "real",
+            "title": "Frame interval (seconds)",
+            "default": 2,
+            "minimum": 0.25,
+            "maximum": 60
+          }
+        }
+      },
+      "output": {
+        "enrichment_type": "detection.objects",
+        "schema_version": 1,
+        "review_mode": "spatiotemporal_candidates"
+      },
+      "ui": {
+        "workspace": "photos_videos",
+        "renderer": "spatiotemporal_review",
+        "category": "Detection",
+        "purpose": "General object detection for photographs and sampled video frames.",
+        "best_for": [
+          "Multiple visible subjects",
+          "General nature photographs",
+          "Bounding-box region extraction"
+        ],
+        "not_for": [
+          "Species-level identification by itself",
+          "Pixel-accurate masks"
+        ],
+        "works_with": [
+          "BioCLIP 2",
+          "BioCLIP 2.5 Huge",
+          "Segment Anything ViT-B"
+        ],
+        "workflow": [
+          "Photo or video frame",
+          "YOLO locates subjects",
+          "BioCLIP classifies each selected region"
+        ],
+        "dependencies": [
+          "Ultralytics runtime",
+          "YOLO 11 detection checkpoint",
+          "BioCLIP 2 or 2.5 for taxonomy identification"
+        ],
+        "produces": [
+          "Object bounding boxes, labels, and confidence scores",
+          "Frame or photo detection evidence",
+          "Regions suitable for downstream classification",
+          "Reviewable enrichment with model and run provenance"
+        ]
+      },
+      "description": "General object detection with a locally installed YOLO 11 nano checkpoint.",
+      "license": "AGPL-3.0; commercial licensing may be required",
+      "license_url": "https://github.com/ultralytics/ultralytics",
+      "requires_license_acceptance": true,
+      "estimated_download_mb": 15,
+      "default": false,
+      "built_in": false,
+      "offline_execution": true,
+      "installation_contract": "Dependencies and model artifacts are acquired and verified by Load model; enrichment performs no network access."
+    },
+    {
+      "key": "yolo11n-segment",
+      "display_name": "YOLO 11 Instance Segmentation",
+      "family": "yolo",
+      "version": "11n-seg",
+      "factory": "natureai_next.synthesis_core.optional_models:Yolo11SegmentationCapability",
+      "requirements": [
+        {
+          "import": "ultralytics",
+          "pip": "ultralytics>=8.3,<9"
+        }
+      ],
+      "input": {
+        "subject_types": [
+          "asset"
+        ],
+        "asset_types": [
+          "photo",
+          "video"
+        ],
+        "parameters": {
+          "minimum_confidence": {
+            "type": "real",
+            "title": "Minimum confidence",
+            "default": 0.25,
+            "minimum": 0,
+            "maximum": 1
+          },
+          "sample_interval_seconds": {
+            "type": "real",
+            "title": "Frame interval (seconds)",
+            "default": 2,
+            "minimum": 0.25,
+            "maximum": 60
+          }
+        }
+      },
+      "output": {
+        "enrichment_type": "segmentation.objects",
+        "schema_version": 1,
+        "review_mode": "segmentation_candidates"
+      },
+      "ui": {
+        "workspace": "photos_videos",
+        "renderer": "segmentation_review",
+        "category": "Segmentation",
+        "purpose": "Detects subjects and creates instance masks for each visible object.",
+        "best_for": [
+          "Overlapping organisms",
+          "Insect and flower separation",
+          "Multiple subjects in one frame"
+        ],
+        "not_for": [
+          "Species identification by itself"
+        ],
+        "works_with": [
+          "BioCLIP 2",
+          "BioCLIP 2.5 Huge"
+        ],
+        "workflow": [
+          "Photo",
+          "YOLO creates boxes and masks",
+          "BioCLIP classifies each masked region"
+        ],
+        "dependencies": [
+          "Ultralytics runtime",
+          "YOLO 11 segmentation checkpoint",
+          "BioCLIP 2 or 2.5 for taxonomy identification"
+        ],
+        "produces": [
+          "Object masks and confidence scores",
+          "Segmentation geometry for review",
+          "Regions suitable for downstream classification"
+        ]
+      },
+      "description": "General object detection and instance masks with a locally installed YOLO 11 nano segmentation checkpoint.",
+      "license": "AGPL-3.0; commercial licensing may be required",
+      "license_url": "https://github.com/ultralytics/ultralytics",
+      "requires_license_acceptance": true,
+      "estimated_download_mb": 25,
+      "default": false,
+      "built_in": false,
+      "offline_execution": true,
+      "installation_contract": "Dependencies and model artifacts are acquired and verified by Load model; enrichment performs no network access."
+    },
+    {
+      "key": "sam-vit-b",
+      "display_name": "Segment Anything ViT-B",
+      "family": "segment-anything",
+      "version": "1-vit-b",
+      "factory": "natureai_next.synthesis_core.optional_models:SegmentAnythingVitBCapability",
+      "requirements": [
+        {
+          "import": "segment_anything",
+          "pip": "git+https://github.com/facebookresearch/segment-anything.git"
+        },
+        {
+          "import": "cv2",
+          "pip": "opencv-python-headless>=4.10,<5"
+        }
+      ],
+      "input": {
+        "subject_types": [
+          "asset"
+        ],
+        "asset_types": [
+          "photo"
+        ],
+        "parameters": {
+          "minimum_area": {
+            "type": "integer",
+            "title": "Minimum region area",
+            "default": 256,
+            "minimum": 1,
+            "maximum": 10000000
+          },
+          "maximum_masks": {
+            "type": "integer",
+            "title": "Maximum masks",
+            "default": 32,
+            "minimum": 1,
+            "maximum": 256
+          }
+        }
+      },
+      "output": {
+        "enrichment_type": "segmentation.subject_regions",
+        "schema_version": 1,
+        "review_mode": "segmentation_candidates"
+      },
+      "ui": {
+        "workspace": "photos",
+        "renderer": "segmentation_review",
+        "category": "Segmentation",
+        "purpose": "Creates high-quality subject masks without assigning taxonomy labels.",
+        "best_for": [
+          "Interactive region refinement",
+          "Subject cut-outs",
+          "Separating foreground from background"
+        ],
+        "not_for": [
+          "Species identification",
+          "Automatic semantic labels without prompts"
+        ],
+        "works_with": [
+          "BioCLIP 2",
+          "BioCLIP 2.5 Huge",
+          "YOLO 11 Detection"
+        ],
+        "workflow": [
+          "YOLO or user supplies region prompt",
+          "SAM refines the mask",
+          "BioCLIP classifies the masked subject"
+        ],
+        "dependencies": [
+          "Segment Anything runtime",
+          "OpenCV",
+          "SAM ViT-B checkpoint",
+          "A detector or user prompt is needed for targeted regions"
+        ],
+        "produces": [
+          "Prompted subject masks",
+          "Segmentation geometry for review",
+          "Cropped regions suitable for downstream classification"
+        ]
+      },
+      "description": "Automatic subject-region masks using Meta Segment Anything ViT-B, installed and executed locally.",
+      "license": "Apache-2.0",
+      "license_url": "https://github.com/facebookresearch/segment-anything",
+      "requires_license_acceptance": true,
+      "estimated_download_mb": 400,
+      "default": false,
+      "built_in": false,
+      "offline_execution": true,
+      "installation_contract": "Dependencies and model artifacts are acquired and verified by Load model; enrichment performs no network access."
+    },
+    {
+      "key": "bioclip-v2",
+      "display_name": "BioCLIP 2",
+      "family": "bioclip",
+      "version": "2",
+      "factory": "natureai_next.synthesis_core.optional_models:BioCLIP2Capability",
+      "requirements": [
+        {
+          "import": "bioclip",
+          "pip": "pybioclip==2.1.5"
+        },
+        {
+          "import": "open_clip",
+          "pip": "open-clip-torch>=2.30,<3"
+        }
+      ],
+      "input": {
+        "subject_types": [
+          "asset"
+        ],
+        "asset_types": [
+          "photo"
+        ],
+        "parameters": {
+          "limit": {
+            "type": "integer",
+            "title": "Suggestions",
+            "default": 10,
+            "minimum": 1,
+            "maximum": 50
+          }
+        }
+      },
+      "output": {
+        "enrichment_type": "taxonomy.classification",
+        "schema_version": 1,
+        "review_mode": "taxonomy_candidates"
+      },
+      "ui": {
+        "workspace": "ai_review",
+        "renderer": "taxonomy_review",
+        "category": "Classification",
+        "purpose": "Imageomics BioCLIP 2 biodiversity taxonomy classification.",
+        "best_for": [
+          "Species, genus and family suggestions",
+          "Whole images and detector crops"
+        ],
+        "not_for": [
+          "Object detection or segmentation"
+        ],
+        "works_with": [
+          "YOLO 11 Detection",
+          "YOLO 11 Instance Segmentation",
+          "MegaDetector 5a",
+          "Segment Anything ViT-B"
+        ],
+        "workflow": [
+          "YOLO or MegaDetector locates subject (optional)",
+          "BioCLIP 2 identifies region",
+          "Knowledge Base review"
+        ],
+        "dependencies": [
+          "pybioclip TreeOfLifeClassifier",
+          "BioCLIP 2 weights and taxonomy labels"
+        ],
+        "produces": [
+          "Ranked taxon candidates with confidence scores",
+          "Reviewable taxonomy suggestions",
+          "Model provenance for accepted or rejected candidates"
+        ]
+      },
+      "description": "TreeOfLife-200M ViT-L/14 image foundation model; supplied as a field-validation test subject.",
+      "license": "See the Imageomics model card",
+      "license_url": "https://huggingface.co/imageomics/bioclip-2",
+      "requires_license_acceptance": true,
+      "estimated_download_mb": 3500,
+      "default": false,
+      "built_in": false,
+      "offline_execution": true,
+      "installation_contract": "Dependencies and model artifacts are acquired and verified by Load model; enrichment performs no network access."
+    },
+    {
+      "key": "perch-v2",
+      "display_name": "Perch 2 Bioacoustics",
+      "family": "perch",
+      "version": "2",
+      "factory": "natureai_next.synthesis_core.optional_models:Perch2Capability",
+      "requirements": [
+        {
+          "import": "bioacoustics_model_zoo",
+          "pip": "bioacoustics-model-zoo"
+        },
+        {
+          "import": "kagglehub",
+          "pip": "kagglehub"
+        },
+        {
+          "import": "tensorflow",
+          "pip": "tensorflow>=2.20,<2.22"
+        }
+      ],
+      "input": {
+        "subject_types": [
+          "asset"
+        ],
+        "asset_types": [
+          "sound",
+          "video"
+        ],
+        "parameters": {
+          "minimum_confidence": {
+            "type": "real",
+            "title": "Minimum confidence",
+            "default": 0.25,
+            "minimum": 0,
+            "maximum": 1
+          }
+        }
+      },
+      "output": {
+        "enrichment_type": "taxonomy.audio_detection",
+        "schema_version": 1,
+        "review_mode": "temporal_candidates"
+      },
+      "ui": {
+        "workspace": "sounds_videos",
+        "renderer": "temporal_review",
+        "category": "Audio",
+        "purpose": "General bioacoustic embedding and classification for wildlife sounds.",
+        "best_for": [
+          "Bird and wildlife audio",
+          "Embedding-based comparison"
+        ],
+        "not_for": [
+          "Photographs",
+          "Direct video-container decoding without extracted audio"
+        ],
+        "works_with": [],
+        "workflow": [
+          "Audio or extracted video audio",
+          "Perch analysis",
+          "Knowledge Base sound review"
+        ],
+        "dependencies": [
+          "Perch/TensorFlow runtime",
+          "Local model resources",
+          "FFmpeg extraction for video audio"
+        ],
+        "produces": [
+          "Time-coded species candidates",
+          "Detection confidence and temporal evidence",
+          "Reviewable audio enrichment with model provenance"
+        ]
+      },
+      "description": "Google Perch 2 bioacoustic classifications and time-coded review candidates.",
+      "license": "Apache-2.0 code; Kaggle model terms apply",
+      "license_url": "https://github.com/google-research/perch",
+      "requires_license_acceptance": true,
+      "estimated_download_mb": 2500,
+      "default": false,
+      "built_in": false,
+      "offline_execution": true,
+      "installation_contract": "Dependencies and model artifacts are acquired and verified by Load model; enrichment performs no network access."
+    },
+    {
+      "key": "batdetect2-v1",
+      "display_name": "BatDetect2",
+      "family": "batdetect2",
+      "version": "1",
+      "factory": "natureai_next.synthesis_core.optional_models:BatDetect2Capability",
+      "requirements": [
+        {
+          "import": "batdetect2",
+          "pip": "batdetect2"
+        }
+      ],
+      "input": {
+        "subject_types": [
+          "asset"
+        ],
+        "asset_types": [
+          "sound"
+        ],
+        "parameters": {
+          "minimum_confidence": {
+            "type": "real",
+            "title": "Minimum confidence",
+            "default": 0.25,
+            "minimum": 0,
+            "maximum": 1
+          }
+        }
+      },
+      "output": {
+        "enrichment_type": "taxonomy.audio_detection",
+        "schema_version": 1,
+        "review_mode": "temporal_candidates"
+      },
+      "ui": {
+        "workspace": "sounds",
+        "renderer": "temporal_review",
+        "category": "Audio",
+        "purpose": "Offline bat-call detection and classification.",
+        "best_for": [
+          "Ultrasonic bat recordings"
+        ],
+        "not_for": [
+          "Ordinary speech or photographs"
+        ],
+        "works_with": [],
+        "workflow": [
+          "Ultrasonic recording",
+          "BatDetect2 detections",
+          "Knowledge Base sound review"
+        ],
+        "dependencies": [
+          "BatDetect2 runtime",
+          "PyTorch",
+          "Local model checkpoint"
+        ],
+        "produces": [
+          "Time-coded species candidates",
+          "Detection confidence and temporal evidence",
+          "Reviewable audio enrichment with model provenance"
+        ]
+      },
+      "description": "Detects and classifies bat echolocation calls; the bundled upstream model is UK-focused.",
+      "license": "See upstream package and model licence",
+      "license_url": "https://github.com/macaodha/batdetect2",
+      "requires_license_acceptance": true,
+      "estimated_download_mb": 1200,
+      "default": false,
+      "built_in": false,
+      "offline_execution": true,
+      "installation_contract": "Dependencies and model artifacts are acquired and verified by Load model; enrichment performs no network access."
+    },
+    {
+      "key": "bioclip-v2.5-huge",
+      "display_name": "BioCLIP 2.5 Huge",
+      "family": "bioclip",
+      "version": "2.5",
+      "factory": "natureai_next.synthesis_core.optional_models:BioCLIP25HugeCapability",
+      "requirements": [
+        {
+          "import": "bioclip",
+          "pip": "pybioclip==2.1.5"
+        },
+        {
+          "import": "open_clip",
+          "pip": "open-clip-torch>=2.30,<3"
+        }
+      ],
+      "input": {
+        "subject_types": [
+          "asset"
+        ],
+        "asset_types": [
+          "photo"
+        ],
+        "parameters": {
+          "limit": {
+            "type": "integer",
+            "title": "Suggestions",
+            "default": 10,
+            "minimum": 1,
+            "maximum": 50
+          }
+        }
+      },
+      "output": {
+        "enrichment_type": "taxonomy.classification",
+        "schema_version": 1,
+        "review_mode": "taxonomy_candidates"
+      },
+      "ui": {
+        "workspace": "ai_review",
+        "renderer": "taxonomy_review",
+        "category": "Classification",
+        "purpose": "High-capacity biodiversity classifier using OpenCLIP and matching Tree-of-Life embeddings.",
+        "best_for": [
+          "High-quality taxonomy ranking",
+          "Detected or segmented subject regions"
+        ],
+        "not_for": [
+          "Detection, tracking or mask creation"
+        ],
+        "works_with": [
+          "YOLO 11 Detection",
+          "YOLO 11 Instance Segmentation",
+          "MegaDetector 5a",
+          "Segment Anything ViT-B"
+        ],
+        "workflow": [
+          "Detector or segmenter creates subject region",
+          "BioCLIP 2.5 classifies region",
+          "Knowledge Base review"
+        ],
+        "dependencies": [
+          "OpenCLIP ViT-H/14 runtime",
+          "BioCLIP 2.5 checkpoint",
+          "Matching TreeOfLife-200M labels and embeddings"
+        ],
+        "produces": [
+          "Ranked taxon candidates with confidence scores",
+          "Reviewable taxonomy suggestions",
+          "Model provenance for accepted or rejected candidates"
+        ]
+      },
+      "description": "Heavyweight ViT-H/14 BioCLIP test subject; high-memory GPU recommended.",
+      "license": "See the Imageomics model card",
+      "license_url": "https://huggingface.co/imageomics/bioclip-2.5-vith14",
+      "requires_license_acceptance": true,
+      "estimated_download_mb": 7000,
+      "default": false,
+      "built_in": false,
+      "offline_execution": true,
+      "installation_contract": "Dependencies and model artifacts are acquired and verified by Load model; enrichment performs no network access."
+    },
+    {
+      "key": "document-ocr-v1",
+      "display_name": "Fieldora Offline Document OCR",
+      "family": "document-ocr",
+      "version": "1",
+      "factory": "natureai_next.synthesis_core.optional_models:DocumentOCRCapability",
+      "requirements": [
+        {
+          "import": "fitz",
+          "pip": "PyMuPDF>=1.24,<2"
+        },
+        {
+          "import": "rapidocr_onnxruntime",
+          "pip": "rapidocr-onnxruntime>=1.4,<2"
+        },
+        {
+          "import": "numpy",
+          "pip": "numpy>=1.26,<3"
+        }
+      ],
+      "input": {
+        "subject_types": [
+          "asset"
+        ],
+        "asset_types": [
+          "document"
+        ],
+        "parameters": {
+          "render_dpi": {
+            "type": "integer",
+            "title": "PDF render DPI",
+            "default": 180,
+            "minimum": 96,
+            "maximum": 400
+          },
+          "minimum_confidence": {
+            "type": "real",
+            "title": "Minimum OCR confidence",
+            "default": 0.35,
+            "minimum": 0,
+            "maximum": 1
+          }
+        }
+      },
+      "output": {
+        "enrichment_type": "document.ocr",
+        "schema_version": 1,
+        "review_mode": "document_regions"
+      },
+      "ui": {
+        "workspace": "documents",
+        "renderer": "document_review",
+        "category": "Documents",
+        "purpose": "Extract embedded PDF text and recognize text on scanned PDF pages entirely offline.",
+        "best_for": [
+          "Searchable and scanned PDF files",
+          "Page-specific text review and export"
+        ],
+        "not_for": [
+          "Handwriting-specialist recognition",
+          "Password-protected PDFs"
+        ],
+        "works_with": [],
+        "workflow": [
+          "Select one or more documents",
+          "Run OCR from the Documents workspace",
+          "Review page text and regions in Knowledge Base"
+        ],
+        "dependencies": [
+          "PyMuPDF renderer",
+          "RapidOCR ONNX Runtime"
+        ],
+        "produces": [
+          "Page-specific transcript segments",
+          "Normalized OCR regions with confidence",
+          "Reviewable canonical document enrichment"
+        ]
+      },
+      "description": "Offline PDF text extraction and OCR with no external executable required.",
+      "license": "Apache-2.0 software; bundled OCR model licences apply",
+      "requires_license_acceptance": true,
+      "estimated_download_mb": 250,
+      "default": false,
+      "built_in": false,
+      "offline_execution": true,
+      "installation_contract": "Dependencies and OCR model artifacts are acquired and verified by Load model; document enrichment performs no network access."
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "certification_status": "conditional",
+  "configuration_ready": true,
+  "format": "fieldora.phase-f-deployment-assessment",
+  "format_version": 1,
+  "issues": [],
+  "pending_exercises": [
+    "api-node-loss",
+    "worker-node-loss",
+    "postgres-primary-failover",
+    "object-storage-replica-loss",
+    "search-node-loss",
+    "ingress-certificate-rotation",
+    "rolling-upgrade-and-rollback",
+    "point-in-time-recovery",
+    "zone-failure"
+  ]
+}

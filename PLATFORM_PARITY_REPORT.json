@@ -1,0 +1,482 @@
+{
+  "parity": {
+    "feature_count": 15,
+    "platforms": {
+      "linux_desktop": {
+        "functionally_complete": true,
+        "implemented": 15,
+        "missing": 0,
+        "partial": 0,
+        "total": 15
+      },
+      "server": {
+        "functionally_complete": true,
+        "implemented": 15,
+        "missing": 0,
+        "partial": 0,
+        "total": 15
+      },
+      "windows_desktop": {
+        "functionally_complete": true,
+        "implemented": 15,
+        "missing": 0,
+        "partial": 0,
+        "total": 15
+      }
+    }
+  },
+  "registry": {
+    "items": [
+      {
+        "description": "Authentication and profiles",
+        "feature_id": "core.login",
+        "implementations": [
+          {
+            "certified": false,
+            "evidence_required": "Launch workspace, execute representative CRUD/action flow, verify audit and restart persistence.",
+            "platform": "windows_desktop",
+            "status": "implemented",
+            "surface": "Login / Local Profiles"
+          },
+          {
+            "certified": false,
+            "evidence_required": "Launch workspace, execute representative CRUD/action flow, verify audit and restart persistence.",
+            "platform": "linux_desktop",
+            "status": "implemented",
+            "surface": "Login / Local Profiles"
+          },
+          {
+            "certified": false,
+            "evidence_required": "Exercise server UI and API with administrator and restricted-user accounts.",
+            "platform": "server",
+            "status": "implemented",
+            "surface": "Session API / OIDC login"
+          }
+        ],
+        "module": "Platform",
+        "name": "Authentication and profiles",
+        "permission": "authenticate"
+      },
+      {
+        "description": "RBAC, ABAC, PBAC and access matrices",
+        "feature_id": "core.access",
+        "implementations": [
+          {
+            "certified": false,
+            "evidence_required": "Launch workspace, execute representative CRUD/action flow, verify audit and restart persistence.",
+            "platform": "windows_desktop",
+            "status": "implemented",
+            "surface": "Administration Governance"
+          },
+          {
+            "certified": false,
+            "evidence_required": "Launch workspace, execute representative CRUD/action flow, verify audit and restart persistence.",
+            "platform": "linux_desktop",
+            "status": "implemented",
+            "surface": "Administration Governance"
+          },
+          {
+            "certified": false,
+            "evidence_required": "Exercise server UI and API with administrator and restricted-user accounts.",
+            "platform": "server",
+            "status": "implemented",
+            "surface": "Policy APIs / contracts"
+          }
+        ],
+        "module": "Governance",
+        "name": "RBAC, ABAC, PBAC and access matrices",
+        "permission": "administration"
+      },
+      {
+        "description": "Projects, phases, tasks and subtasks",
+        "feature_id": "project.workspace",
+        "implementations": [
+          {
+            "certified": false,
+            "evidence_required": "Launch workspace, execute representative CRUD/action flow, verify audit and restart persistence.",
+            "platform": "windows_desktop",
+            "status": "implemented",
+            "surface": "Project Workspace"
+          },
+          {
+            "certified": false,
+            "evidence_required": "Launch workspace, execute representative CRUD/action flow, verify audit and restart persistence.",
+            "platform": "linux_desktop",
+            "status": "implemented",
+            "surface": "Project Workspace"
+          },
+          {
+            "certified": false,
+            "evidence_required": "Exercise server UI and API with administrator and restricted-user accounts.",
+            "platform": "server",
+            "status": "implemented",
+            "surface": "Projects, phases, tasks and subtasks web workspace and APIs"
+          }
+        ],
+        "module": "Projects",
+        "name": "Projects, phases, tasks and subtasks",
+        "permission": "project.view"
+      },
+      {
+        "description": "Portfolio and My Work",
+        "feature_id": "project.portfolio",
+        "implementations": [
+          {
+            "certified": false,
+            "evidence_required": "Launch workspace, execute representative CRUD/action flow, verify audit and restart persistence.",
+            "platform": "windows_desktop",
+            "status": "implemented",
+            "surface": "Portfolio & My Work"
+          },
+          {
+            "certified": false,
+            "evidence_required": "Launch workspace, execute representative CRUD/action flow, verify audit and restart persistence.",
+            "platform": "linux_desktop",
+            "status": "implemented",
+            "surface": "Portfolio & My Work"
+          },
+          {
+            "certified": false,
+            "evidence_required": "Exercise server UI and API with administrator and restricted-user accounts.",
+            "platform": "server",
+            "status": "implemented",
+            "surface": "Portfolio and My Work web workspace and APIs"
+          }
+        ],
+        "module": "Projects",
+        "name": "Portfolio and My Work",
+        "permission": "project.view"
+      },
+      {
+        "description": "Schedules, absence, allocations and workload",
+        "feature_id": "project.capacity",
+        "implementations": [
+          {
+            "certified": false,
+            "evidence_required": "Launch workspace, execute representative CRUD/action flow, verify audit and restart persistence.",
+            "platform": "windows_desktop",
+            "status": "implemented",
+            "surface": "Availability / Workload"
+          },
+          {
+            "certified": false,
+            "evidence_required": "Launch workspace, execute representative CRUD/action flow, verify audit and restart persistence.",
+            "platform": "linux_desktop",
+            "status": "implemented",
+            "surface": "Availability / Workload"
+          },
+          {
+            "certified": false,
+            "evidence_required": "Exercise server UI and API with administrator and restricted-user accounts.",
+            "platform": "server",
+            "status": "implemented",
+            "surface": "Schedules, absences, obligations, allocations and workload web workspace"
+          }
+        ],
+        "module": "Projects",
+        "name": "Schedules, absence, allocations and workload",
+        "permission": "project.manage"
+      },
+      {
+        "description": "Specimens, protocols, surveys, samples and laboratory",
+        "feature_id": "research.operations",
+        "implementations": [
+          {
+            "certified": false,
+            "evidence_required": "Launch workspace, execute representative CRUD/action flow, verify audit and restart persistence.",
+            "platform": "windows_desktop",
+            "status": "implemented",
+            "surface": "Measurements & Protocols"
+          },
+          {
+            "certified": false,
+            "evidence_required": "Launch workspace, execute representative CRUD/action flow, verify audit and restart persistence.",
+            "platform": "linux_desktop",
+            "status": "implemented",
+            "surface": "Measurements & Protocols"
+          },
+          {
+            "certified": false,
+            "evidence_required": "Exercise server UI and API with administrator and restricted-user accounts.",
+            "platform": "server",
+            "status": "implemented",
+            "surface": "Research operations web workspace and APIs"
+          }
+        ],
+        "module": "Research",
+        "name": "Specimens, protocols, surveys, samples and laboratory",
+        "permission": "research.view"
+      },
+      {
+        "description": "Observation review and bulk decisions",
+        "feature_id": "observations.review",
+        "implementations": [
+          {
+            "certified": false,
+            "evidence_required": "Launch workspace, execute representative CRUD/action flow, verify audit and restart persistence.",
+            "platform": "windows_desktop",
+            "status": "implemented",
+            "surface": "Observations Overview"
+          },
+          {
+            "certified": false,
+            "evidence_required": "Launch workspace, execute representative CRUD/action flow, verify audit and restart persistence.",
+            "platform": "linux_desktop",
+            "status": "implemented",
+            "surface": "Observations Overview"
+          },
+          {
+            "certified": false,
+            "evidence_required": "Exercise server UI and API with administrator and restricted-user accounts.",
+            "platform": "server",
+            "status": "implemented",
+            "surface": "Observation review and bulk-decision web workspace"
+          }
+        ],
+        "module": "Observations",
+        "name": "Observation review and bulk decisions",
+        "permission": "observation.review"
+      },
+      {
+        "description": "Independent, project and master dossiers",
+        "feature_id": "dossiers.workspace",
+        "implementations": [
+          {
+            "certified": false,
+            "evidence_required": "Launch workspace, execute representative CRUD/action flow, verify audit and restart persistence.",
+            "platform": "windows_desktop",
+            "status": "implemented",
+            "surface": "Dossiers"
+          },
+          {
+            "certified": false,
+            "evidence_required": "Launch workspace, execute representative CRUD/action flow, verify audit and restart persistence.",
+            "platform": "linux_desktop",
+            "status": "implemented",
+            "surface": "Dossiers"
+          },
+          {
+            "certified": false,
+            "evidence_required": "Exercise server UI and API with administrator and restricted-user accounts.",
+            "platform": "server",
+            "status": "implemented",
+            "surface": "Dossier hierarchy, review and ownership web workspace"
+          }
+        ],
+        "module": "Dossiers",
+        "name": "Independent, project and master dossiers",
+        "permission": "dossier.view"
+      },
+      {
+        "description": "Unified multimedia asset catalogue",
+        "feature_id": "library.assets",
+        "implementations": [
+          {
+            "certified": false,
+            "evidence_required": "Launch workspace, execute representative CRUD/action flow, verify audit and restart persistence.",
+            "platform": "windows_desktop",
+            "status": "implemented",
+            "surface": "Library Overview"
+          },
+          {
+            "certified": false,
+            "evidence_required": "Launch workspace, execute representative CRUD/action flow, verify audit and restart persistence.",
+            "platform": "linux_desktop",
+            "status": "implemented",
+            "surface": "Library Overview"
+          },
+          {
+            "certified": false,
+            "evidence_required": "Exercise server UI and API with administrator and restricted-user accounts.",
+            "platform": "server",
+            "status": "implemented",
+            "surface": "Library media gallery and governed download"
+          }
+        ],
+        "module": "Library",
+        "name": "Unified multimedia asset catalogue",
+        "permission": "asset.view"
+      },
+      {
+        "description": "Provider-neutral offline AI and MCP",
+        "feature_id": "ai.platform",
+        "implementations": [
+          {
+            "certified": false,
+            "evidence_required": "Launch workspace, execute representative CRUD/action flow, verify audit and restart persistence.",
+            "platform": "windows_desktop",
+            "status": "implemented",
+            "surface": "AI Chat & MCP / AI Platform Administration"
+          },
+          {
+            "certified": false,
+            "evidence_required": "Launch workspace, execute representative CRUD/action flow, verify audit and restart persistence.",
+            "platform": "linux_desktop",
+            "status": "implemented",
+            "surface": "AI Chat & MCP / AI Platform Administration"
+          },
+          {
+            "certified": false,
+            "evidence_required": "Exercise server UI and API with administrator and restricted-user accounts.",
+            "platform": "server",
+            "status": "implemented",
+            "surface": "AI provider, model and MCP administration web workspace"
+          }
+        ],
+        "module": "AI",
+        "name": "Provider-neutral offline AI and MCP",
+        "permission": "ai.use"
+      },
+      {
+        "description": "Reference data",
+        "feature_id": "admin.reference_data",
+        "implementations": [
+          {
+            "certified": false,
+            "evidence_required": "Launch workspace, execute representative CRUD/action flow, verify audit and restart persistence.",
+            "platform": "windows_desktop",
+            "status": "implemented",
+            "surface": "Research Reference Data"
+          },
+          {
+            "certified": false,
+            "evidence_required": "Launch workspace, execute representative CRUD/action flow, verify audit and restart persistence.",
+            "platform": "linux_desktop",
+            "status": "implemented",
+            "surface": "Research Reference Data"
+          },
+          {
+            "certified": false,
+            "evidence_required": "Exercise server UI and API with administrator and restricted-user accounts.",
+            "platform": "server",
+            "status": "implemented",
+            "surface": "Reference-data administration web workspace and API"
+          }
+        ],
+        "module": "Administration",
+        "name": "Reference data",
+        "permission": "reference_data.view"
+      },
+      {
+        "description": "Audit and governance evidence",
+        "feature_id": "admin.audit",
+        "implementations": [
+          {
+            "certified": false,
+            "evidence_required": "Launch workspace, execute representative CRUD/action flow, verify audit and restart persistence.",
+            "platform": "windows_desktop",
+            "status": "implemented",
+            "surface": "Administration Governance"
+          },
+          {
+            "certified": false,
+            "evidence_required": "Launch workspace, execute representative CRUD/action flow, verify audit and restart persistence.",
+            "platform": "linux_desktop",
+            "status": "implemented",
+            "surface": "Administration Governance"
+          },
+          {
+            "certified": false,
+            "evidence_required": "Exercise server UI and API with administrator and restricted-user accounts.",
+            "platform": "server",
+            "status": "implemented",
+            "surface": "Audit API and administration audit list"
+          }
+        ],
+        "module": "Administration",
+        "name": "Audit and governance evidence",
+        "permission": "audit.view"
+      },
+      {
+        "description": "Connector registry and health",
+        "feature_id": "connectors.registry",
+        "implementations": [
+          {
+            "certified": false,
+            "evidence_required": "Launch workspace, execute representative CRUD/action flow, verify audit and restart persistence.",
+            "platform": "windows_desktop",
+            "status": "implemented",
+            "surface": "Integrations / Resource Components"
+          },
+          {
+            "certified": false,
+            "evidence_required": "Launch workspace, execute representative CRUD/action flow, verify audit and restart persistence.",
+            "platform": "linux_desktop",
+            "status": "implemented",
+            "surface": "Integrations / Resource Components"
+          },
+          {
+            "certified": false,
+            "evidence_required": "Exercise server UI and API with administrator and restricted-user accounts.",
+            "platform": "server",
+            "status": "implemented",
+            "surface": "Connector registry, capabilities and health web workspace"
+          }
+        ],
+        "module": "Connectors",
+        "name": "Connector registry and health",
+        "permission": "connector.view"
+      },
+      {
+        "description": "Governed staged ingestion",
+        "feature_id": "staging.intake",
+        "implementations": [
+          {
+            "certified": false,
+            "evidence_required": "Launch workspace, execute representative CRUD/action flow, verify audit and restart persistence.",
+            "platform": "windows_desktop",
+            "status": "implemented",
+            "surface": "Library governed import"
+          },
+          {
+            "certified": false,
+            "evidence_required": "Launch workspace, execute representative CRUD/action flow, verify audit and restart persistence.",
+            "platform": "linux_desktop",
+            "status": "implemented",
+            "surface": "Library governed import"
+          },
+          {
+            "certified": false,
+            "evidence_required": "Exercise server UI and API with administrator and restricted-user accounts.",
+            "platform": "server",
+            "status": "implemented",
+            "surface": "Staged-submission API and web upload"
+          }
+        ],
+        "module": "Staging",
+        "name": "Governed staged ingestion",
+        "permission": "staging.create"
+      },
+      {
+        "description": "Offline help and guides",
+        "feature_id": "help.offline",
+        "implementations": [
+          {
+            "certified": false,
+            "evidence_required": "Launch workspace, execute representative CRUD/action flow, verify audit and restart persistence.",
+            "platform": "windows_desktop",
+            "status": "implemented",
+            "surface": "Help & Guides"
+          },
+          {
+            "certified": false,
+            "evidence_required": "Launch workspace, execute representative CRUD/action flow, verify audit and restart persistence.",
+            "platform": "linux_desktop",
+            "status": "implemented",
+            "surface": "Help & Guides"
+          },
+          {
+            "certified": false,
+            "evidence_required": "Exercise server UI and API with administrator and restricted-user accounts.",
+            "platform": "server",
+            "status": "implemented",
+            "surface": "Help catalogue and topic API"
+          }
+        ],
+        "module": "Help",
+        "name": "Offline help and guides",
+        "permission": "help.view"
+      }
+    ]
+  }
+}

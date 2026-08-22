@@ -1,0 +1,14 @@
+{
+  "product": "Fieldora",
+  "version": "5.4.0",
+  "build_id": "fieldora-5.4.0-operations-stabilization-r28",
+  "baseline": "fieldora-5.4.1-asset-equipment-operations-r27",
+  "scope": "Operations authorization, navigation, record workflows, module governance and PostgreSQL/server stabilization",
+  "platforms": [
+    "windows",
+    "linux",
+    "server"
+  ],
+  "release_name": "Fieldora 5.4.0 Operations Stabilization R28",
+  "library_migration_required": false
+}

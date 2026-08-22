@@ -1,0 +1,18 @@
+{
+  "app.name": "Aperture",
+  "workspace.export": "Exporteren",
+  "export.subtitle": "Wissel waarnemingen, media en draagbare pakketten uit.",
+  "export.assets": "Bestanden",
+  "export.data": "Gegevens",
+  "export.connectors": "Koppelingen",
+  "export.language": "Exporttaal",
+  "export.darwin_core": "Darwin Core Archive",
+  "export.geojson": "GeoJSON",
+  "export.gpx": "GPX",
+  "export.json": "JSON",
+  "export.csv": "CSV",
+  "connector.preview": "Valideren en voorbeeld",
+  "connector.offline": "Connector uploads require an explicit online session. Export and mapping remain available offline.",
+  "locale.language": "Taal",
+  "common.ready": "Gereed"
+}

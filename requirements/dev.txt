@@ -1,0 +1,7 @@
+-c constraints-py311.txt
+coverage[toml]
+import-linter
+mypy
+pytest
+pytest-cov
+ruff

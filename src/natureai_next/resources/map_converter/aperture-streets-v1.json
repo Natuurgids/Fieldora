@@ -1,0 +1,16 @@
+{
+  "layers": {
+    "landuse": {"minzoom": 5, "maxzoom": 14},
+    "water": {"minzoom": 4, "maxzoom": 14},
+    "building": {"minzoom": 13, "maxzoom": 14},
+    "transportation": {"minzoom": 5, "maxzoom": 14},
+    "place": {"minzoom": 3, "maxzoom": 14}
+  },
+  "settings": {
+    "minzoom": 0, "maxzoom": 14, "basezoom": 14, "include_ids": false,
+    "combine_below": 14, "name": "Aperture Streets v1", "version": "1.0",
+    "description": "Offline street map for Aperture",
+    "compress": "gzip",
+    "filemetadata": {"tilejson": "3.0.0", "scheme": "xyz", "type": "baselayer", "format": "pbf"}
+  }
+}

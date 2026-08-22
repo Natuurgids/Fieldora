@@ -1,0 +1,18 @@
+{
+  "app.name": "Aperture",
+  "workspace.export": "Export",
+  "export.subtitle": "Exchange observations, media, and portable packages.",
+  "export.assets": "Assets",
+  "export.data": "Data",
+  "export.connectors": "Connectors",
+  "export.language": "Export language",
+  "export.darwin_core": "Darwin Core Archive",
+  "export.geojson": "GeoJSON",
+  "export.gpx": "GPX",
+  "export.json": "JSON",
+  "export.csv": "CSV",
+  "connector.preview": "Validate and preview",
+  "connector.offline": "Connector uploads require an explicit online session. Export and mapping remain available offline.",
+  "locale.language": "Language",
+  "common.ready": "Ready"
+}

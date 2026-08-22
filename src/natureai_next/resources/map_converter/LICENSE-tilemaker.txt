@@ -1,0 +1,12 @@
+          FTWPL - THE FUCK THE WARRANTY PUBLIC LICENCE
+
+TERMS AND CONDITIONS FOR COPYING, DISTRIBUTION AND MODIFICATION
+
+You just DO WHAT THE FUCK YOU WANT TO.
+
+WARRANTY
+
+There is NO FUCKING WARRANTY.
+
+Upstream project: https://github.com/systemed/tilemaker
+Bundled version: 3.0.0, Windows x86-64 release executable

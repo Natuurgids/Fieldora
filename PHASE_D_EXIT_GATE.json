@@ -1,0 +1,99 @@
+{
+  "schema_version": 1,
+  "phase": "D",
+  "release": "0.08.34",
+  "status": "conditional",
+  "decision": "Phase D implementation is complete; exit is blocked pending live-provider and installed-client certification.",
+  "checks": [
+    {
+      "check_id": "pbac-default-deny",
+      "status": "pass",
+      "requirement": "Authorization defaults to deny and rejects expired or explicit denials.",
+      "evidence": [
+        "tests/test_fieldora_007_pbac.py"
+      ],
+      "note": "Deterministic policy tests cover scope, fields, expiry, and deny precedence."
+    },
+    {
+      "check_id": "governed-media",
+      "status": "pass",
+      "requirement": "Media bytes and ranges are available only after an API policy decision.",
+      "evidence": [
+        "tests/test_fieldora_008_server.py::test_media_download_is_pbac_filtered_and_resumable",
+        "tests/test_fieldora_008_server.py::test_s3_compatible_media_adapter_preserves_governed_range_contract"
+      ],
+      "note": "The object-store boundary exposes opaque keys, not direct object URLs."
+    },
+    {
+      "check_id": "governed-search",
+      "status": "pass",
+      "requirement": "Search cannot disclose result metadata or snippets before PBAC filtering.",
+      "evidence": [
+        "tests/test_fieldora_008_server.py::test_search_filters_candidates_before_title_or_snippet_disclosure",
+        "tests/test_fieldora_008_server.py::test_opensearch_projection_uses_atomic_alias_and_bounded_candidates"
+      ],
+      "note": "External search remains a non-authoritative candidate projection."
+    },
+    {
+      "check_id": "governed-export",
+      "status": "pass",
+      "requirement": "Export submission, job visibility, and download are separate PBAC gates.",
+      "evidence": [
+        "tests/test_fieldora_008_server.py::test_project_export_is_governed_at_submit_status_and_download"
+      ],
+      "note": "Storage paths are not returned by the governed download API."
+    },
+    {
+      "check_id": "governed-job-output",
+      "status": "pass",
+      "requirement": "Job output requires authorization independently of job submission.",
+      "evidence": [
+        "tests/test_fieldora_008_server.py::test_durable_job_output_requires_separate_pbac_and_lease_recovers"
+      ],
+      "note": "Lease recovery does not weaken output authorization."
+    },
+    {
+      "check_id": "upgrade-and-restore",
+      "status": "pass",
+      "requirement": "The one-node reference can be verified, restored, migrated, and composed.",
+      "evidence": [
+        "tests/test_fieldora_008_server.py::test_one_node_server_backup_verifies_and_restores_to_new_root",
+        "tests/test_fieldora_008_server.py::test_restored_root_validation_composes_current_server_offline"
+      ],
+      "note": "Restore is intentionally non-destructive and targets a new data root."
+    },
+    {
+      "check_id": "live-postgresql",
+      "status": "blocked",
+      "requirement": "Run repository parity and recovery against a supported live PostgreSQL service.",
+      "evidence": [
+        "tests/test_fieldora_008_server.py (DB-API contract doubles only)"
+      ],
+      "note": "No provider-backed execution record is present in this release."
+    },
+    {
+      "check_id": "live-object-search",
+      "status": "blocked",
+      "requirement": "Run governed ranges/uploads and PBAC-filtered search against live S3 and OpenSearch.",
+      "evidence": [
+        "tests/test_fieldora_008_server.py (provider doubles only)"
+      ],
+      "note": "No provider-backed execution record is present in this release."
+    },
+    {
+      "check_id": "deployed-tls-client",
+      "status": "blocked",
+      "requirement": "Exercise the packaged web client over a real TLS listener and trusted browser.",
+      "evidence": [
+        "tests/test_fieldora_008_server.py::test_https_server_uses_tls_12_or_newer_certificate_context"
+      ],
+      "note": "The SSL-context contract is tested; installed-client field evidence is absent."
+    }
+  ],
+  "failed": [],
+  "blocked": [
+    "live-postgresql",
+    "live-object-search",
+    "deployed-tls-client"
+  ]
+}

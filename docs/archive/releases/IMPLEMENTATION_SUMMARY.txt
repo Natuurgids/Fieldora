@@ -1,0 +1,40 @@
+Aperture Build 28.3 — Consolidated Device Availability
+
+Build 28.3 introduces a library-wide storage_devices.db registry. Device mount state is maintained once per persistent volume UUID, while individual observations retain device/location references and relative paths. Offline status is derived from the registry; per-file verification is reserved for online devices and explicit checks.
+
+Aperture 4.0.0.dev1+build28 — Implementation Summary
+
+Implemented work packages:
+WP1 Storage Architecture
+- Asset-centric storage policy, provider, location, role and health domain model.
+- Managed, Linked and Hybrid policies.
+- Source provenance retained independently of the preferred working original.
+
+WP2 Database
+- Canonical storage_providers, asset_storage_policies, asset_storage_locations and storage_verification_events schema.
+- Storage overview view and indexes.
+- Clean-start/pre-RC design; no legacy data migration workflow is claimed.
+
+WP3 Import Pipeline
+- Import policy selection and remembered default.
+- Transactional registration of source and Aperture-master locations.
+- Enrichments remain attached to assets.
+
+WP4 Inspector and Preferences
+- Inspector distinguishes storage mode, source file, Aperture original and availability.
+- Preferences page controls the default import storage policy.
+
+WP5 Storage Manager
+- Storage statistics, verification, health states, relinking, create Aperture original and remove Aperture original.
+- Checksum validation protects relinking and managed-copy creation.
+
+WP6 Backup
+- Catalog-only, managed-original, reference-manifest and complete backup scopes.
+- Managed files are copied and checksum-verified; linked originals are represented by a manifest.
+
+WP7 Documentation
+- Build 28 architecture, user workflow, backup semantics and pre-RC clean-start policy documented.
+
+WP8 Testing
+- Explicitly excluded at the user's request and remains the user's responsibility.
+- No automated test-suite pass is claimed for this delivery.

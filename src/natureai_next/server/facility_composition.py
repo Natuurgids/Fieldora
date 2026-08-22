@@ -1,23 +1,22 @@
 """Authenticated composition for facility/mobile HTTP routes.
 
 Facility routes deliberately pass through the existing :class:`FieldoraApi`
-first.  That preserves the server's single authentication, session and tenant
-quota path.  Only the authenticated ``404`` for the otherwise-unknown facility
+first. That preserves the server's single authentication, session and tenant
+quota path. Only the authenticated ``404`` for the otherwise-unknown facility
 namespace is replaced by the facility adapter response.
 """
 from __future__ import annotations
 
 import json
 from collections.abc import Mapping
-from typing import Any, Protocol
+from pathlib import Path
+from typing import Any
 from urllib.parse import urlsplit
 
+from natureai_next.application.facility_mobile import FacilityMobileService
+from natureai_next.application.facility_planning import FacilityPlanningService
 from natureai_next.server.api import ApiResponse, FieldoraApi
 from natureai_next.server.facility_api import FacilityApiAdapter
-
-
-class _IdentityLike(Protocol):
-    identity_id: str
 
 
 class FacilityEnabledApi:
@@ -46,7 +45,7 @@ class FacilityEnabledApi:
         if gate.status != 404:
             return gate
 
-        # Authentication has already succeeded above.  Re-resolving the same
+        # Authentication has already succeeded above. Re-resolving the same
         # identity is read-only and avoids introducing a second auth policy.
         _token, identity = self.base._identity(headers)
         payload = self._json_body(body)
@@ -73,3 +72,10 @@ class FacilityEnabledApi:
         except (UnicodeDecodeError, json.JSONDecodeError):
             return None
         return value if isinstance(value, dict) else None
+
+
+def compose_facility_api(base: FieldoraApi, database_path: Path) -> FacilityEnabledApi:
+    """Build the facility/mobile edge around an already-configured Fieldora API."""
+    planning = FacilityPlanningService(database_path)
+    mobile = FacilityMobileService(planning)
+    return FacilityEnabledApi(base, FacilityApiAdapter(mobile))

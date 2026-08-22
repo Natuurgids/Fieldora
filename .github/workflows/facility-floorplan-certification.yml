@@ -5,6 +5,7 @@ on:
     paths:
       - "src/natureai_next/application/facility_*.py"
       - "src/natureai_next/application/operations_assets.py"
+      - "src/natureai_next/server/facility_api.py"
       - "src/natureai_next/ui/qt/facility_*.py"
       - "src/natureai_next/ui/qt/navigation_contracts.py"
       - "tests/test_facility_*.py"
@@ -43,6 +44,7 @@ jobs:
           src/natureai_next/application/facility_mobile.py
           src/natureai_next/application/facility_planning.py
           src/natureai_next/application/operations_assets.py
+          src/natureai_next/server/facility_api.py
           src/natureai_next/ui/qt/facility_floorplan.py
           src/natureai_next/ui/qt/facility_operations_integration.py
           src/natureai_next/ui/qt/facility_planning.py
@@ -52,6 +54,7 @@ jobs:
           tests/test_facility_library_bridge.py
           tests/test_facility_mobile_contract.py
           tests/test_facility_planning_workflow.py
+          tests/test_facility_server_api.py
           tests/test_facility_v5_integration.py
           tests/test_versioned_facility_floorplans.py
 
@@ -63,5 +66,6 @@ jobs:
           tests/test_facility_library_bridge.py
           tests/test_facility_mobile_contract.py
           tests/test_facility_planning_workflow.py
+          tests/test_facility_server_api.py
           tests/test_facility_v5_integration.py
           tests/test_versioned_facility_floorplans.py

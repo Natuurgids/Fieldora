@@ -8,6 +8,7 @@ import time
 from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 from natureai_next.server.operator_control import PostgresOperatorRepository, ServiceState
 from natureai_next.server.service_trust import ServiceTrustAuthority
@@ -35,13 +36,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     services = configuration.get("services")
     if not isinstance(services, list) or not services:
         raise SystemExit("renewal configuration requires a non-empty services list")
-    repository = _repository(args.postgres_dsn_file)
+    repository, dsn = _repository(args.postgres_dsn_file)
     authority = ServiceTrustAuthority(args.authority_root)
 
     while True:
         _renew_cycle(
             authority,
             repository,
+            dsn,
             services,
             renew_before_hours=args.renew_before_hours,
             lifetime_hours=args.lifetime_hours,
@@ -54,12 +56,14 @@ def main(argv: Sequence[str] | None = None) -> int:
 def _renew_cycle(
     authority: ServiceTrustAuthority,
     repository: PostgresOperatorRepository,
+    postgres_dsn: str,
     services: list[object],
     *,
     renew_before_hours: float,
     lifetime_hours: int,
 ) -> None:
     threshold = datetime.now(UTC) + timedelta(hours=renew_before_hours)
+    reload_postgres = False
     for raw in services:
         if not isinstance(raw, dict):
             raise ValueError("service renewal entry must be an object")
@@ -72,7 +76,7 @@ def _renew_cycle(
         if record is None:
             raise PermissionError(f"renewal target is not enrolled: {service_id}")
         state = ServiceState(record.state)
-        if state is ServiceState.REVOKED:
+        if state in {ServiceState.STOPPED, ServiceState.REVOKED}:
             continue
 
         current = authority.inspect(certificate)
@@ -91,6 +95,7 @@ def _renew_cycle(
                 reuse_private_key=True,
             )
             renewed = True
+            reload_postgres = reload_postgres or bool(raw.get("reload_postgres", False))
 
         repository.heartbeat(
             service_id,
@@ -112,9 +117,11 @@ def _renew_cycle(
                 ),
                 flush=True,
             )
+    if reload_postgres:
+        _reload_postgres(postgres_dsn)
 
 
-def _repository(dsn_file: Path) -> PostgresOperatorRepository:
+def _repository(dsn_file: Path) -> tuple[PostgresOperatorRepository, str]:
     if not dsn_file.is_file() or dsn_file.stat().st_size > 16_384:
         raise SystemExit("PostgreSQL operator DSN file is invalid")
     dsn = dsn_file.read_text(encoding="utf-8").strip()
@@ -124,10 +131,20 @@ def _repository(dsn_file: Path) -> PostgresOperatorRepository:
         import psycopg
     except ImportError as exc:
         raise SystemExit("certificate renewal requires server-postgresql") from exc
-    return PostgresOperatorRepository(lambda: psycopg.connect(dsn, connect_timeout=10))
+    return PostgresOperatorRepository(lambda: psycopg.connect(dsn, connect_timeout=10)), dsn
 
 
-def _required(item: dict[object, object], key: str) -> str:
+def _reload_postgres(dsn: str) -> None:
+    import psycopg
+
+    with psycopg.connect(dsn, connect_timeout=10, autocommit=True) as connection:
+        result = connection.execute("SELECT pg_reload_conf()").fetchone()
+    if result is None or result[0] is not True:
+        raise RuntimeError("PostgreSQL did not acknowledge TLS configuration reload")
+    print(json.dumps({"event": "postgres_tls_reloaded"}), flush=True)
+
+
+def _required(item: dict[Any, Any], key: str) -> str:
     value = item.get(key)
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"renewal service field is required: {key}")

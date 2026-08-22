@@ -11,7 +11,11 @@ on:
       - "src/natureai_next/server/platform_extensions.py"
       - "src/natureai_next/server/scientific_collaboration.py"
       - "src/natureai_next/server/service_trust.py"
+      - "src/natureai_next/server/facility_platform.py"
+      - "src/natureai_next/server/facility_platform_api.py"
+      - "src/natureai_next/server/facility_web_compatibility.py"
       - "src/natureai_next/server/web_compatibility.py"
+      - "src/natureai_next/server/http.py"
       - "tests/test_platform_server_extensions.py"
       - ".github/workflows/platform-server-certification.yml"
   workflow_dispatch:
@@ -47,8 +51,16 @@ jobs:
           src/natureai_next/server/platform_extensions.py
           src/natureai_next/server/scientific_collaboration.py
           src/natureai_next/server/service_trust.py
+          src/natureai_next/server/facility_platform.py
+          src/natureai_next/server/facility_platform_api.py
+          src/natureai_next/server/facility_web_compatibility.py
           src/natureai_next/server/web_compatibility.py
+          src/natureai_next/server/http.py
           tests/test_platform_server_extensions.py
 
       - name: Platform server tests
-        run: python -m pytest -q tests/test_platform_server_extensions.py tests/test_server_web_compatibility.py
+        run: >-
+          python -m pytest -q
+          tests/test_platform_server_extensions.py
+          tests/test_server_web_compatibility.py
+          tests/test_facility_server_api.py

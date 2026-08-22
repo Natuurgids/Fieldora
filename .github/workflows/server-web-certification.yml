@@ -3,9 +3,11 @@ name: Fieldora server web certification
 on:
   pull_request:
     paths:
+      - "src/natureai_next/application/platform_features.py"
       - "src/natureai_next/server/http.py"
       - "src/natureai_next/server/web_compatibility.py"
       - "src/natureai_next/resources/server_web/**"
+      - "tests/test_cross_client_parity_contract.py"
       - "tests/test_server_web_compatibility.py"
       - ".github/workflows/server-web-certification.yml"
   workflow_dispatch:
@@ -30,12 +32,17 @@ jobs:
       - name: Install certification dependencies
         run: python -m pip install --upgrade pip && python -m pip install -e ".[dev]"
 
-      - name: Ruff server web compatibility
+      - name: Ruff server web and parity compatibility
         run: >-
           python -m ruff check
+          src/natureai_next/application/platform_features.py
           src/natureai_next/server/http.py
           src/natureai_next/server/web_compatibility.py
+          tests/test_cross_client_parity_contract.py
           tests/test_server_web_compatibility.py
 
-      - name: Server web compatibility tests
-        run: python -m pytest -q tests/test_server_web_compatibility.py
+      - name: Server web and parity compatibility tests
+        run: >-
+          python -m pytest -q
+          tests/test_cross_client_parity_contract.py
+          tests/test_server_web_compatibility.py

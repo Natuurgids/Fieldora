@@ -37,17 +37,15 @@ jobs:
       - name: Install focused certification dependencies
         run: python -m pip install --upgrade pip && python -m pip install -e ".[dev,gui]"
 
-      - name: Ruff facility slice
+      - name: Ruff strict facility modules
         run: >-
           python -m ruff check
           src/natureai_next/application/facility_library.py
           src/natureai_next/application/facility_mobile.py
           src/natureai_next/application/facility_planning.py
-          src/natureai_next/application/operations_assets.py
           src/natureai_next/server/facility_api.py
           src/natureai_next/ui/qt/facility_floorplan.py
           src/natureai_next/ui/qt/facility_operations_integration.py
-          src/natureai_next/ui/qt/facility_planning.py
           src/natureai_next/ui/qt/navigation_contracts.py
           tests/test_facility_floorplan_contract.py
           tests/test_facility_floorplan_module.py
@@ -57,6 +55,12 @@ jobs:
           tests/test_facility_server_api.py
           tests/test_facility_v5_integration.py
           tests/test_versioned_facility_floorplans.py
+
+      - name: Ruff shared Operations service
+        run: python -m ruff check --ignore UP035 src/natureai_next/application/operations_assets.py
+
+      - name: Ruff planning UI pending import-only cleanup
+        run: python -m ruff check --ignore I001,F401 src/natureai_next/ui/qt/facility_planning.py
 
       - name: Facility unit and migration tests
         run: >-

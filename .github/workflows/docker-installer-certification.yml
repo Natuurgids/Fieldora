@@ -1,0 +1,69 @@
+name: Fieldora Docker installer certification
+
+on:
+  pull_request:
+    paths:
+      - "Install-Fieldora-Clean.ps1"
+      - "src/natureai_next/server/service_trust.py"
+      - "src/natureai_next/bootstrap/service_trust_cli.py"
+      - "src/natureai_next/bootstrap/operator_cli.py"
+      - ".github/workflows/docker-installer-certification.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  installer-contract:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Parse PowerShell installer
+        shell: pwsh
+        run: |
+          $text = Get-Content -LiteralPath ./Install-Fieldora-Clean.ps1 -Raw
+          [void][scriptblock]::Create($text)
+          Write-Host "PowerShell syntax: OK"
+
+      - name: Certify clean-install trust contract
+        shell: pwsh
+        run: |
+          $text = Get-Content -LiteralPath ./Install-Fieldora-Clean.ps1 -Raw
+          $required = @(
+            'FIELDORA_SERVICE_ID: fieldora-api-local',
+            'FIELDORA_SERVICE_ID: fieldora-worker-local',
+            'sslmode=verify-full',
+            'clientcert=verify-full',
+            'fieldora-service-trust',
+            'fieldora-operator',
+            '--tls-certificate',
+            '--tls-private-key',
+            'restart: unless-stopped',
+            'fieldora-postgres-trust',
+            'fieldora-worker-trust',
+            'fieldora-api-trust'
+          )
+          foreach ($needle in $required) {
+            if (-not $text.Contains($needle)) {
+              throw "Installer trust contract is missing: $needle"
+            }
+          }
+          if ($text.Contains('--allow-insecure-http')) {
+            throw 'Clean installer must not enable insecure HTTP.'
+          }
+          Write-Host "Service enrollment, HTTPS and PostgreSQL mTLS contract: OK"
+
+      - name: Ensure plaintext PostgreSQL network access is rejected
+        shell: pwsh
+        run: |
+          $text = Get-Content -LiteralPath ./Install-Fieldora-Clean.ps1 -Raw
+          foreach ($needle in @(
+            'hostnossl all all   0.0.0.0/0   reject',
+            'hostnossl all all   ::/0        reject'
+          )) {
+            if (-not $text.Contains($needle)) {
+              throw "PostgreSQL plaintext rejection rule is missing: $needle"
+            }
+          }
+          Write-Host "PostgreSQL plaintext rejection: OK"

@@ -93,6 +93,8 @@ def _renew_cycle(
                 ip_addresses=tuple(_strings(raw.get("ip_addresses", []))),
                 lifetime_hours=lifetime_hours,
                 reuse_private_key=True,
+                file_uid=_optional_int(raw, "uid"),
+                file_gid=_optional_int(raw, "gid"),
             )
             renewed = True
             reload_postgres = reload_postgres or bool(raw.get("reload_postgres", False))
@@ -149,6 +151,15 @@ def _required(item: dict[Any, Any], key: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"renewal service field is required: {key}")
     return value.strip()
+
+
+def _optional_int(item: dict[Any, Any], key: str) -> int | None:
+    value = item.get(key)
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise ValueError(f"renewal service field must be a non-negative integer: {key}")
+    return value
 
 
 def _strings(value: object) -> list[str]:

@@ -3,10 +3,13 @@ import pytest
 from natureai_next.server.access_contracts import (
     AccessTarget,
     AccessTargetKind,
+    ContractSubject,
+    ContractSubjectKind,
     IntakeActorKind,
     IntakeContext,
     default_intake_contract,
     owner_approval_complete,
+    restrict_contract,
     sharing_amendment,
 )
 
@@ -16,6 +19,52 @@ def test_admin_and_global_service_imports_are_unrestricted() -> None:
         draft = default_intake_contract(IntakeContext(kind, "actor-1"))
         assert draft.unrestricted
         assert not draft.requires_project_owner_approval
+
+
+def test_admin_can_narrow_unrestricted_asset_to_one_organization() -> None:
+    base = default_intake_contract(IntakeContext(IntakeActorKind.ADMIN, "admin-a"))
+    narrowed = restrict_contract(
+        base,
+        subject=ContractSubject(ContractSubjectKind.ASSET, "asset-42"),
+        replacement_targets=(
+            AccessTarget(AccessTargetKind.ORGANIZATION, organization_id="org-a"),
+        ),
+        administrator=True,
+    )
+    assert not narrowed.unrestricted
+    assert narrowed.subject == ContractSubject(ContractSubjectKind.ASSET, "asset-42")
+    assert narrowed.targets == (
+        AccessTarget(AccessTargetKind.ORGANIZATION, organization_id="org-a"),
+    )
+
+
+def test_admin_can_narrow_an_entire_collection() -> None:
+    base = default_intake_contract(IntakeContext(IntakeActorKind.ADMIN, "admin-a"))
+    narrowed = restrict_contract(
+        base,
+        subject=ContractSubject(ContractSubjectKind.COLLECTION, "collection-200m"),
+        replacement_targets=(
+            AccessTarget(AccessTargetKind.ORGANIZATION, organization_id="org-research"),
+        ),
+        administrator=True,
+    )
+    assert narrowed.subject == ContractSubject(
+        ContractSubjectKind.COLLECTION, "collection-200m"
+    )
+    assert narrowed.targets[0].organization_id == "org-research"
+
+
+def test_non_admin_cannot_replace_contract_scope() -> None:
+    base = default_intake_contract(IntakeContext(IntakeActorKind.ADMIN, "admin-a"))
+    with pytest.raises(PermissionError):
+        restrict_contract(
+            base,
+            subject=ContractSubject(ContractSubjectKind.ASSET, "asset-42"),
+            replacement_targets=(
+                AccessTarget(AccessTargetKind.ORGANIZATION, organization_id="org-a"),
+            ),
+            administrator=False,
+        )
 
 
 def test_organization_service_is_restricted_to_its_organization() -> None:
@@ -128,4 +177,4 @@ def test_multiple_cross_wall_targets_are_reserved_for_admin_batch_contracts() ->
     with pytest.raises(PermissionError):
         sharing_amendment(base, requested_targets=targets)
     draft = sharing_amendment(base, requested_targets=targets, administrator_batch=True)
-    assert len(draft.targets) == 3  # unrestricted base plus both explicit targets
+    assert len(draft.targets) == 3

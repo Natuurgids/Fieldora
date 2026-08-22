@@ -8,6 +8,7 @@ on:
       - "src/natureai_next/bootstrap/operator_cli.py"
       - "src/natureai_next/bootstrap/service_trust_cli.py"
       - "src/natureai_next/bootstrap/certificate_renewer_cli.py"
+      - "src/natureai_next/server/access_contracts.py"
       - "src/natureai_next/server/operator_control.py"
       - "src/natureai_next/server/platform_api.py"
       - "src/natureai_next/server/platform_extensions.py"
@@ -19,6 +20,7 @@ on:
       - "src/natureai_next/server/facility_web_compatibility.py"
       - "src/natureai_next/server/web_compatibility.py"
       - "src/natureai_next/server/http.py"
+      - "tests/test_access_contracts.py"
       - "tests/test_platform_server_extensions.py"
       - "tests/test_service_tls_reload.py"
       - "tests/test_certificate_renewal.py"
@@ -52,6 +54,7 @@ jobs:
           src/natureai_next/bootstrap/operator_cli.py
           src/natureai_next/bootstrap/service_trust_cli.py
           src/natureai_next/bootstrap/certificate_renewer_cli.py
+          src/natureai_next/server/access_contracts.py
           src/natureai_next/server/operator_control.py
           src/natureai_next/server/platform_api.py
           src/natureai_next/server/platform_extensions.py
@@ -63,6 +66,7 @@ jobs:
           src/natureai_next/server/facility_web_compatibility.py
           src/natureai_next/server/web_compatibility.py
           src/natureai_next/server/http.py
+          tests/test_access_contracts.py
           tests/test_platform_server_extensions.py
           tests/test_service_tls_reload.py
           tests/test_certificate_renewal.py
@@ -70,6 +74,7 @@ jobs:
       - name: Platform server tests
         run: >-
           python -m pytest -q
+          tests/test_access_contracts.py
           tests/test_platform_server_extensions.py
           tests/test_server_web_compatibility.py
           tests/test_facility_server_api.py

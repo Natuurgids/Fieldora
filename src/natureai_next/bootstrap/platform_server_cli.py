@@ -22,9 +22,9 @@ from natureai_next.server.operator_control import (
     SqliteOperatorRepository,
 )
 from natureai_next.server.platform_extensions import ProjectOptionalStagedIngestionStore
-from natureai_next.server.runtime_api import RuntimeGovernedFieldoraApi
 from natureai_next.server.service_runtime import ServiceRuntimeSupervisor
 
+from natureai_next.server.runtime_api import RuntimeGovernedFieldoraApi
 
 _LAST_REPOSITORY: Any = None
 _LAST_IDENTITY: Any = None

@@ -11,6 +11,7 @@ Implemented in the branch:
 - location-to-drawing and drawing-to-location service navigation;
 - future layout and relocation data model;
 - reliable `FacilityPlanningService` facade for planned placement and relocation generation;
+- all new planning/mobile/UI callers use `FacilityPlanningService`, not the older duplicate planning helpers on `OperationsAssetService`;
 - reusable Qt `FloorplanCanvas` and `FacilityFloorplanDialog`;
 - reusable `FacilityPlanningWorkspace` for floorplans, future layouts, picklists and relocation execution;
 - V5 `AssetEquipmentOperations` runtime integration without replacing the existing asset/maintenance/calibration page;
@@ -30,13 +31,14 @@ Release invariants:
 3. Intermediate relocation states (`removed`, `in_transit`, `staging`) do not change the canonical live location.
 4. Final placement states (`stored`, `placed`, `displayed`, `completed`) may update the live location and append movement history.
 5. Original design/source drawings remain governed Library assets; the operational SVG is a separately versioned spatial representation.
+6. Until the duplicate base helpers are reconciled, future-layout creation and relocation generation must enter through `FacilityPlanningService`.
 
 Still required before merge/release:
 
 - obtain a successful run of the focused facility certification workflow;
 - run the broader Fieldora Ruff/unit/migration/Qt certification suite against the branch;
 - perform an interactive desktop smoke test with real SVG/PDF/CAD-derived Library assets and a multi-level location hierarchy;
-- review server HTTP exposure for the `FacilityMobileService` contract before the mobile client consumes it;
-- reconcile/fix the older planning helper implementations still present directly on `OperationsAssetService` so callers use one reliable implementation path.
+- review and wire server HTTP exposure for the `FacilityMobileService` contract before the mobile client consumes it;
+- reconcile/fix the older planning helper implementations still present directly on `OperationsAssetService` in a controlled whole-file cleanup/refactor, without risking unrelated Operations code.
 
 Keep the pull request in draft until the certification evidence is green.

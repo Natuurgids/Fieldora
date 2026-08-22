@@ -1,0 +1,67 @@
+name: Facility floorplan certification
+
+on:
+  pull_request:
+    paths:
+      - "src/natureai_next/application/facility_*.py"
+      - "src/natureai_next/application/operations_assets.py"
+      - "src/natureai_next/ui/qt/facility_*.py"
+      - "src/natureai_next/ui/qt/navigation_contracts.py"
+      - "tests/test_facility_*.py"
+      - "tests/test_versioned_facility_floorplans.py"
+      - ".github/workflows/facility-floorplan-certification.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  facility-certification:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      QT_QPA_PLATFORM: offscreen
+      FIELDORA_IDENTITY_ID: local-user
+      FIELDORA_PROFILE_ROLE: administrator
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install focused certification dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -e ".[dev,gui]"
+
+      - name: Ruff facility slice
+        run: >-
+          python -m ruff check
+          src/natureai_next/application/facility_library.py
+          src/natureai_next/application/facility_mobile.py
+          src/natureai_next/application/facility_planning.py
+          src/natureai_next/application/operations_assets.py
+          src/natureai_next/ui/qt/facility_floorplan.py
+          src/natureai_next/ui/qt/facility_operations_integration.py
+          src/natureai_next/ui/qt/facility_planning.py
+          src/natureai_next/ui/qt/navigation_contracts.py
+          tests/test_facility_floorplan_contract.py
+          tests/test_facility_floorplan_module.py
+          tests/test_facility_library_bridge.py
+          tests/test_facility_mobile_contract.py
+          tests/test_facility_planning_workflow.py
+          tests/test_facility_v5_integration.py
+          tests/test_versioned_facility_floorplans.py
+
+      - name: Facility unit and migration tests
+        run: >-
+          python -m pytest -q
+          tests/test_facility_floorplan_contract.py
+          tests/test_facility_floorplan_module.py
+          tests/test_facility_library_bridge.py
+          tests/test_facility_mobile_contract.py
+          tests/test_facility_planning_workflow.py
+          tests/test_facility_v5_integration.py
+          tests/test_versioned_facility_floorplans.py

@@ -50,6 +50,7 @@ fieldora-secret-rotation = "natureai_next.bootstrap.secret_rotation_cli:main"
 fieldora-audit-export = "natureai_next.bootstrap.audit_export_cli:main"
 fieldora-phase-f-certification = "natureai_next.bootstrap.phase_f_certification_cli:main"
 fieldora-service-trust = "natureai_next.bootstrap.service_trust_cli:main"
+fieldora-certificate-renewer = "natureai_next.bootstrap.certificate_renewer_cli:main"
 fieldora-operator = "natureai_next.bootstrap.operator_cli:main"
 aperture-updater = "natureai_next.bootstrap.native_updater:main"
 aperture-recovery = "natureai_next.bootstrap.native_recovery:main"
@@ -119,22 +120,36 @@ forbidden_modules = [
   "natureai_next.application",
   "natureai_next.ports",
   "natureai_next.infrastructure",
-  "natureai_next.jobs",
-  "natureai_next.plugins",
-  "natureai_next.ui",
   "natureai_next.bootstrap",
-  "natureai_next.plugin_api",
+  "natureai_next.server",
 ]
 
 [[tool.importlinter.contracts]]
-name = "Ports do not depend on outer layers"
+name = "Application does not import infrastructure or bootstrap"
+type = "forbidden"
+source_modules = ["natureai_next.application"]
+forbidden_modules = [
+  "natureai_next.infrastructure",
+  "natureai_next.bootstrap",
+]
+
+[[tool.importlinter.contracts]]
+name = "Ports do not import infrastructure or bootstrap"
 type = "forbidden"
 source_modules = ["natureai_next.ports"]
 forbidden_modules = [
-  "natureai_next.application",
   "natureai_next.infrastructure",
-  "natureai_next.jobs",
-  "natureai_next.plugins",
-  "natureai_next.ui",
   "natureai_next.bootstrap",
 ]
+
+[[tool.importlinter.contracts]]
+name = "Infrastructure does not import bootstrap"
+type = "forbidden"
+source_modules = ["natureai_next.infrastructure"]
+forbidden_modules = ["natureai_next.bootstrap"]
+
+[[tool.importlinter.contracts]]
+name = "GUI does not import infrastructure"
+type = "forbidden"
+source_modules = ["natureai_next.gui"]
+forbidden_modules = ["natureai_next.infrastructure"]

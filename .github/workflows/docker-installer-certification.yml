@@ -63,7 +63,7 @@ jobs:
           }
           Write-Host "Service enrollment, HTTPS, mTLS and live renewal contract: OK"
 
-      - name: Certify Windows curl output handling
+      - name: Certify Windows curl handling
         shell: pwsh
         run: |
           $text = Get-Content -LiteralPath ./Install-Fieldora-Clean.ps1 -Raw
@@ -73,7 +73,28 @@ jobs:
           if (-not $text.Contains('-o NUL')) {
             throw 'Windows curl smoke tests must discard bodies with -o NUL.'
           }
-          Write-Host "Windows curl null-device handling: OK"
+          if (-not $text.Contains('--ssl-revoke-best-effort')) {
+            throw 'Windows Schannel private-CA smoke tests must use best-effort revocation while retaining certificate validation.'
+          }
+          if ($text.Contains('--insecure') -or $text.Contains('-k ')) {
+            throw 'Installer TLS smoke tests must never disable certificate verification.'
+          }
+          Write-Host "Windows curl private-CA handling: OK"
+
+      - name: Certify clean runtime stability
+        shell: pwsh
+        run: |
+          $text = Get-Content -LiteralPath ./Install-Fieldora-Clean.ps1 -Raw
+          foreach ($needle in @(
+            '{{.RestartCount}}',
+            'restarted $restartCount time(s) during clean installation',
+            "expected 'active'"
+          )) {
+            if (-not $text.Contains($needle)) {
+              throw "Installer does not certify clean runtime stability: $needle"
+            }
+          }
+          Write-Host "Zero-restart and active-service certification: OK"
 
       - name: Ensure root CA is not mounted into running renewal service
         shell: pwsh

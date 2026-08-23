@@ -1,8 +1,9 @@
 <#
 Windows entry point for the Fieldora clean Docker installer.
-Runs the repository clean installer, installs the Fieldora root CA into the current
-user root store through .NET X509Store (no certificate-store UI), verifies the exact
-thumbprint, then proves HTTPS using the Windows trust store.
+Runs the repository clean installer, enables the internal mTLS storage-service listener,
+installs the Fieldora root CA into the current user root store through .NET X509Store
+(no certificate-store UI), verifies the exact thumbprint, then proves HTTPS using the
+Windows trust store.
 #>
 
 [CmdletBinding()]
@@ -45,6 +46,87 @@ try {
     if ($LASTEXITCODE -ne 0) {
         throw "Fieldora clean installer failed with exit code $LASTEXITCODE."
     }
+
+    Write-Host ""
+    Write-Host "============================================================" -ForegroundColor DarkCyan
+    Write-Host "==> Enabling internal mTLS storage-service listener" -ForegroundColor Cyan
+    Write-Host "============================================================" -ForegroundColor DarkCyan
+
+    $overridePath = Join-Path $InstallRoot "compose.override.yaml"
+    $override = @'
+services:
+  fieldora-server:
+    environment:
+      FIELDORA_STORAGE_SERVICE_ENABLED: "true"
+      FIELDORA_STORAGE_SERVICE_HOST: "0.0.0.0"
+      FIELDORA_STORAGE_SERVICE_PORT: "8766"
+      FIELDORA_STORAGE_SERVICE_CERTIFICATE: "/run/fieldora-trust/service.crt"
+      FIELDORA_STORAGE_SERVICE_PRIVATE_KEY: "/run/fieldora-trust/service.key"
+      FIELDORA_STORAGE_SERVICE_CLIENT_CA: "/run/fieldora-trust/ca-certificate.pem"
+    expose:
+      - "8766"
+'@
+    Set-Content -LiteralPath $overridePath -Encoding utf8NoBOM -Value $override
+
+    Push-Location $InstallRoot
+    try {
+        & docker compose config -q
+        if ($LASTEXITCODE -ne 0) {
+            throw "Storage-service Compose override is invalid."
+        }
+        & docker compose up -d --no-deps fieldora-server
+        if ($LASTEXITCODE -ne 0) {
+            throw "Unable to restart Fieldora server with the mTLS storage-service listener."
+        }
+
+        $healthy = $false
+        foreach ($attempt in 1..45) {
+            $state = (@(& docker inspect --format "{{.State.Health.Status}}" fieldora-server 2>$null) -join "").Trim()
+            if ($state -eq "healthy") {
+                $healthy = $true
+                break
+            }
+            Start-Sleep -Seconds 2
+        }
+        if (-not $healthy) {
+            & docker compose logs --tail 150 fieldora-server
+            throw "Fieldora server did not become healthy after enabling the mTLS storage-service listener."
+        }
+
+        # Prove the internal listener performs a real mutual-TLS handshake. The worker
+        # certificate is sufficient for the transport proof; storage operations still
+        # require an enrolled ACTIVE storage-service identity at the application layer.
+        $probe = @'
+import ssl
+import urllib.error
+import urllib.request
+
+context = ssl.create_default_context(cafile="/run/fieldora-trust/ca-certificate.pem")
+context.load_cert_chain(
+    "/run/fieldora-trust/service.crt",
+    "/run/fieldora-trust/service.key",
+)
+request = urllib.request.Request(
+    "https://fieldora-server:8766/internal/v1/storage/transport-probe",
+    method="GET",
+)
+try:
+    urllib.request.urlopen(request, context=context, timeout=5).read()
+except urllib.error.HTTPError as exc:
+    if exc.code != 404:
+        raise
+else:
+    raise RuntimeError("unexpected storage-service probe response")
+'@
+        & docker compose exec -T fieldora-worker python3.11 -c $probe
+        if ($LASTEXITCODE -ne 0) {
+            throw "Internal mTLS storage-service handshake verification failed."
+        }
+    }
+    finally {
+        Pop-Location
+    }
+    Write-Host "Internal storage-service mTLS listener: VERIFIED (Docker network port 8766)" -ForegroundColor Green
 
     $caPath = Join-Path $InstallRoot "service-trust\ca-certificate.pem"
     if (-not (Test-Path -LiteralPath $caPath)) {

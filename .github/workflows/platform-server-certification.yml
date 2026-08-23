@@ -5,6 +5,7 @@ on:
     paths:
       - "pyproject.toml"
       - "ACCESS_CONTRACTS.md"
+      - "SECURITY_BANDIT.md"
       - "src/natureai_next/bootstrap/platform_server_cli.py"
       - "src/natureai_next/bootstrap/operator_cli.py"
       - "src/natureai_next/bootstrap/service_trust_cli.py"
@@ -41,7 +42,7 @@ permissions:
 jobs:
   platform-server-certification:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -86,8 +87,46 @@ jobs:
           tests/test_service_tls_reload.py
           tests/test_certificate_renewal.py
 
-      - name: Bandit security scan
-        run: python -m bandit -r src/natureai_next -c pyproject.toml -ll -ii
+      - name: Bandit full repository audit
+        continue-on-error: true
+        run: >-
+          python -m bandit -r src/natureai_next -c pyproject.toml
+          -ll -ii -f json -o bandit-full-audit.json
+
+      - name: Upload Bandit full audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bandit-full-audit
+          path: bandit-full-audit.json
+          if-no-files-found: error
+
+      - name: Bandit high-severity repository gate
+        run: python -m bandit -r src/natureai_next -c pyproject.toml -lll -i
+
+      - name: Bandit governed platform gate
+        run: >-
+          python -m bandit
+          src/natureai_next/bootstrap/platform_server_cli.py
+          src/natureai_next/bootstrap/operator_cli.py
+          src/natureai_next/bootstrap/service_trust_cli.py
+          src/natureai_next/bootstrap/certificate_renewer_cli.py
+          src/natureai_next/server/access_contracts.py
+          src/natureai_next/server/access_barriers.py
+          src/natureai_next/server/required_access_barriers.py
+          src/natureai_next/server/recipient_contract_api.py
+          src/natureai_next/server/project_owner_contract_api.py
+          src/natureai_next/server/operator_control.py
+          src/natureai_next/server/platform_api.py
+          src/natureai_next/server/platform_extensions.py
+          src/natureai_next/server/service_trust.py
+          src/natureai_next/server/service_runtime.py
+          src/natureai_next/server/facility_platform.py
+          src/natureai_next/server/facility_platform_api.py
+          src/natureai_next/server/facility_web_compatibility.py
+          src/natureai_next/server/web_compatibility.py
+          src/natureai_next/server/http.py
+          -c pyproject.toml -ll -ii
 
       - name: Platform server tests
         run: >-

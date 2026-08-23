@@ -1,0 +1,58 @@
+name: fieldora-storage-node
+
+services:
+  storage-service:
+    build:
+      context: ../..
+      dockerfile: deployment/storage-node/Dockerfile
+    image: fieldora-storage-node:local
+    container_name: fieldora-storage-service
+    restart: unless-stopped
+    command:
+      - fieldora-storage-service
+      - --endpoint
+      - ${FIELDORA_STORAGE_ENDPOINT:?Set FIELDORA_STORAGE_ENDPOINT to the private mTLS listener origin}
+      - --service-id
+      - ${FIELDORA_STORAGE_SERVICE_ID:?Set FIELDORA_STORAGE_SERVICE_ID}
+      - --organization
+      - ${FIELDORA_STORAGE_ORGANIZATION:?Set FIELDORA_STORAGE_ORGANIZATION}
+      - --storage-id
+      - ${FIELDORA_STORAGE_ID:?Set FIELDORA_STORAGE_ID}
+      - --display-name
+      - ${FIELDORA_STORAGE_DISPLAY_NAME:?Set FIELDORA_STORAGE_DISPLAY_NAME}
+      - --root-alias
+      - ${FIELDORA_STORAGE_ROOT_ALIAS:?Set FIELDORA_STORAGE_ROOT_ALIAS}
+      - --root-path
+      - /mnt/fieldora-storage
+      - --state-root
+      - /var/lib/fieldora-storage
+      - --certificate
+      - /run/fieldora-trust/service.crt
+      - --private-key
+      - /run/fieldora-trust/service.key
+      - --ca-certificate
+      - /run/fieldora-trust/ca-certificate.pem
+      - run
+      - --worker-id
+      - ${FIELDORA_STORAGE_WORKER_ID:-storage-preview-1}
+      - --batch-size
+      - ${FIELDORA_STORAGE_BATCH_SIZE:-250}
+      - --preview-limit
+      - ${FIELDORA_STORAGE_PREVIEW_LIMIT:-20}
+      - --lease-seconds
+      - ${FIELDORA_STORAGE_LEASE_SECONDS:-120}
+      - --poll-seconds
+      - ${FIELDORA_STORAGE_POLL_SECONDS:-2}
+      - --rescan-seconds
+      - ${FIELDORA_STORAGE_RESCAN_SECONDS:-3600}
+    volumes:
+      - ${FIELDORA_STORAGE_ROOT:?Set FIELDORA_STORAGE_ROOT to the organisation archive path}:/mnt/fieldora-storage:ro
+      - ./state:/var/lib/fieldora-storage
+      - ${FIELDORA_STORAGE_TRUST_DIR:?Set FIELDORA_STORAGE_TRUST_DIR to the enrolled service trust directory}:/run/fieldora-trust:ro
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m,mode=1777
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL

@@ -171,7 +171,11 @@ def _storage_service_listener(
     if (_argument_value(arguments, "--governance-backend") or "sqlite") != "postgresql":
         raise SystemExit("storage service listener requires --governance-backend postgresql")
 
-    host = os.environ.get("FIELDORA_STORAGE_SERVICE_HOST", "0.0.0.0").strip()
+    host = os.environ.get("FIELDORA_STORAGE_SERVICE_HOST", "").strip()
+    if not host:
+        raise SystemExit(
+            "FIELDORA_STORAGE_SERVICE_HOST is required when the storage service listener is enabled"
+        )
     try:
         port = int(os.environ.get("FIELDORA_STORAGE_SERVICE_PORT", "8766"))
     except ValueError as exc:

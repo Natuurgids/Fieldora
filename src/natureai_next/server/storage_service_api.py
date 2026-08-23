@@ -2,7 +2,7 @@
 
 The transport injects peer-certificate metadata after a successful TLS handshake. This
 API binds that certificate to the durable operator service record before accepting source
-registrations, catalogue data, or preview work.
+registrations, catalogue data, preview work, or bounded original-byte range transfers.
 """
 
 from __future__ import annotations
@@ -16,6 +16,7 @@ from natureai_next.server.api import ApiResponse
 from natureai_next.server.operator_control import OperatorRepository, ServiceState
 from natureai_next.server.postgres_linked_preview import PostgresLinkedPreviewLeases
 from natureai_next.server.postgres_linked_preview_store import PostgresLinkedPreviewStore
+from natureai_next.server.postgres_linked_range_transfer import PostgresLinkedRangeTransfers
 from natureai_next.server.postgres_linked_storage import PostgresLinkedStorageRepository
 from natureai_next.server.storage_exchange import (
     PreviewState,
@@ -28,6 +29,7 @@ from natureai_next.server.storage_exchange import (
 _PEER_SERIAL = "fieldora-peer-certificate-serial"
 _HEARTBEAT_INTERVAL_SECONDS = 60
 _MAX_PREVIEW_BYTES = 2 * 1024 * 1024
+_MAX_RANGE_BYTES = 4 * 1024 * 1024
 
 
 class StorageServiceApplication(Protocol):
@@ -43,11 +45,13 @@ class LinkedStorageServiceApi:
         leases: PostgresLinkedPreviewLeases,
         operators: OperatorRepository,
         preview_store: PostgresLinkedPreviewStore | None = None,
+        range_transfers: PostgresLinkedRangeTransfers | None = None,
     ) -> None:
         self._catalogue = catalogue
         self._leases = leases
         self._operators = operators
         self._preview_store = preview_store
+        self._range_transfers = range_transfers
 
     def dispatch(
         self, method: str, target: str, headers: dict[str, str], body: bytes
@@ -62,6 +66,10 @@ class LinkedStorageServiceApi:
             return self._upload_preview(headers, body)
         if target == "/internal/v1/storage/previews/complete" and method == "POST":
             return self._complete_preview(headers, body)
+        if target == "/internal/v1/storage/ranges/claim" and method == "POST":
+            return self._claim_ranges(headers, body)
+        if target == "/internal/v1/storage/ranges/upload" and method == "PUT":
+            return self._upload_range(headers, body)
         return ApiResponse.json(404, {"error": "not_found"})
 
     def _service(
@@ -109,18 +117,14 @@ class LinkedStorageServiceApi:
         except (KeyError, TypeError, ValueError, json.JSONDecodeError):
             return ApiResponse.json(400, {"error": "invalid_storage_source"})
         _service, error = self._service(
-            headers,
-            service_id=source.service_id,
-            organization_id=source.organization_id,
+            headers, service_id=source.service_id, organization_id=source.organization_id
         )
         if error is not None:
             return error
         try:
             self._catalogue.register_source(source)
         except ValueError as exc:
-            return ApiResponse.json(
-                409, {"error": "storage_source_rejected", "detail": str(exc)}
-            )
+            return ApiResponse.json(409, {"error": "storage_source_rejected", "detail": str(exc)})
         return ApiResponse.json(
             200,
             {
@@ -136,14 +140,11 @@ class LinkedStorageServiceApi:
         if len(body) > 8 * 1024 * 1024:
             return ApiResponse.json(413, {"error": "request_too_large"})
         try:
-            data = json.loads(body)
-            batch = _decode_batch(data)
+            batch = _decode_batch(json.loads(body))
         except (KeyError, TypeError, ValueError, json.JSONDecodeError):
             return ApiResponse.json(400, {"error": "invalid_catalogue_batch"})
         _service, error = self._service(
-            headers,
-            service_id=batch.service_id,
-            organization_id=batch.organization_id,
+            headers, service_id=batch.service_id, organization_id=batch.organization_id
         )
         if error is not None:
             return error
@@ -176,14 +177,9 @@ class LinkedStorageServiceApi:
                 raise ValueError
         except (KeyError, TypeError, ValueError, json.JSONDecodeError):
             return ApiResponse.json(400, {"error": "invalid_preview_claim"})
-        _service, error = self._service(
-            headers, service_id=service_id, organization_id=organization_id
-        )
+        error = self._authorize_source(headers, service_id, organization_id, storage_id)
         if error is not None:
             return error
-        source = self._catalogue.source(storage_id)
-        if source is None or source.organization_id != organization_id or source.service_id != service_id:
-            return ApiResponse.json(403, {"error": "storage_source_forbidden"})
         try:
             items = self._leases.claim(
                 storage_id=storage_id,
@@ -201,23 +197,14 @@ class LinkedStorageServiceApi:
             return ApiResponse.json(503, {"error": "preview_store_unavailable"})
         if not 1 <= len(body) <= _MAX_PREVIEW_BYTES:
             return ApiResponse.json(413, {"error": "preview_payload_size_invalid"})
-        service_id = headers.get("fieldora-service-id", "").strip()
-        organization_id = headers.get("fieldora-organization-id", "").strip()
-        storage_id = headers.get("fieldora-storage-id", "").strip()
-        worker_id = headers.get("fieldora-worker-id", "").strip()
-        media_id = headers.get("fieldora-media-id", "").strip()
+        service_id, organization_id, storage_id, worker_id, media_id = _upload_identity(headers)
         digest = headers.get("fieldora-preview-sha256", "").strip().casefold()
         mime_type = headers.get("content-type", "").split(";", 1)[0].strip().casefold()
         if not all((service_id, organization_id, storage_id, worker_id, media_id, digest)):
             return ApiResponse.json(400, {"error": "invalid_preview_upload_identity"})
-        _service, error = self._service(
-            headers, service_id=service_id, organization_id=organization_id
-        )
+        error = self._authorize_source(headers, service_id, organization_id, storage_id)
         if error is not None:
             return error
-        source = self._catalogue.source(storage_id)
-        if source is None or source.organization_id != organization_id or source.service_id != service_id:
-            return ApiResponse.json(403, {"error": "storage_source_forbidden"})
         try:
             stored = self._preview_store.put_leased_preview(
                 media_id=media_id,
@@ -255,14 +242,9 @@ class LinkedStorageServiceApi:
                 raise ValueError
         except (KeyError, TypeError, ValueError, json.JSONDecodeError):
             return ApiResponse.json(400, {"error": "invalid_preview_completion"})
-        _service, error = self._service(
-            headers, service_id=service_id, organization_id=organization_id
-        )
+        error = self._authorize_source(headers, service_id, organization_id, storage_id)
         if error is not None:
             return error
-        source = self._catalogue.source(storage_id)
-        if source is None or source.organization_id != organization_id or source.service_id != service_id:
-            return ApiResponse.json(403, {"error": "storage_source_forbidden"})
         try:
             completed = self._leases.complete(
                 media_id=media_id,
@@ -277,6 +259,110 @@ class LinkedStorageServiceApi:
         if not completed:
             return ApiResponse.json(409, {"error": "preview_lease_not_owned"})
         return ApiResponse.json(200, {"media_id": media_id, "state": state.value})
+
+    def _claim_ranges(self, headers: dict[str, str], body: bytes) -> ApiResponse:
+        if self._range_transfers is None:
+            return ApiResponse.json(503, {"error": "range_transfer_unavailable"})
+        try:
+            data = json.loads(body)
+            service_id = str(data["service_id"]).strip()
+            organization_id = str(data["organization_id"]).strip()
+            storage_id = str(data["storage_id"]).strip()
+            worker_id = str(data["worker_id"]).strip()
+            limit = int(data.get("limit", 8))
+            lease_seconds = int(data.get("lease_seconds", 120))
+            if not all((service_id, organization_id, storage_id, worker_id)):
+                raise ValueError
+        except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+            return ApiResponse.json(400, {"error": "invalid_range_claim"})
+        error = self._authorize_source(headers, service_id, organization_id, storage_id)
+        if error is not None:
+            return error
+        try:
+            items = self._range_transfers.claim(
+                storage_id=storage_id,
+                service_id=service_id,
+                worker_id=worker_id,
+                limit=limit,
+                lease_seconds=lease_seconds,
+            )
+        except (KeyError, PermissionError, ValueError) as exc:
+            return ApiResponse.json(409, {"error": "range_claim_rejected", "detail": str(exc)})
+        return ApiResponse.json(200, {"items": [asdict(item) for item in items]})
+
+    def _upload_range(self, headers: dict[str, str], body: bytes) -> ApiResponse:
+        if self._range_transfers is None:
+            return ApiResponse.json(503, {"error": "range_transfer_unavailable"})
+        if not 1 <= len(body) <= _MAX_RANGE_BYTES:
+            return ApiResponse.json(413, {"error": "range_payload_size_invalid"})
+        service_id, organization_id, storage_id, worker_id, media_id = _upload_identity(headers)
+        request_id = headers.get("fieldora-range-request-id", "").strip()
+        digest = headers.get("fieldora-range-sha256", "").strip().casefold()
+        try:
+            start = int(headers.get("fieldora-range-start", ""))
+            end = int(headers.get("fieldora-range-end", ""))
+        except ValueError:
+            return ApiResponse.json(400, {"error": "invalid_range_upload_identity"})
+        if not all(
+            (service_id, organization_id, storage_id, worker_id, media_id, request_id, digest)
+        ):
+            return ApiResponse.json(400, {"error": "invalid_range_upload_identity"})
+        error = self._authorize_source(headers, service_id, organization_id, storage_id)
+        if error is not None:
+            return error
+        try:
+            result = self._range_transfers.put_leased_range(
+                request_id=request_id,
+                media_id=media_id,
+                storage_id=storage_id,
+                organization_id=organization_id,
+                service_id=service_id,
+                worker_id=worker_id,
+                start_byte=start,
+                end_byte=end,
+                sha256=digest,
+                payload=body,
+            )
+        except (KeyError, PermissionError, ValueError) as exc:
+            return ApiResponse.json(409, {"error": "range_upload_rejected", "detail": str(exc)})
+        return ApiResponse.json(
+            200,
+            {
+                "request_id": result.request_id,
+                "media_id": result.media_id,
+                "start_byte": result.start_byte,
+                "end_byte": result.end_byte,
+                "sha256": result.sha256,
+                "state": result.state,
+            },
+        )
+
+    def _authorize_source(
+        self,
+        headers: dict[str, str],
+        service_id: str,
+        organization_id: str,
+        storage_id: str,
+    ) -> ApiResponse | None:
+        _service, error = self._service(
+            headers, service_id=service_id, organization_id=organization_id
+        )
+        if error is not None:
+            return error
+        source = self._catalogue.source(storage_id)
+        if source is None or source.organization_id != organization_id or source.service_id != service_id:
+            return ApiResponse.json(403, {"error": "storage_source_forbidden"})
+        return None
+
+
+def _upload_identity(headers: dict[str, str]) -> tuple[str, str, str, str, str]:
+    return (
+        headers.get("fieldora-service-id", "").strip(),
+        headers.get("fieldora-organization-id", "").strip(),
+        headers.get("fieldora-storage-id", "").strip(),
+        headers.get("fieldora-worker-id", "").strip(),
+        headers.get("fieldora-media-id", "").strip(),
+    )
 
 
 def _decode_batch(data: Any) -> StorageCatalogueBatch:

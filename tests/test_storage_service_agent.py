@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 
 import pytest
@@ -13,6 +14,7 @@ class _Exchange:
         self.sources: list[object] = []
         self.catalogue_payloads: list[dict] = []
         self.claim_items: list[dict] = []
+        self.uploads: list[dict] = []
         self.completions: list[dict] = []
         self._fail_first_catalogue = fail_first_catalogue
 
@@ -29,6 +31,14 @@ class _Exchange:
 
     def claim_previews(self, payload):
         return {"items": list(self.claim_items)}
+
+    def upload_preview(self, payload: bytes, **kwargs):
+        self.uploads.append({"payload": payload, **kwargs})
+        return {
+            "media_id": kwargs["media_id"],
+            "thumbnail_etag": kwargs["sha256"],
+            "state": "ready",
+        }
 
     def complete_preview(self, payload):
         self.completions.append(payload)
@@ -98,7 +108,7 @@ def test_uncertain_catalogue_delivery_replays_identical_pending_batch(tmp_path: 
     assert state.state == "completed"
 
 
-def test_priority_preview_lease_generates_local_thumbnail_and_reports_etag(tmp_path: Path) -> None:
+def test_priority_preview_lease_uploads_local_thumbnail_bytes(tmp_path: Path) -> None:
     config = _config(tmp_path)
     image_path = config.root_path / "camera" / "image.jpg"
     image_path.parent.mkdir()
@@ -107,9 +117,10 @@ def test_priority_preview_lease_generates_local_thumbnail_and_reports_etag(tmp_p
     agent = LinkedStorageAgent(config, exchange)
     agent.catalogue(batch_size=100)
     local = agent.repository.media_in_path(config.storage_id)[0]
+    media_id = f"linked:{config.storage_id}:{local.media_id}"
     exchange.claim_items = [
         {
-            "media_id": f"linked:{config.storage_id}:{local.media_id}",
+            "media_id": media_id,
             "storage_id": config.storage_id,
             "object_id": local.media_id,
             "organization_id": config.organization_id,
@@ -121,10 +132,14 @@ def test_priority_preview_lease_generates_local_thumbnail_and_reports_etag(tmp_p
     ]
 
     assert agent.process_preview_leases(worker_id="preview-worker-1") == 1
-    assert len(exchange.completions) == 1
-    completion = exchange.completions[0]
-    assert completion["state"] == "ready"
-    assert len(completion["thumbnail_etag"]) == 64
+    assert exchange.completions == []
+    assert len(exchange.uploads) == 1
+    upload = exchange.uploads[0]
+    assert upload["media_id"] == media_id
+    assert upload["storage_id"] == config.storage_id
+    assert upload["worker_id"] == "preview-worker-1"
+    assert upload["payload"].startswith(b"\xff\xd8")
+    assert hashlib.sha256(upload["payload"]).hexdigest() == upload["sha256"]
     updated = agent.repository.media(local.media_id)
     assert updated is not None and updated.thumbnail_state == "ready"
     assert (agent.preview_root / updated.thumbnail_key).is_file()

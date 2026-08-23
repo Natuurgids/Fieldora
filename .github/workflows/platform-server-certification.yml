@@ -10,6 +10,7 @@ on:
       - "src/natureai_next/bootstrap/operator_cli.py"
       - "src/natureai_next/bootstrap/service_trust_cli.py"
       - "src/natureai_next/bootstrap/certificate_renewer_cli.py"
+      - "src/natureai_next/server/access_audit_events.py"
       - "src/natureai_next/server/access_contracts.py"
       - "src/natureai_next/server/access_barriers.py"
       - "src/natureai_next/server/required_access_barriers.py"
@@ -30,6 +31,7 @@ on:
       - "tests/test_access_contracts.py"
       - "tests/test_access_barriers.py"
       - "tests/test_required_access_barriers.py"
+      - "tests/test_contract_audit.py"
       - "tests/test_recipient_contract_api.py"
       - "tests/test_platform_server_extensions.py"
       - "tests/test_server_web_compatibility.py"
@@ -65,6 +67,7 @@ jobs:
           src/natureai_next/bootstrap/operator_cli.py
           src/natureai_next/bootstrap/service_trust_cli.py
           src/natureai_next/bootstrap/certificate_renewer_cli.py
+          src/natureai_next/server/access_audit_events.py
           src/natureai_next/server/access_contracts.py
           src/natureai_next/server/access_barriers.py
           src/natureai_next/server/required_access_barriers.py
@@ -85,6 +88,7 @@ jobs:
           tests/test_access_contracts.py
           tests/test_access_barriers.py
           tests/test_required_access_barriers.py
+          tests/test_contract_audit.py
           tests/test_recipient_contract_api.py
           tests/test_platform_server_extensions.py
           tests/test_server_web_compatibility.py
@@ -115,6 +119,7 @@ jobs:
           src/natureai_next/bootstrap/operator_cli.py
           src/natureai_next/bootstrap/service_trust_cli.py
           src/natureai_next/bootstrap/certificate_renewer_cli.py
+          src/natureai_next/server/access_audit_events.py
           src/natureai_next/server/access_contracts.py
           src/natureai_next/server/access_barriers.py
           src/natureai_next/server/required_access_barriers.py
@@ -139,6 +144,7 @@ jobs:
           tests/test_access_contracts.py
           tests/test_access_barriers.py
           tests/test_required_access_barriers.py
+          tests/test_contract_audit.py
           tests/test_recipient_contract_api.py
           tests/test_platform_server_extensions.py
           tests/test_server_web_compatibility.py

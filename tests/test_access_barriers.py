@@ -1,6 +1,6 @@
 import pytest
 
-from natureai_next.infrastructure.database.connection import SqliteConnectionFactory
+from natureai_next.infrastructure.database.access_control import SqliteAccessControlRepository
 from natureai_next.server.access_barriers import AccessBarrierRepository
 from natureai_next.server.access_contracts import (
     AccessTarget,
@@ -14,7 +14,8 @@ from natureai_next.server.access_contracts import (
 
 
 def _repository(tmp_path):
-    return AccessBarrierRepository(SqliteConnectionFactory(tmp_path / "access.sqlite3"))
+    access = SqliteAccessControlRepository(tmp_path / "access.sqlite3")
+    return AccessBarrierRepository(access._factory)
 
 
 def test_admin_can_replace_unrestricted_asset_with_organization_wall(tmp_path) -> None:
@@ -124,13 +125,17 @@ def test_collection_wall_is_cumulative_with_asset_contract(tmp_path) -> None:
         contract_id="collection-org-a",
         now_epoch=11,
     )
-    repository.link_collection_asset(collection.subject_id, asset.subject_id)
+    repository.link_collection_asset(
+        collection.subject_id, asset.subject_id, actor_id="admin"
+    )
 
     assert repository.collections_for_asset(asset.subject_id) == (collection.subject_id,)
     assert repository.allows_asset(asset.subject_id, organization_id="org-a")
     assert not repository.allows_asset(asset.subject_id, organization_id="org-b")
 
-    repository.unlink_collection_asset(collection.subject_id, asset.subject_id)
+    repository.unlink_collection_asset(
+        collection.subject_id, asset.subject_id, actor_id="admin"
+    )
     assert repository.allows_asset(asset.subject_id, organization_id="org-b")
 
 
@@ -168,7 +173,9 @@ def test_target_index_finds_assets_shared_to_organization_and_project(tmp_path) 
         contract_id="to-project-b",
         now_epoch=11,
     )
-    repository.link_collection_asset(collection.subject_id, "asset-project")
+    repository.link_collection_asset(
+        collection.subject_id, "asset-project", actor_id="admin"
+    )
 
     assert repository.candidate_shared_assets(organization_id="org-b") == ("asset-org",)
     assert repository.candidate_shared_assets(

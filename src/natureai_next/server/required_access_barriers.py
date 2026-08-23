@@ -215,17 +215,39 @@ class RequiredAccessBarrierRepository(AccessBarrierRepository):
             str(row[0]), str(row[1]), str(row[2]), targets, str(row[4]), int(row[5])
         )
 
+    def evidence_owner_contracts_for_subject(
+        self, subject: ContractSubject
+    ) -> tuple[EvidenceOwnerContract, ...]:
+        """Return every upstream owner ceiling applying to the subject.
+
+        Collection owner contracts apply cumulatively to member assets. An asset cannot
+        be shared beyond a collection owner's restriction merely because its own owner
+        contract is wider or absent.
+        """
+        subjects = [subject]
+        if subject.kind is ContractSubjectKind.ASSET:
+            subjects.extend(
+                ContractSubject(ContractSubjectKind.COLLECTION, collection_id)
+                for collection_id in self.collections_for_asset(subject.subject_id)
+            )
+        return tuple(
+            contract
+            for candidate in subjects
+            if (contract := self.evidence_owner_contract(candidate)) is not None
+        )
+
     def project_share_allowed_by_evidence_owner(
         self,
         subject: ContractSubject,
         requested_targets: tuple[AccessTarget, ...],
     ) -> bool:
-        owner_contract = self.evidence_owner_contract(subject)
-        if owner_contract is None:
-            return True
+        owner_contracts = self.evidence_owner_contracts_for_subject(subject)
         return all(
-            any(_target_contains(ceiling, requested) for ceiling in owner_contract.targets)
-            for requested in requested_targets
+            all(
+                any(_target_contains(ceiling, requested) for ceiling in owner_contract.targets)
+                for requested in requested_targets
+            )
+            for owner_contract in owner_contracts
         )
 
     def sign(

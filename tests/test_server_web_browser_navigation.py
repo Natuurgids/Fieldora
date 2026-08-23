@@ -337,7 +337,7 @@ def _assert_all_tab_groups(page: Page) -> None:
         _click_tab(page, f'[data-portfolio-view="{view}"]')
         page.wait_for_function(
             "view => document.getElementById('portfolio-list').dataset.renderedView === view",
-            view,
+            arg=view,
         )
         text = page.locator("#portfolio-list").inner_text()
         assert marker in text

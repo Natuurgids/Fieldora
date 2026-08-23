@@ -6,6 +6,7 @@ on:
       - "pyproject.toml"
       - "ACCESS_CONTRACTS.md"
       - "SECURITY_BANDIT.md"
+      - "SECURITY_SEMGREP.md"
       - "src/natureai_next/bootstrap/platform_server_cli.py"
       - "src/natureai_next/bootstrap/operator_cli.py"
       - "src/natureai_next/bootstrap/service_trust_cli.py"
@@ -156,6 +157,25 @@ jobs:
           src/natureai_next/server/web_compatibility.py
           src/natureai_next/server/http.py
           -c pyproject.toml -ll -ii
+
+      - name: Semgrep OWASP Top 10 full audit
+        continue-on-error: true
+        run: >-
+          semgrep scan --config p/owasp-top-ten --metrics off
+          --json --output semgrep-owasp-audit.json src/natureai_next
+
+      - name: Upload Semgrep OWASP audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: semgrep-owasp-audit
+          path: semgrep-owasp-audit.json
+          if-no-files-found: warn
+
+      - name: Semgrep OWASP blocking gate
+        run: >-
+          semgrep scan --config p/owasp-top-ten --metrics off
+          --severity ERROR --error src/natureai_next
 
       - name: Platform server tests
         run: >-

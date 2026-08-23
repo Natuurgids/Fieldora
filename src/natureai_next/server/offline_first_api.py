@@ -5,13 +5,22 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from natureai_next.server.browser_functionality_api import BrowserFunctionalityFieldoraApi
+from natureai_next.server.linked_storage_api import (
+    LinkedStorageApiMixin,
+    LinkedStorageRepository,
+)
 from natureai_next.server.offline_sync_api import OfflineSyncApiMixin, OfflineSyncRepository
 
 
-class OfflineFirstFieldoraApi(OfflineSyncApiMixin, BrowserFunctionalityFieldoraApi):
-    """Browser/platform API with an explicitly configured synchronization repository."""
+class OfflineFirstFieldoraApi(
+    LinkedStorageApiMixin,
+    OfflineSyncApiMixin,
+    BrowserFunctionalityFieldoraApi,
+):
+    """Browser/platform API with explicitly configured offline-first repositories."""
 
     _offline_sync_factory: Callable[[], OfflineSyncRepository] | None = None
+    _linked_storage_factory: Callable[[], LinkedStorageRepository] | None = None
 
     @classmethod
     def configure_offline_sync(
@@ -19,7 +28,15 @@ class OfflineFirstFieldoraApi(OfflineSyncApiMixin, BrowserFunctionalityFieldoraA
     ) -> None:
         cls._offline_sync_factory = factory
 
+    @classmethod
+    def configure_linked_storage(
+        cls, factory: Callable[[], LinkedStorageRepository] | None
+    ) -> None:
+        cls._linked_storage_factory = factory
+
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        factory = type(self)._offline_sync_factory
-        self._offline_sync = None if factory is None else factory()
+        sync_factory = type(self)._offline_sync_factory
+        linked_factory = type(self)._linked_storage_factory
+        self._offline_sync = None if sync_factory is None else sync_factory()
+        self._linked_storage = None if linked_factory is None else linked_factory()

@@ -219,3 +219,38 @@ def test_project_owner_can_share_within_evidence_owner_ceiling(tmp_path) -> None
         subject,
         (AccessTarget(AccessTargetKind.ORGANIZATION, organization_id="other-org"),),
     )
+
+
+def test_collection_evidence_owner_ceiling_prevents_member_asset_widening(tmp_path) -> None:
+    repository = _repository(tmp_path)
+    asset = ContractSubject(ContractSubjectKind.ASSET, "asset-in-collection")
+    collection = ContractSubject(ContractSubjectKind.COLLECTION, "restricted-collection")
+    repository.link_collection_asset(collection.subject_id, asset.subject_id)
+    repository.set_evidence_owner_contract(
+        collection,
+        "collection-evidence-owner",
+        (AccessTarget(AccessTargetKind.ORGANIZATION, organization_id="source-org"),),
+        assigned_by="platform-admin",
+        now_epoch=10,
+    )
+
+    assert not repository.project_share_allowed_by_evidence_owner(
+        asset,
+        (
+            AccessTarget(
+                AccessTargetKind.ORGANIZATION_PROJECT,
+                organization_id="recipient-org",
+                project_id="recipient-project",
+            ),
+        ),
+    )
+    assert repository.project_share_allowed_by_evidence_owner(
+        asset,
+        (
+            AccessTarget(
+                AccessTargetKind.ORGANIZATION_PROJECT,
+                organization_id="source-org",
+                project_id="source-project",
+            ),
+        ),
+    )

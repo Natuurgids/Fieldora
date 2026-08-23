@@ -5,6 +5,7 @@ import json
 from natureai_next.domain.access_control import AccessDecision, Identity, IdentityKind
 from natureai_next.server.api import ApiResponse
 from natureai_next.server.linked_storage_api import LinkedStorageApiMixin
+from natureai_next.server.postgres_linked_preview_store import LinkedPreviewObject
 from natureai_next.server.postgres_linked_storage import ServerLinkedMedia
 from natureai_next.server.storage_exchange import PreviewState, StorageObjectState
 
@@ -23,6 +24,7 @@ class _Repository:
     def __init__(self, records: tuple[ServerLinkedMedia, ...]) -> None:
         self.records = records
         self.preview_requests: list[dict] = []
+        self.previews: dict[str, LinkedPreviewObject] = {}
 
     def browse(self, organization_id: str, storage_id: str, prefix: str = "", limit: int = 200):
         return tuple(
@@ -39,6 +41,9 @@ class _Repository:
     def request_preview(self, **kwargs):
         self.preview_requests.append(kwargs)
         return True
+
+    def preview(self, media_id: str):
+        return self.previews.get(media_id)
 
 
 class _BaseApi:
@@ -139,6 +144,38 @@ def test_preview_request_queues_only_authorized_same_organization_media() -> Non
             "requested_by": "researcher-1",
         }
     ]
+
+
+def test_thumbnail_returns_only_managed_derivative_after_pbac() -> None:
+    api = _Api((_record("media-1"), _record("media-denied")), denied_media_id="media-denied")
+    payload = b"\xff\xd8managed-thumbnail\xff\xd9"
+    digest = "b" * 64
+    api._linked_storage.previews["media-1"] = LinkedPreviewObject(
+        "media-1", "image/jpeg", digest, payload
+    )
+    api._linked_storage.previews["media-denied"] = LinkedPreviewObject(
+        "media-denied", "image/jpeg", digest, payload
+    )
+
+    response = api.dispatch(
+        "GET",
+        "/api/v1/linked-storage/thumbnail?media_id=media-1",
+        _headers(),
+        b"",
+    )
+    assert response.status == 200
+    assert response.body == payload
+    assert response.content_type == "image/jpeg"
+    assert ("ETag", f'"{digest}"') in response.headers
+    assert all("storage" not in name.casefold() for name, _value in response.headers)
+
+    denied = api.dispatch(
+        "GET",
+        "/api/v1/linked-storage/thumbnail?media_id=media-denied",
+        _headers(),
+        b"",
+    )
+    assert denied.status == 404
 
 
 def test_linked_storage_requires_authentication() -> None:

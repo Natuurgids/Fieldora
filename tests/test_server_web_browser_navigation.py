@@ -170,7 +170,7 @@ def test_all_visible_workspaces_have_browser_routes_and_cross_screen_navigation(
         page.locator('#portfolio-list [data-kind="project"]').click()
         page.get_by_role("button", name="Open project workspace").click()
         assert page.locator("#page-research").is_visible()
-        assert page.locator("#project-detail").contains_text("Navigation Test Project")
+        assert "Navigation Test Project" in page.locator("#project-detail").inner_text()
 
         # Operational records with project context must lead to that project rather than dead-end.
         page.locator('.nav[data-page="operations"]').click()
@@ -178,6 +178,6 @@ def test_all_visible_workspaces_have_browser_routes_and_cross_screen_navigation(
         page.locator('[data-operations-id="asset-1"]').click()
         page.get_by_role("button", name="Open related project").click()
         assert page.locator("#page-research").is_visible()
-        assert page.locator("#project-detail").contains_text("Navigation Test Project")
+        assert "Navigation Test Project" in page.locator("#project-detail").inner_text()
 
         browser.close()

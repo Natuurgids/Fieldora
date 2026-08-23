@@ -18,6 +18,14 @@ class PostgresScienceRepository:
         self._connect = connect
         with self._connect() as connection:
             with connection.cursor() as cursor:
+                # API and worker processes can start together on a clean database.
+                # PostgreSQL's CREATE TABLE IF NOT EXISTS is not enough to protect
+                # concurrent catalog/type creation, so serialize this schema bootstrap
+                # transaction with a stable advisory lock.
+                cursor.execute(
+                    "SELECT pg_advisory_xact_lock(hashtext(%s))",
+                    ("fieldora_science_schema_v1",),
+                )
                 cursor.execute(
                     """
                     CREATE TABLE IF NOT EXISTS science_state(
@@ -58,7 +66,7 @@ class PostgresScienceRepository:
         "ops_building_drawings": ("ops_building_drawings", ("id", "title", "source_format", "file_path", "created_by", "created_at_us", "updated_at_us")),
         "ops_drawing_markers": ("ops_drawing_markers", ("id", "drawing_id", "marker_code", "x", "y", "created_at_us", "updated_at_us")),
         "ops_asset_documents": ("ops_asset_documents", ("id", "asset_id", "document_type", "title", "file_path", "created_by", "created_at_us")),
-        "ops_asset_movements": ("ops_asset_movements", ("id", "asset_id", "moved_at", "moved_by", "created_at_us")),
+        "ops_asset_movements": ("ops_asset_movements", ("id", "asset_id", "moved_at", "moved_by", "created_at_us", "updated_at_us")),
         "ops_maintenance_events": ("ops_maintenance_events", ("id", "asset_id", "maintenance_type", "status", "created_by", "created_at_us", "updated_at_us")),
         "ops_calibration_events": ("ops_calibration_events", ("id", "asset_id", "status", "created_by", "created_at_us", "updated_at_us")),
     }

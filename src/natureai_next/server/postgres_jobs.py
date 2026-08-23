@@ -15,6 +15,7 @@ _COLUMNS = (
     "payload_json,result_json,attempts,lease_until_utc,created_at_utc,"
     "updated_at_utc,lease_owner,lease_token"
 )
+_RETURNING_COLUMNS = ",".join(f"jobs.{column}" for column in _COLUMNS.split(","))
 
 
 class PostgresServerJobStore:
@@ -111,7 +112,7 @@ class PostgresServerJobStore:
                     "attempts=jobs.attempts+1,lease_until_utc=%s,updated_at_utc=%s,"
                     "lease_owner=%s,lease_token=%s FROM candidate "
                     "WHERE jobs.job_id=candidate.job_id "
-                    f"RETURNING {_COLUMNS}",
+                    f"RETURNING {_RETURNING_COLUMNS}",
                     (max_attempts, now, lease, now, owner, token),
                 )
                 row = cursor.fetchone()

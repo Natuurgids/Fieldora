@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import os
 import sys
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -19,11 +19,15 @@ from natureai_next import __version__
 from natureai_next.bootstrap.paths import resolve_application_paths
 from natureai_next.domain.access_control import PolicyEffect, PolicySource
 from natureai_next.server.browser_functionality_api import BrowserFunctionalityFieldoraApi
+from natureai_next.server.offline_first_api import OfflineFirstFieldoraApi
+from natureai_next.server.offline_sync import OfflineSyncStore
+from natureai_next.server.offline_sync_api import OfflineSyncRepository
 from natureai_next.server.operator_control import (
     PostgresOperatorRepository,
     SqliteOperatorRepository,
 )
 from natureai_next.server.platform_extensions import ProjectOptionalStagedIngestionStore
+from natureai_next.server.postgres_offline_sync import PostgresOfflineSyncStore
 from natureai_next.server.service_runtime import ServiceRuntimeSupervisor
 
 _LAST_REPOSITORY: Any = None
@@ -39,6 +43,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     command = _command(arguments)
     supervisor = _runtime_supervisor(arguments, command)
+    sync_factory = _offline_sync_factory(arguments, command)
     base_administration = server_cli.AccessAdministrationService
     base_run_one_job = server_cli.run_one_job
 
@@ -59,7 +64,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             return None
         return base_run_one_job(*args, **kwargs)
 
-    server_cli.FieldoraApi = BrowserFunctionalityFieldoraApi
+    OfflineFirstFieldoraApi.configure_offline_sync(sync_factory)
+    server_cli.FieldoraApi = OfflineFirstFieldoraApi
     server_cli.StagedIngestionStore = ProjectOptionalStagedIngestionStore
     server_cli.AccessAdministrationService = TrackingAdministration
     if command == "run-job-worker" and supervisor is not None:
@@ -71,6 +77,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     finally:
         if supervisor is not None:
             supervisor.stop()
+        OfflineFirstFieldoraApi.configure_offline_sync(None)
         server_cli.FieldoraApi = BrowserFunctionalityFieldoraApi
         server_cli.StagedIngestionStore = ProjectOptionalStagedIngestionStore
         server_cli.AccessAdministrationService = base_administration
@@ -79,6 +86,47 @@ def main(argv: Sequence[str] | None = None) -> int:
     if result == 0 and command == "init-user":
         _bootstrap_initial_operator(base_administration)
     return result
+
+
+def _offline_sync_factory(
+    arguments: list[str], command: str
+) -> Callable[[], OfflineSyncRepository] | None:
+    if command != "serve":
+        return None
+    science_backend = _argument_value(arguments, "--science-backend") or "sqlite"
+    if science_backend == "postgresql":
+        dsn_name = _argument_value(arguments, "--postgres-science-dsn-file")
+        if not dsn_name:
+            raise SystemExit(
+                "offline synchronization requires --postgres-science-dsn-file "
+                "with --science-backend postgresql"
+            )
+        dsn_file = Path(dsn_name)
+        if not dsn_file.is_file() or dsn_file.stat().st_size > 16_384:
+            raise SystemExit("PostgreSQL Science DSN file is invalid for synchronization")
+        dsn = dsn_file.read_text(encoding="utf-8").strip()
+        if not dsn:
+            raise SystemExit("PostgreSQL Science DSN file is empty for synchronization")
+        try:
+            import psycopg
+        except ImportError as exc:
+            raise SystemExit(
+                "PostgreSQL synchronization requires the server-postgresql dependency"
+            ) from exc
+
+        def postgres_factory() -> OfflineSyncRepository:
+            return PostgresOfflineSyncStore(
+                lambda: psycopg.connect(dsn, connect_timeout=10)
+            )
+
+        return postgres_factory
+
+    root_name = _argument_value(arguments, "--data-root")
+    root = None if not root_name else Path(root_name)
+    paths = resolve_application_paths(root)
+    paths.ensure_directories()
+    database_path = paths.subsystem_databases_dir / "offline-sync.sqlite3"
+    return lambda: OfflineSyncStore(database_path)
 
 
 def _runtime_supervisor(

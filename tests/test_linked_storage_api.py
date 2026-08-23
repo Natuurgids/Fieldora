@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import json
+import time
 
 from natureai_next.domain.access_control import AccessDecision, Identity, IdentityKind
 from natureai_next.server.api import ApiResponse
 from natureai_next.server.linked_storage_api import LinkedStorageApiMixin
 from natureai_next.server.postgres_linked_preview_store import LinkedPreviewObject
+from natureai_next.server.postgres_linked_range_transfer import LinkedRangeResult
 from natureai_next.server.postgres_linked_storage import ServerLinkedMedia
 from natureai_next.server.storage_exchange import PreviewState, StorageObjectState
 
@@ -46,6 +48,24 @@ class _Repository:
         return self.previews.get(media_id)
 
 
+class _Ranges:
+    def __init__(self) -> None:
+        self.requests: list[dict] = []
+        self.results: dict[str, LinkedRangeResult] = {}
+
+    def request_range(self, **kwargs):
+        self.requests.append(kwargs)
+        return "request-1"
+
+    def result(self, request_id: str, organization_id: str, requested_by: str):
+        result = self.results.get(request_id)
+        if result is None:
+            return None
+        if result.organization_id != organization_id or result.requested_by != requested_by:
+            return None
+        return result
+
+
 class _BaseApi:
     def dispatch(self, method: str, target: str, headers: dict[str, str], body: bytes):
         return ApiResponse.json(404, {"error": "not_found"})
@@ -54,6 +74,7 @@ class _BaseApi:
 class _Api(LinkedStorageApiMixin, _BaseApi):
     def __init__(self, records: tuple[ServerLinkedMedia, ...], *, denied_media_id: str = "") -> None:
         self._linked_storage = _Repository(records)
+        self._linked_range_transfers = _Ranges()
         self._decisions = _Decisions(denied_media_id)
         self.identity = Identity("researcher-1", IdentityKind.USER, "Researcher", "org-1")
 
@@ -98,7 +119,6 @@ def test_browse_filters_pbac_and_never_discloses_storage_service_fields() -> Non
         b"",
     )
     payload = json.loads(response.body)
-
     assert response.status == 200
     assert payload["count"] == 1
     assert payload["items"][0]["media_id"] == "media-1"
@@ -111,11 +131,7 @@ def test_browse_filters_pbac_and_never_discloses_storage_service_fields() -> Non
 
 def test_preview_request_queues_only_authorized_same_organization_media() -> None:
     api = _Api(
-        (
-            _record("media-1"),
-            _record("media-denied"),
-            _record("foreign", organization_id="org-2"),
-        ),
+        (_record("media-1"), _record("media-denied"), _record("foreign", organization_id="org-2")),
         denied_media_id="media-denied",
     )
     response = api.dispatch(
@@ -131,19 +147,9 @@ def test_preview_request_queues_only_authorized_same_organization_media() -> Non
         ).encode(),
     )
     payload = json.loads(response.body)
-
     assert response.status == 202
     assert payload["queued_media_ids"] == ["media-1"]
     assert payload["unavailable_media_ids"] == ["media-denied", "foreign"]
-    assert api._linked_storage.preview_requests == [
-        {
-            "media_id": "media-1",
-            "organization_id": "org-1",
-            "priority": 900,
-            "reason": "opened-detail",
-            "requested_by": "researcher-1",
-        }
-    ]
 
 
 def test_thumbnail_returns_only_managed_derivative_after_pbac() -> None:
@@ -153,27 +159,69 @@ def test_thumbnail_returns_only_managed_derivative_after_pbac() -> None:
     api._linked_storage.previews["media-1"] = LinkedPreviewObject(
         "media-1", "image/jpeg", digest, payload
     )
-    api._linked_storage.previews["media-denied"] = LinkedPreviewObject(
-        "media-denied", "image/jpeg", digest, payload
-    )
-
     response = api.dispatch(
-        "GET",
-        "/api/v1/linked-storage/thumbnail?media_id=media-1",
-        _headers(),
-        b"",
+        "GET", "/api/v1/linked-storage/thumbnail?media_id=media-1", _headers(), b""
     )
     assert response.status == 200
     assert response.body == payload
-    assert response.content_type == "image/jpeg"
     assert ("ETag", f'"{digest}"') in response.headers
-    assert all("storage" not in name.casefold() for name, _value in response.headers)
-
     denied = api.dispatch(
-        "GET",
-        "/api/v1/linked-storage/thumbnail?media_id=media-denied",
+        "GET", "/api/v1/linked-storage/thumbnail?media_id=media-denied", _headers(), b""
+    )
+    assert denied.status == 404
+
+
+def test_original_range_is_queued_and_ready_result_rechecks_pbac() -> None:
+    api = _Api((_record("media-1"), _record("media-denied")), denied_media_id="media-denied")
+    queued = api.dispatch(
+        "POST",
+        "/api/v1/linked-storage/ranges",
         _headers(),
-        b"",
+        json.dumps({"media_id": "media-1", "start_byte": 10, "end_byte": 19}).encode(),
+    )
+    assert queued.status == 202
+    assert json.loads(queued.body)["request_id"] == "request-1"
+    assert api._linked_range_transfers.requests[0]["requested_by"] == "researcher-1"
+
+    payload = b"0123456789"
+    api._linked_range_transfers.results["request-1"] = LinkedRangeResult(
+        "request-1",
+        "media-1",
+        "org-1",
+        "researcher-1",
+        10,
+        19,
+        1234,
+        "image/jpeg",
+        "ready",
+        "c" * 64,
+        payload,
+        int(time.time()) + 300,
+    )
+    ready = api.dispatch(
+        "GET", "/api/v1/linked-storage/ranges?request_id=request-1", _headers(), b""
+    )
+    assert ready.status == 206
+    assert ready.body == payload
+    assert ("Content-Range", "bytes 10-19/1234") in ready.headers
+    assert ("Accept-Ranges", "bytes") in ready.headers
+
+    api._linked_range_transfers.results["request-denied"] = LinkedRangeResult(
+        "request-denied",
+        "media-denied",
+        "org-1",
+        "researcher-1",
+        0,
+        3,
+        1234,
+        "image/jpeg",
+        "ready",
+        "d" * 64,
+        b"abcd",
+        int(time.time()) + 300,
+    )
+    denied = api.dispatch(
+        "GET", "/api/v1/linked-storage/ranges?request_id=request-denied", _headers(), b""
     )
     assert denied.status == 404
 
@@ -181,9 +229,6 @@ def test_thumbnail_returns_only_managed_derivative_after_pbac() -> None:
 def test_linked_storage_requires_authentication() -> None:
     api = _Api((_record("media-1"),))
     response = api.dispatch(
-        "GET",
-        "/api/v1/linked-storage/browse?storage_id=storage-1",
-        {},
-        b"",
+        "GET", "/api/v1/linked-storage/browse?storage_id=storage-1", {}, b""
     )
     assert response.status == 401

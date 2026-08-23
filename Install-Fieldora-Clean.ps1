@@ -622,7 +622,7 @@ Internal root CA: $TrustRoot\ca-certificate.pem
     $curl = Get-Command curl.exe -ErrorAction SilentlyContinue
     if (-not $curl) { throw "curl.exe is required for TLS smoke testing on Windows 11." }
     $caFile = Join-Path $TrustRoot "ca-certificate.pem"
-    & curl.exe --fail --silent --show-error --cacert $caFile https://127.0.0.1:8765/ -o $null
+    & curl.exe --fail --silent --show-error --cacert $caFile https://127.0.0.1:8765/ -o NUL
     Assert-Exit "Fieldora HTTPS root test failed after live certificate renewal"
     $live = (& curl.exe --fail --silent --show-error --cacert $caFile https://127.0.0.1:8765/health/live) | ConvertFrom-Json
     Assert-Exit "Fieldora liveness test failed"
@@ -631,7 +631,7 @@ Internal root CA: $TrustRoot\ca-certificate.pem
     $openapi = (& curl.exe --fail --silent --show-error --cacert $caFile https://127.0.0.1:8765/openapi.json) | ConvertFrom-Json
     Assert-Exit "Fieldora OpenAPI test failed"
     if (-not $openapi.openapi) { throw "OpenAPI document is invalid." }
-    & curl.exe --fail --silent --show-error --cacert $caFile https://127.0.0.1:8765/docs -o $null
+    & curl.exe --fail --silent --show-error --cacert $caFile https://127.0.0.1:8765/docs -o NUL
     Assert-Exit "Fieldora documentation test failed"
 
     $servicesJson = Docker-Output { docker compose run --rm --no-deps fieldora-server fieldora-operator --postgres-dsn-file /run/secrets/fieldora-governance-dsn list --organization $Organization }

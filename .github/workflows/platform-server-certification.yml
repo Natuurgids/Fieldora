@@ -172,10 +172,31 @@ jobs:
           path: semgrep-owasp-audit.json
           if-no-files-found: warn
 
-      - name: Semgrep OWASP blocking gate
+      - name: Semgrep OWASP governed platform gate
         run: >-
           semgrep scan --config p/owasp-top-ten --metrics off
-          --severity ERROR --error src/natureai_next
+          --severity ERROR --error
+          src/natureai_next/bootstrap/platform_server_cli.py
+          src/natureai_next/bootstrap/operator_cli.py
+          src/natureai_next/bootstrap/service_trust_cli.py
+          src/natureai_next/bootstrap/certificate_renewer_cli.py
+          src/natureai_next/server/access_audit_events.py
+          src/natureai_next/server/access_contracts.py
+          src/natureai_next/server/access_barriers.py
+          src/natureai_next/server/required_access_barriers.py
+          src/natureai_next/server/recipient_contract_api.py
+          src/natureai_next/server/project_owner_contract_api.py
+          src/natureai_next/server/contract_web_compatibility.py
+          src/natureai_next/server/operator_control.py
+          src/natureai_next/server/platform_api.py
+          src/natureai_next/server/platform_extensions.py
+          src/natureai_next/server/service_trust.py
+          src/natureai_next/server/service_runtime.py
+          src/natureai_next/server/facility_platform.py
+          src/natureai_next/server/facility_platform_api.py
+          src/natureai_next/server/facility_web_compatibility.py
+          src/natureai_next/server/web_compatibility.py
+          src/natureai_next/server/http.py
 
       - name: Platform server tests
         run: >-

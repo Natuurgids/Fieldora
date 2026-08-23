@@ -123,3 +123,99 @@ def test_project_sharing_requires_recorded_source_owner_to_sign_twice(tmp_path) 
     )
     assert second.status == "active"
     assert repository.project_owner("source-project").owner_identity == "owner-a"
+
+
+def test_evidence_owner_contract_blocks_project_owner_from_widening(tmp_path) -> None:
+    repository = _repository(tmp_path)
+    subject = ContractSubject(ContractSubjectKind.ASSET, "asset-blocked")
+    current = repository.create(
+        ContractDraft(
+            (AccessTarget(AccessTargetKind.PROJECT, project_id="source-project"),),
+            "",
+            False,
+            0,
+            source_project_id="source-project",
+            subject=subject,
+        ),
+        requested_by="evidence-owner",
+        contract_id="source-contract",
+        now_epoch=10,
+    )
+    repository.set_evidence_owner_contract(
+        subject,
+        "evidence-owner",
+        (AccessTarget(AccessTargetKind.ORGANIZATION, organization_id="source-org"),),
+        assigned_by="platform-admin",
+        now_epoch=11,
+    )
+    pending = repository.create(
+        ContractDraft(
+            (
+                AccessTarget(AccessTargetKind.PROJECT, project_id="source-project"),
+                AccessTarget(
+                    AccessTargetKind.ORGANIZATION_PROJECT,
+                    organization_id="recipient-org",
+                    project_id="recipient-project",
+                ),
+            ),
+            "",
+            True,
+            2,
+            source_project_id="source-project",
+            subject=subject,
+        ),
+        requested_by="member-a",
+        replaces_contract_id=current.contract_id,
+        contract_id="blocked-share",
+        now_epoch=20,
+    )
+    repository.assign_project_owner(
+        "source-project",
+        "project-owner",
+        assigned_by="platform-admin",
+        now_epoch=21,
+    )
+
+    assert not repository.project_share_allowed_by_evidence_owner(
+        subject,
+        pending.targets,
+    )
+    with pytest.raises(PermissionError, match="evidence owner contract blocks"):
+        repository.sign(
+            pending.contract_id,
+            owner_identity="project-owner",
+            signature_id="attestation-1",
+            now_epoch=22,
+        )
+    assert not repository.allows_asset(
+        subject.subject_id,
+        organization_id="recipient-org",
+        project_ids=("recipient-project",),
+    )
+
+
+def test_project_owner_can_share_within_evidence_owner_ceiling(tmp_path) -> None:
+    repository = _repository(tmp_path)
+    subject = ContractSubject(ContractSubjectKind.ASSET, "asset-allowed")
+    repository.set_evidence_owner_contract(
+        subject,
+        "evidence-owner",
+        (AccessTarget(AccessTargetKind.ORGANIZATION, organization_id="recipient-org"),),
+        assigned_by="platform-admin",
+        now_epoch=10,
+    )
+
+    assert repository.project_share_allowed_by_evidence_owner(
+        subject,
+        (
+            AccessTarget(
+                AccessTargetKind.ORGANIZATION_PROJECT,
+                organization_id="recipient-org",
+                project_id="recipient-project",
+            ),
+        ),
+    )
+    assert not repository.project_share_allowed_by_evidence_owner(
+        subject,
+        (AccessTarget(AccessTargetKind.ORGANIZATION, organization_id="other-org"),),
+    )

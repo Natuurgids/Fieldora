@@ -19,6 +19,14 @@ class PostgresExportMetadataRepository:
         self._connect = connect
         with self._connect() as connection:
             with connection.cursor() as cursor:
+                # API and worker processes can start together on a clean database.
+                # PostgreSQL's CREATE TABLE IF NOT EXISTS is not enough to protect
+                # concurrent catalog/type creation, so serialize this schema bootstrap
+                # transaction with a stable advisory lock.
+                cursor.execute(
+                    "SELECT pg_advisory_xact_lock(hashtext(%s))",
+                    ("fieldora_governed_exports_schema_v1",),
+                )
                 cursor.execute(
                     """
                     CREATE TABLE IF NOT EXISTS governed_exports(

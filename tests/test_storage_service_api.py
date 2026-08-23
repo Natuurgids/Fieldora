@@ -28,9 +28,14 @@ class _Catalogue:
     def __init__(self, source: StorageSourceRegistration) -> None:
         self._source = source
         self.applied: list[StorageCatalogueBatch] = []
+        self.registered: list[StorageSourceRegistration] = []
 
     def source(self, storage_id: str):
         return self._source if self._source.storage_id == storage_id else None
+
+    def register_source(self, source: StorageSourceRegistration) -> None:
+        self.registered.append(source)
+        self._source = source
 
     def apply_catalogue_batch(self, batch: StorageCatalogueBatch):
         if not batch.verify():
@@ -137,6 +142,30 @@ def _catalogue_payload() -> dict:
             }
         ],
     }
+
+
+def test_source_registration_requires_matching_active_storage_service() -> None:
+    api, catalogue, _leases = _api()
+    payload = json.dumps(
+        {
+            "storage_id": "archive-2",
+            "organization_id": "org-1",
+            "service_id": "storage-service-1",
+            "display_name": "Secondary archive",
+            "root_alias": "secondary-archive",
+            "read_only": True,
+        }
+    ).encode()
+
+    denied = api.dispatch("POST", "/internal/v1/storage/sources", _headers("FFFF"), payload)
+    assert denied.status == 403
+    assert catalogue.registered == []
+
+    accepted = api.dispatch("POST", "/internal/v1/storage/sources", _headers(), payload)
+    assert accepted.status == 200
+    assert len(catalogue.registered) == 1
+    assert catalogue.registered[0].root_alias == "secondary-archive"
+    assert "root_path" not in json.loads(accepted.body)
 
 
 def test_catalogue_requires_matching_active_service_certificate() -> None:

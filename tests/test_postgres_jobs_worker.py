@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from concurrent.futures import ThreadPoolExecutor
 
 import psycopg
 import pytest
@@ -15,10 +16,14 @@ def _dsn() -> str:
     return value
 
 
+def _connect(dsn: str):
+    return psycopg.connect(dsn, connect_timeout=10)
+
+
 def test_worker_can_claim_and_finish_postgres_job() -> None:
     dsn = _dsn()
-    store = PostgresServerJobStore(lambda: psycopg.connect(dsn, connect_timeout=10))
-    with psycopg.connect(dsn, connect_timeout=10) as connection:
+    store = PostgresServerJobStore(lambda: _connect(dsn))
+    with _connect(dsn) as connection:
         connection.execute("TRUNCATE TABLE server_jobs")
 
     queued = store.enqueue(
@@ -43,3 +48,25 @@ def test_worker_can_claim_and_finish_postgres_job() -> None:
     assert finished is not None
     assert finished.status == "succeeded"
     assert finished.result == {"ok": True}
+
+
+def test_concurrent_postgres_job_schema_bootstrap_is_safe() -> None:
+    dsn = _dsn()
+    with _connect(dsn) as connection:
+        connection.execute("DROP TABLE IF EXISTS server_jobs")
+
+    def initialize(_: int) -> bool:
+        PostgresServerJobStore(lambda: _connect(dsn))
+        return True
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        results = list(executor.map(initialize, range(8)))
+
+    assert results == [True] * 8
+
+    with _connect(dsn) as connection:
+        row = connection.execute(
+            "SELECT to_regclass('public.server_jobs')"
+        ).fetchone()
+    assert row is not None
+    assert row[0] == "server_jobs"

@@ -10,13 +10,6 @@ from uuid import uuid4
 
 from natureai_next.server.jobs import ServerJob
 
-_COLUMNS = (
-    "job_id,job_type,subject_id,organization_id,project_id,status,"
-    "payload_json,result_json,attempts,lease_until_utc,created_at_utc,"
-    "updated_at_utc,lease_owner,lease_token"
-)
-_RETURNING_COLUMNS = ",".join(f"jobs.{column}" for column in _COLUMNS.split(","))
-
 
 class PostgresServerJobStore:
     """Shared job repository suitable for independently deployed workers."""
@@ -63,12 +56,25 @@ class PostgresServerJobStore:
         with self._connect() as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
-                    f"INSERT INTO server_jobs({_COLUMNS}) "
-                    "VALUES(%s,%s,%s,%s,%s,'queued',%s::jsonb,%s::jsonb,0,"
-                    "NULL,%s,%s,'','')",
+                    """
+                    INSERT INTO server_jobs(
+                        job_id,job_type,subject_id,organization_id,project_id,status,
+                        payload_json,result_json,attempts,lease_until_utc,
+                        created_at_utc,updated_at_utc,lease_owner,lease_token
+                    )
+                    VALUES(%s,%s,%s,%s,%s,'queued',%s::jsonb,%s::jsonb,0,
+                           NULL,%s,%s,'','')
+                    """,
                     (
-                        job_id, job_type, subject_id, organization_id, project_id,
-                        json.dumps(payload, sort_keys=True), "{}", now, now,
+                        job_id,
+                        job_type,
+                        subject_id,
+                        organization_id,
+                        project_id,
+                        json.dumps(payload, sort_keys=True),
+                        "{}",
+                        now,
+                        now,
                     ),
                 )
         result = self.job(job_id)
@@ -80,7 +86,14 @@ class PostgresServerJobStore:
         with self._connect() as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
-                    f"SELECT {_COLUMNS} FROM server_jobs WHERE job_id=%s", (job_id,)
+                    """
+                    SELECT job_id,job_type,subject_id,organization_id,project_id,status,
+                           payload_json,result_json,attempts,lease_until_utc,
+                           created_at_utc,updated_at_utc,lease_owner,lease_token
+                    FROM server_jobs
+                    WHERE job_id=%s
+                    """,
+                    (job_id,),
                 )
                 row = cursor.fetchone()
         return None if row is None else self._decode(row)
@@ -102,17 +115,35 @@ class PostgresServerJobStore:
         with self._connect() as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
-                    "WITH candidate AS ("
-                    " SELECT job_id FROM server_jobs"
-                    " WHERE attempts<%s AND (status='queued' OR "
-                    " (status='running' AND lease_until_utc<%s))"
-                    " ORDER BY created_at_utc,job_id"
-                    " FOR UPDATE SKIP LOCKED LIMIT 1"
-                    ") UPDATE server_jobs AS jobs SET status='running',"
-                    "attempts=jobs.attempts+1,lease_until_utc=%s,updated_at_utc=%s,"
-                    "lease_owner=%s,lease_token=%s FROM candidate "
-                    "WHERE jobs.job_id=candidate.job_id "
-                    f"RETURNING {_RETURNING_COLUMNS}",
+                    """
+                    WITH candidate AS (
+                        SELECT job_id
+                        FROM server_jobs
+                        WHERE attempts<%s
+                          AND (
+                            status='queued'
+                            OR (status='running' AND lease_until_utc<%s)
+                          )
+                        ORDER BY created_at_utc,job_id
+                        FOR UPDATE SKIP LOCKED
+                        LIMIT 1
+                    )
+                    UPDATE server_jobs AS jobs
+                    SET status='running',
+                        attempts=jobs.attempts+1,
+                        lease_until_utc=%s,
+                        updated_at_utc=%s,
+                        lease_owner=%s,
+                        lease_token=%s
+                    FROM candidate
+                    WHERE jobs.job_id=candidate.job_id
+                    RETURNING
+                        jobs.job_id,jobs.job_type,jobs.subject_id,
+                        jobs.organization_id,jobs.project_id,jobs.status,
+                        jobs.payload_json,jobs.result_json,jobs.attempts,
+                        jobs.lease_until_utc,jobs.created_at_utc,
+                        jobs.updated_at_utc,jobs.lease_owner,jobs.lease_token
+                    """,
                     (max_attempts, now, lease, now, owner, token),
                 )
                 row = cursor.fetchone()
@@ -129,8 +160,11 @@ class PostgresServerJobStore:
                     "WHERE job_id=%s AND status='running' AND lease_token=%s "
                     "AND lease_until_utc>=%s",
                     (
-                        now + timedelta(seconds=lease_seconds), now,
-                        job_id, lease_token, now,
+                        now + timedelta(seconds=lease_seconds),
+                        now,
+                        job_id,
+                        lease_token,
+                        now,
                     ),
                 )
                 return cursor.rowcount == 1
@@ -154,8 +188,11 @@ class PostgresServerJobStore:
                     "lease_token='' WHERE job_id=%s AND status='running' "
                     "AND lease_token=%s",
                     (
-                        status, json.dumps(result, sort_keys=True), datetime.now(UTC),
-                        job_id, lease_token,
+                        status,
+                        json.dumps(result, sort_keys=True),
+                        datetime.now(UTC),
+                        job_id,
+                        lease_token,
                     ),
                 )
                 return cursor.rowcount == 1

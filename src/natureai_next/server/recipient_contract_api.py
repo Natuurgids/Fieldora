@@ -11,12 +11,21 @@ import json
 from urllib.parse import parse_qs, urlsplit
 
 from natureai_next.domain.access_control import AccessRequest, Identity
+from natureai_next.server.access_contracts import ContractSubject, ContractSubjectKind
 from natureai_next.server.api import ApiResponse
+from natureai_next.server.required_access_barriers import RequiredAccessBarrierRepository
 from natureai_next.server.runtime_api import RuntimeGovernedFieldoraApi
 
 
 class RecipientContractFieldoraApi(RuntimeGovernedFieldoraApi):
     """Expose explicitly shared evidence without rewriting its source ownership."""
+
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        if self._access_repository is not None:
+            self._barriers = RequiredAccessBarrierRepository(
+                self._access_repository._factory
+            )
 
     def dispatch(
         self, method: str, target: str, headers: dict[str, str], body: bytes
@@ -40,6 +49,19 @@ class RecipientContractFieldoraApi(RuntimeGovernedFieldoraApi):
         if method == "GET" and path == "/api/v1/search" and response.status == 200:
             return self._augment_search(response, route.query, headers)
         return response
+
+    def _contract_completed_upload(self, upload, response: ApiResponse, headers: dict[str, str]) -> None:
+        """Mark newly published evidence contract-required before deriving its contract."""
+        if self._barriers is not None:
+            try:
+                media_id = str(json.loads(response.body)["media_id"])
+                self._barriers.require_contract(
+                    ContractSubject(ContractSubjectKind.ASSET, media_id),
+                    reason="direct_governed_upload",
+                )
+            except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+                pass
+        super()._contract_completed_upload(upload, response, headers)
 
     def _augment_media_list(
         self,

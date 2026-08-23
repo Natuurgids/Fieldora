@@ -89,6 +89,15 @@ _SCHEMA = (
     )""",
     """CREATE INDEX IF NOT EXISTS ix_access_data_contract_subject
         ON access_data_contracts(subject_kind,subject_id,status,created_at_epoch)""",
+    """CREATE TABLE IF NOT EXISTS access_data_contract_targets(
+        contract_id TEXT NOT NULL,
+        target_kind TEXT NOT NULL,
+        organization_id TEXT NOT NULL,
+        project_id TEXT NOT NULL,
+        PRIMARY KEY(contract_id,target_kind,organization_id,project_id)
+    )""",
+    """CREATE INDEX IF NOT EXISTS ix_access_data_contract_target_lookup
+        ON access_data_contract_targets(target_kind,organization_id,project_id,contract_id)""",
     """CREATE TABLE IF NOT EXISTS access_data_contract_signatures(
         contract_id TEXT NOT NULL,
         owner_identity TEXT NOT NULL,
@@ -115,6 +124,7 @@ class AccessBarrierRepository:
         try:
             for statement in _SCHEMA:
                 connection.execute(statement)
+            self._backfill_target_index(connection)
         finally:
             connection.close()
 
@@ -139,18 +149,7 @@ class AccessBarrierRepository:
         identifier = contract_id.strip() or str(uuid4())
         status = "pending" if draft.requires_project_owner_approval else "active"
         activated = 0 if status == "pending" else now
-        targets_json = json.dumps(
-            [
-                {
-                    "kind": target.kind.value,
-                    "organization_id": target.organization_id,
-                    "project_id": target.project_id,
-                }
-                for target in draft.targets
-            ],
-            sort_keys=True,
-            separators=(",", ":"),
-        )
+        targets_json = _targets_json(draft.targets)
         connection = self._factory.connect()
         try:
             connection.execute("BEGIN IMMEDIATE")
@@ -186,6 +185,7 @@ class AccessBarrierRepository:
                     activated,
                 ),
             )
+            self._insert_targets(connection, identifier, draft.targets)
             if status == "active":
                 self._supersede_other_active(
                     connection,
@@ -370,7 +370,6 @@ class AccessBarrierRepository:
         )
         active = [contract for subject in subjects if (contract := self.current(subject))]
         if not active:
-            # Legacy evidence remains PBAC-governed. New intake should be contracted.
             return True
         return all(
             _contract_allows(
@@ -380,6 +379,94 @@ class AccessBarrierRepository:
             )
             for contract in active
         )
+
+    def candidate_shared_assets(
+        self,
+        *,
+        organization_id: str,
+        project_ids: tuple[str, ...] = (),
+        limit: int = 500,
+    ) -> tuple[str, ...]:
+        """Return indexed asset IDs whose active contracts target this recipient scope."""
+        limit = max(1, min(int(limit), 5000))
+        projects = tuple(sorted({value.strip() for value in project_ids if value.strip()}))
+        clauses = [
+            "t.target_kind='all'",
+            "(t.target_kind='organization' AND t.organization_id=?)",
+        ]
+        parameters: list[object] = [organization_id]
+        if projects:
+            placeholders = ",".join("?" for _ in projects)
+            clauses.append(f"(t.target_kind='project' AND t.project_id IN ({placeholders}))")
+            parameters.extend(projects)
+            clauses.append(
+                "(t.target_kind='organization_project' AND t.organization_id=? "
+                f"AND t.project_id IN ({placeholders}))"
+            )
+            parameters.append(organization_id)
+            parameters.extend(projects)
+        parameters.append(limit)
+        sql = (
+            "SELECT DISTINCT c.subject_kind,c.subject_id FROM access_data_contracts c "
+            "JOIN access_data_contract_targets t ON t.contract_id=c.contract_id "
+            "WHERE c.status='active' AND ("
+            + " OR ".join(clauses)
+            + ") ORDER BY c.subject_kind,c.subject_id LIMIT ?"
+        )
+        connection = self._factory.connect(read_only=True)
+        try:
+            rows = connection.execute(sql, tuple(parameters)).fetchall()
+            result: list[str] = []
+            for row in rows:
+                kind, subject_id = str(row[0]), str(row[1])
+                if kind == ContractSubjectKind.ASSET.value:
+                    if subject_id not in result:
+                        result.append(subject_id)
+                elif kind == ContractSubjectKind.COLLECTION.value:
+                    members = connection.execute(
+                        "SELECT asset_id FROM access_collection_assets "
+                        "WHERE collection_id=? ORDER BY asset_id LIMIT ?",
+                        (subject_id, limit),
+                    ).fetchall()
+                    for member in members:
+                        asset_id = str(member[0])
+                        if asset_id not in result:
+                            result.append(asset_id)
+                        if len(result) >= limit:
+                            break
+                if len(result) >= limit:
+                    break
+        finally:
+            connection.close()
+        return tuple(result[:limit])
+
+    @staticmethod
+    def _insert_targets(
+        connection: Any, contract_id: str, targets: tuple[AccessTarget, ...]
+    ) -> None:
+        for target in targets:
+            connection.execute(
+                "INSERT OR IGNORE INTO access_data_contract_targets VALUES(?,?,?,?)",
+                (
+                    contract_id,
+                    target.kind.value,
+                    target.organization_id,
+                    target.project_id,
+                ),
+            )
+
+    @classmethod
+    def _backfill_target_index(cls, connection: Any) -> None:
+        rows = connection.execute(
+            "SELECT contract_id,targets_json FROM access_data_contracts "
+            "WHERE contract_id NOT IN (SELECT DISTINCT contract_id FROM access_data_contract_targets)"
+        ).fetchall()
+        for row in rows:
+            cls._insert_targets(
+                connection,
+                str(row[0]),
+                _parse_targets(str(row[1])),
+            )
 
     @staticmethod
     def _supersede_other_active(
@@ -427,9 +514,24 @@ def _contract_allows(
     return False
 
 
-def _contract_row(row: Any) -> DataAccessContract:
-    raw_targets = json.loads(str(row["targets_json"]))
-    targets = tuple(
+def _targets_json(targets: tuple[AccessTarget, ...]) -> str:
+    return json.dumps(
+        [
+            {
+                "kind": target.kind.value,
+                "organization_id": target.organization_id,
+                "project_id": target.project_id,
+            }
+            for target in targets
+        ],
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+
+
+def _parse_targets(value: str) -> tuple[AccessTarget, ...]:
+    raw_targets = json.loads(value)
+    return tuple(
         AccessTarget(
             AccessTargetKind(str(item["kind"])),
             str(item.get("organization_id", "")),
@@ -437,13 +539,16 @@ def _contract_row(row: Any) -> DataAccessContract:
         )
         for item in raw_targets
     )
+
+
+def _contract_row(row: Any) -> DataAccessContract:
     return DataAccessContract(
         contract_id=str(row["contract_id"]),
         subject_kind=str(row["subject_kind"]),
         subject_id=str(row["subject_id"]),
         source_project_id=str(row["source_project_id"]),
         status=str(row["status"]),
-        targets=targets,
+        targets=_parse_targets(str(row["targets_json"])),
         requires_owner_approval=bool(row["requires_owner_approval"]),
         required_owner_signatures=int(row["required_owner_signatures"]),
         requested_by=str(row["requested_by"]),

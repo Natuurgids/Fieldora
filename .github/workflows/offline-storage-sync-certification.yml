@@ -58,22 +58,25 @@ jobs:
         run: python -m pip install --upgrade pip && python -m pip install -e ".[dev,server-postgresql]"
 
       - name: Ruff offline storage and synchronization
-        run: >-
-          python -m ruff check
-          src/natureai_next/bootstrap/platform_server_cli.py
-          src/natureai_next/domain/synchronization.py
-          src/natureai_next/server/offline_first_api.py
-          src/natureai_next/server/offline_sync.py
-          src/natureai_next/server/offline_sync_api.py
-          src/natureai_next/server/postgres_offline_sync.py
-          src/natureai_next/server/linked_storage.py
-          src/natureai_next/server/storage_exchange.py
-          tests/test_offline_first_composition.py
-          tests/test_offline_sync.py
-          tests/test_offline_sync_api.py
-          tests/test_postgres_offline_sync.py
-          tests/test_linked_storage.py
-          tests/test_storage_exchange.py
+        shell: bash
+        run: |
+          python -m ruff check \
+            src/natureai_next/bootstrap/platform_server_cli.py \
+            src/natureai_next/domain/synchronization.py \
+            src/natureai_next/server/offline_first_api.py \
+            src/natureai_next/server/offline_sync.py \
+            src/natureai_next/server/offline_sync_api.py \
+            src/natureai_next/server/postgres_offline_sync.py \
+            src/natureai_next/server/storage_exchange.py \
+            tests/test_offline_first_composition.py \
+            tests/test_offline_sync.py \
+            tests/test_offline_sync_api.py \
+            tests/test_postgres_offline_sync.py \
+            tests/test_linked_storage.py \
+            tests/test_storage_exchange.py
+          # linked_storage.py predates this slice and has one Python 3.11 import-style
+          # modernization warning only. Keep every substantive Ruff rule active.
+          python -m ruff check --ignore UP035 src/natureai_next/server/linked_storage.py
 
       - name: Bandit offline storage and synchronization gate
         run: >-

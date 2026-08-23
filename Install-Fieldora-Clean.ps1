@@ -610,6 +610,13 @@ Internal root CA: $TrustRoot\ca-certificate.pem
         $state = (@(& docker inspect --format "{{.State.Status}}" $container 2>$null) -join "").Trim()
         if ($state -ne "running") { docker compose logs --tail 300 $container; throw "$container is not running." }
     }
+    foreach ($container in @("fieldora-server","fieldora-worker","fieldora-cert-renewer")) {
+        $restartCount = [int]((@(& docker inspect --format "{{.RestartCount}}" $container 2>$null) -join "").Trim())
+        if ($restartCount -ne 0) {
+            docker compose logs --tail 300 $container
+            throw "$container restarted $restartCount time(s) during clean installation."
+        }
+    }
 
     Step "Running live no-restart certificate renewal test"
     & docker compose run --rm --no-deps fieldora-cert-renewer fieldora-certificate-renewer --authority-root /run/fieldora-authority --postgres-dsn-file /run/secrets/fieldora-governance-dsn --config /run/fieldora-renewal/config.json --interval-seconds 3600 --renew-before-hours 168 --lifetime-hours 168 --once
@@ -622,23 +629,28 @@ Internal root CA: $TrustRoot\ca-certificate.pem
     $curl = Get-Command curl.exe -ErrorAction SilentlyContinue
     if (-not $curl) { throw "curl.exe is required for TLS smoke testing on Windows 11." }
     $caFile = Join-Path $TrustRoot "ca-certificate.pem"
-    & curl.exe --fail --silent --show-error --cacert $caFile https://127.0.0.1:8765/ -o NUL
+    $curlTrust = @("--fail","--silent","--show-error","--ssl-revoke-best-effort","--cacert",$caFile)
+    & curl.exe @curlTrust https://127.0.0.1:8765/ -o NUL
     Assert-Exit "Fieldora HTTPS root test failed after live certificate renewal"
-    $live = (& curl.exe --fail --silent --show-error --cacert $caFile https://127.0.0.1:8765/health/live) | ConvertFrom-Json
+    $live = (& curl.exe @curlTrust https://127.0.0.1:8765/health/live) | ConvertFrom-Json
     Assert-Exit "Fieldora liveness test failed"
-    $ready = (& curl.exe --fail --silent --show-error --cacert $caFile https://127.0.0.1:8765/health/ready) | ConvertFrom-Json
+    $ready = (& curl.exe @curlTrust https://127.0.0.1:8765/health/ready) | ConvertFrom-Json
     Assert-Exit "Fieldora readiness test failed"
-    $openapi = (& curl.exe --fail --silent --show-error --cacert $caFile https://127.0.0.1:8765/openapi.json) | ConvertFrom-Json
+    $openapi = (& curl.exe @curlTrust https://127.0.0.1:8765/openapi.json) | ConvertFrom-Json
     Assert-Exit "Fieldora OpenAPI test failed"
     if (-not $openapi.openapi) { throw "OpenAPI document is invalid." }
-    & curl.exe --fail --silent --show-error --cacert $caFile https://127.0.0.1:8765/docs -o NUL
+    & curl.exe @curlTrust https://127.0.0.1:8765/docs -o NUL
     Assert-Exit "Fieldora documentation test failed"
 
     $servicesJson = Docker-Output { docker compose run --rm --no-deps fieldora-server fieldora-operator --postgres-dsn-file /run/secrets/fieldora-governance-dsn list --organization $Organization }
     Assert-Exit "Operator registry verification failed"
     $services = @($servicesJson | ConvertFrom-Json)
     foreach ($requiredService in @($ApiServiceId,$WorkerServiceId,$PostgresServiceId,$RenewerServiceId)) {
-        if ($services.service_id -notcontains $requiredService) { throw "Operator registry is missing $requiredService" }
+        $service = @($services | Where-Object { $_.service_id -eq $requiredService })
+        if ($service.Count -ne 1) { throw "Operator registry is missing $requiredService" }
+        if ($service[0].state -ne "active") {
+            throw "Operator registry service $requiredService is '$($service[0].state)', expected 'active'."
+        }
     }
 
     $rootKeyMountCheck = Docker-Output { docker inspect fieldora-cert-renewer --format '{{range .Mounts}}{{println .Destination}}{{end}}' }

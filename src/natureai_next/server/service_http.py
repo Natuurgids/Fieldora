@@ -1,16 +1,19 @@
 """Mutual-TLS HTTP transport for internal Fieldora service-to-service APIs.
 
-This listener is intentionally separate from the human browser listener.  It requires a
+This listener is intentionally separate from the human browser listener. It requires a
 client certificate signed by the configured Fieldora service CA and injects authenticated
 peer-certificate metadata into the application request only after the TLS handshake.
 Client-supplied headers with the same names are overwritten and therefore cannot spoof
-service identity.
+service identity. Replaced server certificate/key material is adopted on subsequent
+connections without restarting the service listener.
 """
 
 from __future__ import annotations
 
+import hashlib
 import socket
 import ssl
+import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Protocol
@@ -47,6 +50,35 @@ def _distinguished_name(parts: object) -> str:
     return ",".join(rendered)
 
 
+class ReloadingMutualTLSContext:
+    """Reload renewed server certificate/key material for new mTLS connections."""
+
+    def __init__(self, certificate: Path, private_key: Path, client_ca: Path) -> None:
+        self.certificate = certificate.resolve(strict=True)
+        self.private_key = private_key.resolve(strict=True)
+        self.client_ca = client_ca.resolve(strict=True)
+        self.context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        self.context.minimum_version = ssl.TLSVersion.TLSv1_2
+        self.context.verify_mode = ssl.CERT_REQUIRED
+        self.context.load_verify_locations(cafile=str(self.client_ca))
+        self._lock = threading.Lock()
+        self._fingerprint = b""
+        self.reload_if_changed(force=True)
+
+    def reload_if_changed(self, *, force: bool = False) -> bool:
+        certificate_bytes = self.certificate.read_bytes()
+        private_key_bytes = self.private_key.read_bytes()
+        fingerprint = hashlib.sha256(
+            certificate_bytes + b"\0" + private_key_bytes
+        ).digest()
+        with self._lock:
+            if not force and fingerprint == self._fingerprint:
+                return False
+            self.context.load_cert_chain(str(self.certificate), str(self.private_key))
+            self._fingerprint = fingerprint
+            return True
+
+
 class MutualTLSServer(ThreadingHTTPServer):
     """Internal server that rejects clients without a trusted certificate."""
 
@@ -59,17 +91,13 @@ class MutualTLSServer(ThreadingHTTPServer):
         client_ca: Path,
     ) -> None:
         super().__init__(server_address, handler)
-        context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-        context.minimum_version = ssl.TLSVersion.TLSv1_2
-        context.verify_mode = ssl.CERT_REQUIRED
-        context.load_cert_chain(str(certificate.resolve(strict=True)), str(private_key.resolve(strict=True)))
-        context.load_verify_locations(cafile=str(client_ca.resolve(strict=True)))
-        self.context = context
+        self.tls = ReloadingMutualTLSContext(certificate, private_key, client_ca)
 
     def get_request(self) -> tuple[socket.socket, tuple[str, int]]:
         request, address = super().get_request()
         try:
-            wrapped = self.context.wrap_socket(request, server_side=True)
+            self.tls.reload_if_changed()
+            wrapped = self.tls.context.wrap_socket(request, server_side=True)
         except BaseException:
             request.close()
             raise

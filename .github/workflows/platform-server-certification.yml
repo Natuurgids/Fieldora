@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "pyproject.toml"
+      - "ACCESS_CONTRACTS.md"
       - "src/natureai_next/bootstrap/platform_server_cli.py"
       - "src/natureai_next/bootstrap/operator_cli.py"
       - "src/natureai_next/bootstrap/service_trust_cli.py"
@@ -12,6 +13,7 @@ on:
       - "src/natureai_next/server/access_barriers.py"
       - "src/natureai_next/server/required_access_barriers.py"
       - "src/natureai_next/server/recipient_contract_api.py"
+      - "src/natureai_next/server/project_owner_contract_api.py"
       - "src/natureai_next/server/operator_control.py"
       - "src/natureai_next/server/platform_api.py"
       - "src/natureai_next/server/platform_extensions.py"
@@ -64,6 +66,7 @@ jobs:
           src/natureai_next/server/access_barriers.py
           src/natureai_next/server/required_access_barriers.py
           src/natureai_next/server/recipient_contract_api.py
+          src/natureai_next/server/project_owner_contract_api.py
           src/natureai_next/server/operator_control.py
           src/natureai_next/server/platform_api.py
           src/natureai_next/server/platform_extensions.py

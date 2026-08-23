@@ -1,6 +1,6 @@
 import pytest
 
-from natureai_next.infrastructure.database.connection import SqliteConnectionFactory
+from natureai_next.infrastructure.database.access_control import SqliteAccessControlRepository
 from natureai_next.server.access_contracts import (
     AccessTarget,
     AccessTargetKind,
@@ -12,9 +12,8 @@ from natureai_next.server.required_access_barriers import RequiredAccessBarrierR
 
 
 def _repository(tmp_path):
-    return RequiredAccessBarrierRepository(
-        SqliteConnectionFactory(tmp_path / "access.sqlite3")
-    )
+    access = SqliteAccessControlRepository(tmp_path / "access.sqlite3")
+    return RequiredAccessBarrierRepository(access._factory)
 
 
 def test_new_required_asset_is_hidden_until_contract_exists(tmp_path) -> None:

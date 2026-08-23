@@ -15,7 +15,6 @@ from typing import Any
 from natureai_next.server.storage_exchange import (
     PreviewState,
     StorageCatalogueBatch,
-    StorageCatalogueItem,
     StorageObjectState,
     StorageSourceRegistration,
 )

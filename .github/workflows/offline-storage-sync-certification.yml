@@ -14,6 +14,8 @@ on:
       - "src/natureai_next/server/postgres_linked_storage.py"
       - "src/natureai_next/server/postgres_linked_preview.py"
       - "src/natureai_next/server/storage_exchange.py"
+      - "src/natureai_next/server/service_http.py"
+      - "src/natureai_next/server/storage_service_api.py"
       - "tests/test_offline_first_composition.py"
       - "tests/test_offline_sync.py"
       - "tests/test_offline_sync_api.py"
@@ -23,6 +25,7 @@ on:
       - "tests/test_postgres_linked_storage.py"
       - "tests/test_postgres_linked_preview.py"
       - "tests/test_storage_exchange.py"
+      - "tests/test_storage_service_api.py"
       - ".github/workflows/offline-storage-sync-certification.yml"
   workflow_dispatch:
 
@@ -77,6 +80,8 @@ jobs:
             src/natureai_next/server/postgres_linked_storage.py \
             src/natureai_next/server/postgres_linked_preview.py \
             src/natureai_next/server/storage_exchange.py \
+            src/natureai_next/server/service_http.py \
+            src/natureai_next/server/storage_service_api.py \
             tests/test_offline_first_composition.py \
             tests/test_offline_sync.py \
             tests/test_offline_sync_api.py \
@@ -85,9 +90,8 @@ jobs:
             tests/test_linked_storage_api.py \
             tests/test_postgres_linked_storage.py \
             tests/test_postgres_linked_preview.py \
-            tests/test_storage_exchange.py
-          # linked_storage.py predates this slice and has one Python 3.11 import-style
-          # modernization warning only. Keep every substantive Ruff rule active.
+            tests/test_storage_exchange.py \
+            tests/test_storage_service_api.py
           python -m ruff check --ignore UP035 src/natureai_next/server/linked_storage.py
 
       - name: Bandit offline storage and synchronization gate
@@ -103,6 +107,8 @@ jobs:
           src/natureai_next/server/postgres_linked_storage.py
           src/natureai_next/server/postgres_linked_preview.py
           src/natureai_next/server/storage_exchange.py
+          src/natureai_next/server/service_http.py
+          src/natureai_next/server/storage_service_api.py
           -c pyproject.toml -ll -ii
 
       - name: Semgrep OWASP offline storage and synchronization gate
@@ -119,6 +125,8 @@ jobs:
           src/natureai_next/server/postgres_linked_storage.py
           src/natureai_next/server/postgres_linked_preview.py
           src/natureai_next/server/storage_exchange.py
+          src/natureai_next/server/service_http.py
+          src/natureai_next/server/storage_service_api.py
 
       - name: Offline storage and synchronization tests
         run: >-
@@ -132,3 +140,4 @@ jobs:
           tests/test_postgres_linked_storage.py
           tests/test_postgres_linked_preview.py
           tests/test_storage_exchange.py
+          tests/test_storage_service_api.py

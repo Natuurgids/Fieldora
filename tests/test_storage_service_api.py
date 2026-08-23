@@ -17,10 +17,23 @@ from natureai_next.server.storage_service_api import LinkedStorageServiceApi
 class _Operators:
     def __init__(self, service: ServiceRecord | None) -> None:
         self._service = service
+        self.heartbeats: list[dict] = []
 
     def service(self, service_id: str):
         if self._service is None or self._service.service_id != service_id:
             return None
+        return self._service
+
+    def heartbeat(self, service_id: str, **kwargs):
+        if self._service is None or self._service.service_id != service_id:
+            raise KeyError(service_id)
+        if ServiceState(self._service.state) is ServiceState.REVOKED:
+            raise PermissionError("revoked service cannot heartbeat")
+        self.heartbeats.append({"service_id": service_id, **kwargs})
+        self._service = replace(
+            self._service,
+            last_heartbeat_epoch=int(kwargs.get("now_epoch", self._service.last_heartbeat_epoch)),
+        )
         return self._service
 
 
@@ -87,8 +100,9 @@ def _source() -> StorageSourceRegistration:
 def _api(service: ServiceRecord | None = None):
     catalogue = _Catalogue(_source())
     leases = _Leases()
-    api = LinkedStorageServiceApi(catalogue, leases, _Operators(service or _service()))
-    return api, catalogue, leases
+    operators = _Operators(service or _service())
+    api = LinkedStorageServiceApi(catalogue, leases, operators)
+    return api, catalogue, leases, operators
 
 
 def _headers(serial: str = "ABCD") -> dict[str, str]:
@@ -144,8 +158,21 @@ def _catalogue_payload() -> dict:
     }
 
 
+def _claim_payload() -> bytes:
+    return json.dumps(
+        {
+            "service_id": "storage-service-1",
+            "organization_id": "org-1",
+            "storage_id": "archive-1",
+            "worker_id": "preview-worker-1",
+            "limit": 20,
+            "lease_seconds": 120,
+        }
+    ).encode()
+
+
 def test_source_registration_requires_matching_active_storage_service() -> None:
-    api, catalogue, _leases = _api()
+    api, catalogue, _leases, _operators = _api()
     payload = json.dumps(
         {
             "storage_id": "archive-2",
@@ -168,8 +195,23 @@ def test_source_registration_requires_matching_active_storage_service() -> None:
     assert "root_path" not in json.loads(accepted.body)
 
 
+def test_authenticated_storage_traffic_throttles_operator_heartbeat() -> None:
+    api, _catalogue, _leases, operators = _api()
+    first = api.dispatch(
+        "POST", "/internal/v1/storage/previews/claim", _headers(), _claim_payload()
+    )
+    assert first.status == 200
+    assert len(operators.heartbeats) == 1
+
+    second = api.dispatch(
+        "POST", "/internal/v1/storage/previews/claim", _headers(), _claim_payload()
+    )
+    assert second.status == 200
+    assert len(operators.heartbeats) == 1
+
+
 def test_catalogue_requires_matching_active_service_certificate() -> None:
-    api, catalogue, _leases = _api()
+    api, catalogue, _leases, _operators = _api()
     payload = json.dumps(_catalogue_payload()).encode()
 
     missing = api.dispatch("POST", "/internal/v1/storage/catalogue", {}, payload)
@@ -182,7 +224,7 @@ def test_catalogue_requires_matching_active_service_certificate() -> None:
 
 
 def test_inactive_service_cannot_catalogue_or_claim_work() -> None:
-    api, catalogue, leases = _api(_service(state=ServiceState.REVOKED))
+    api, catalogue, leases, _operators = _api(_service(state=ServiceState.REVOKED))
     response = api.dispatch(
         "POST",
         "/internal/v1/storage/catalogue",
@@ -194,24 +236,14 @@ def test_inactive_service_cannot_catalogue_or_claim_work() -> None:
     assert catalogue.applied == []
 
     claim = api.dispatch(
-        "POST",
-        "/internal/v1/storage/previews/claim",
-        _headers(),
-        json.dumps(
-            {
-                "service_id": "storage-service-1",
-                "organization_id": "org-1",
-                "storage_id": "archive-1",
-                "worker_id": "preview-worker-1",
-            }
-        ).encode(),
+        "POST", "/internal/v1/storage/previews/claim", _headers(), _claim_payload()
     )
     assert claim.status == 403
     assert leases.claims == []
 
 
 def test_valid_service_catalogue_preserves_project_scope() -> None:
-    api, catalogue, _leases = _api()
+    api, catalogue, _leases, _operators = _api()
     response = api.dispatch(
         "POST",
         "/internal/v1/storage/catalogue",
@@ -224,21 +256,9 @@ def test_valid_service_catalogue_preserves_project_scope() -> None:
 
 
 def test_valid_service_can_claim_and_complete_preview_lease() -> None:
-    api, _catalogue, leases = _api()
+    api, _catalogue, leases, _operators = _api()
     claim = api.dispatch(
-        "POST",
-        "/internal/v1/storage/previews/claim",
-        _headers(),
-        json.dumps(
-            {
-                "service_id": "storage-service-1",
-                "organization_id": "org-1",
-                "storage_id": "archive-1",
-                "worker_id": "preview-worker-1",
-                "limit": 20,
-                "lease_seconds": 120,
-            }
-        ).encode(),
+        "POST", "/internal/v1/storage/previews/claim", _headers(), _claim_payload()
     )
     assert claim.status == 200
     assert leases.claims[0]["worker_id"] == "preview-worker-1"

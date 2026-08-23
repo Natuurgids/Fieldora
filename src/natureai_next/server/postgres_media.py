@@ -13,6 +13,13 @@ class PostgresMediaMetadataRepository:
         self._connect = connect
         with self._connect() as connection:
             with connection.cursor() as cursor:
+                # API and worker processes start together on a clean database. PostgreSQL
+                # can still race in system-catalog type creation even with IF NOT EXISTS,
+                # so serialize the complete media schema bootstrap transaction.
+                cursor.execute(
+                    "SELECT pg_advisory_xact_lock(hashtext(%s))",
+                    ("fieldora_media_schema_v1",),
+                )
                 cursor.execute(
                     """
                     CREATE TABLE IF NOT EXISTS governed_media(
@@ -62,9 +69,14 @@ class PostgresMediaMetadataRepository:
                     "expected_size,expected_sha256,received_bytes"
                     ") VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s)",
                     (
-                        upload.upload_id, upload.subject_id, upload.organization_id,
-                        upload.project_id, upload.filename, upload.mime_type,
-                        upload.expected_size, upload.expected_sha256,
+                        upload.upload_id,
+                        upload.subject_id,
+                        upload.organization_id,
+                        upload.project_id,
+                        upload.filename,
+                        upload.mime_type,
+                        upload.expected_size,
+                        upload.expected_sha256,
                         upload.received_bytes,
                     ),
                 )
@@ -128,17 +140,24 @@ class PostgresMediaMetadataRepository:
                 row = cursor.fetchone()
         return None if row is None else MediaRecord(*row)
 
-    def records(self, organization_id: str, project_id: str = "", limit: int = 200) -> tuple[MediaRecord, ...]:
+    def records(
+        self, organization_id: str, project_id: str = "", limit: int = 200
+    ) -> tuple[MediaRecord, ...]:
         with self._connect() as connection:
             with connection.cursor() as cursor:
                 if project_id:
                     cursor.execute(
-                        "SELECT media_id,relative_path,organization_id,project_id,mime_type,size_bytes,sha256 FROM governed_media WHERE organization_id=%s AND project_id=%s ORDER BY media_id DESC LIMIT %s",
+                        "SELECT media_id,relative_path,organization_id,project_id,"
+                        "mime_type,size_bytes,sha256 FROM governed_media "
+                        "WHERE organization_id=%s AND project_id=%s "
+                        "ORDER BY media_id DESC LIMIT %s",
                         (organization_id, project_id, limit),
                     )
                 else:
                     cursor.execute(
-                        "SELECT media_id,relative_path,organization_id,project_id,mime_type,size_bytes,sha256 FROM governed_media WHERE organization_id=%s ORDER BY media_id DESC LIMIT %s",
+                        "SELECT media_id,relative_path,organization_id,project_id,"
+                        "mime_type,size_bytes,sha256 FROM governed_media "
+                        "WHERE organization_id=%s ORDER BY media_id DESC LIMIT %s",
                         (organization_id, limit),
                     )
                 rows = cursor.fetchall()
@@ -151,7 +170,12 @@ class PostgresMediaMetadataRepository:
             "media_id,relative_path,organization_id,project_id,mime_type,size_bytes,sha256"
             ") VALUES(%s,%s,%s,%s,%s,%s,%s)",
             (
-                record.media_id, record.relative_path, record.organization_id,
-                record.project_id, record.mime_type, record.size_bytes, record.sha256,
+                record.media_id,
+                record.relative_path,
+                record.organization_id,
+                record.project_id,
+                record.mime_type,
+                record.size_bytes,
+                record.sha256,
             ),
         )

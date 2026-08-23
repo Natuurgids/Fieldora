@@ -56,4 +56,5 @@ def test_postgres_contract_mutation_and_audit_chain_commit_together() -> None:
     assert "data_contract.required" in actions
     assert "data_contract.activated" in actions
     assert "data_contract.project_owner_assigned" in actions
-    assert access.verify_audit_chain() == (True, "audit chain verified")
+    verified, detail = access.verify_audit_chain()
+    assert verified, detail

@@ -49,6 +49,8 @@ class StorageServiceListenerRuntime:
     ) -> None:
         config.validate()
         self._config = config
+        if preview_store is None:
+            preview_store = PostgresLinkedPreviewStore(catalogue._connect)
         self._application = LinkedStorageServiceApi(
             catalogue,
             leases,

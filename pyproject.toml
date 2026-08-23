@@ -56,6 +56,7 @@ fieldora-phase-f-certification = "natureai_next.bootstrap.phase_f_certification_
 fieldora-service-trust = "natureai_next.bootstrap.service_trust_cli:main"
 fieldora-certificate-renewer = "natureai_next.bootstrap.certificate_renewer_cli:main"
 fieldora-operator = "natureai_next.bootstrap.operator_cli:main"
+fieldora-storage-service = "natureai_next.bootstrap.storage_service_cli:main"
 aperture-updater = "natureai_next.bootstrap.native_updater:main"
 aperture-recovery = "natureai_next.bootstrap.native_recovery:main"
 

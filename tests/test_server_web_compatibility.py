@@ -1,4 +1,5 @@
 from natureai_next.server.api import ApiResponse
+from natureai_next.server.contract_web_compatibility import patch_contract_web_response
 from natureai_next.server.web_compatibility import (
     openapi_document,
     patch_web_response,
@@ -50,6 +51,19 @@ def test_app_bundle_patch_turns_header_import_into_file_picker_action() -> None:
     assert patch_web_response("/app.js", patched).body == patched.body
 
 
+def test_contract_web_patch_exposes_owner_precedence_and_double_attestation() -> None:
+    original = ApiResponse(200, b"console.log('fieldora');", "text/javascript")
+    patched = patch_contract_web_response("/app.js", original)
+
+    assert b"Data Access &amp; Contracts" in patched.body
+    assert b"Evidence-owner restrictions are upstream" in patched.body
+    assert b"two separate attestations" in patched.body
+    assert b"/api/v1/access-barriers/evidence/" in patched.body
+    assert b"/api/v1/access-barriers/projects/" in patched.body
+    assert patch_contract_web_response("/app.js", patched).body == patched.body
+
+
 def test_non_app_response_is_untouched() -> None:
     original = ApiResponse.json(200, {"ok": True})
     assert patch_web_response("/api/v1/status", original) is original
+    assert patch_contract_web_response("/api/v1/status", original) is original

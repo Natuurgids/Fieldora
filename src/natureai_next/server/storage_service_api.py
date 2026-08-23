@@ -1,8 +1,8 @@
 """Internal mTLS-only API for linked storage services.
 
-The transport injects peer-certificate metadata after a successful TLS handshake.  This
-API binds that certificate to the durable operator service record before accepting
-catalogue data or leasing preview work.
+The transport injects peer-certificate metadata after a successful TLS handshake. This
+API binds that certificate to the durable operator service record before accepting source
+registrations, catalogue data, or preview work.
 """
 
 from __future__ import annotations
@@ -20,6 +20,7 @@ from natureai_next.server.storage_exchange import (
     StorageCatalogueBatch,
     StorageCatalogueItem,
     StorageObjectState,
+    StorageSourceRegistration,
 )
 
 _PEER_SERIAL = "fieldora-peer-certificate-serial"
@@ -45,6 +46,8 @@ class LinkedStorageServiceApi:
     def dispatch(
         self, method: str, target: str, headers: dict[str, str], body: bytes
     ) -> ApiResponse:
+        if target == "/internal/v1/storage/sources" and method == "POST":
+            return self._register_source(headers, body)
         if target == "/internal/v1/storage/catalogue" and method == "POST":
             return self._catalogue_batch(headers, body)
         if target == "/internal/v1/storage/previews/claim" and method == "POST":
@@ -75,6 +78,45 @@ class LinkedStorageServiceApi:
         if "storage" not in service.service_type.casefold():
             return None, ApiResponse.json(403, {"error": "service_type_forbidden"})
         return service, None
+
+    def _register_source(self, headers: dict[str, str], body: bytes) -> ApiResponse:
+        if len(body) > 64 * 1024:
+            return ApiResponse.json(413, {"error": "request_too_large"})
+        try:
+            data = json.loads(body)
+            source = StorageSourceRegistration(
+                storage_id=str(data["storage_id"]).strip(),
+                organization_id=str(data["organization_id"]).strip(),
+                service_id=str(data["service_id"]).strip(),
+                display_name=str(data["display_name"]).strip(),
+                root_alias=str(data["root_alias"]).strip(),
+                read_only=bool(data.get("read_only", True)),
+            )
+        except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+            return ApiResponse.json(400, {"error": "invalid_storage_source"})
+        _service, error = self._service(
+            headers,
+            service_id=source.service_id,
+            organization_id=source.organization_id,
+        )
+        if error is not None:
+            return error
+        try:
+            self._catalogue.register_source(source)
+        except ValueError as exc:
+            return ApiResponse.json(
+                409, {"error": "storage_source_rejected", "detail": str(exc)}
+            )
+        return ApiResponse.json(
+            200,
+            {
+                "storage_id": source.storage_id,
+                "organization_id": source.organization_id,
+                "service_id": source.service_id,
+                "display_name": source.display_name,
+                "read_only": source.read_only,
+            },
+        )
 
     def _catalogue_batch(self, headers: dict[str, str], body: bytes) -> ApiResponse:
         if len(body) > 8 * 1024 * 1024:

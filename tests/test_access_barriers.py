@@ -134,6 +134,49 @@ def test_collection_wall_is_cumulative_with_asset_contract(tmp_path) -> None:
     assert repository.allows_asset(asset.subject_id, organization_id="org-b")
 
 
+def test_target_index_finds_assets_shared_to_organization_and_project(tmp_path) -> None:
+    repository = _repository(tmp_path)
+    direct = ContractSubject(ContractSubjectKind.ASSET, "asset-org")
+    collection = ContractSubject(ContractSubjectKind.COLLECTION, "collection-project")
+    repository.create(
+        ContractDraft(
+            (AccessTarget(AccessTargetKind.ORGANIZATION, organization_id="org-b"),),
+            "",
+            False,
+            0,
+            subject=direct,
+        ),
+        requested_by="admin",
+        contract_id="to-org-b",
+        now_epoch=10,
+    )
+    repository.create(
+        ContractDraft(
+            (
+                AccessTarget(
+                    AccessTargetKind.ORGANIZATION_PROJECT,
+                    organization_id="org-b",
+                    project_id="project-b",
+                ),
+            ),
+            "",
+            False,
+            0,
+            subject=collection,
+        ),
+        requested_by="admin",
+        contract_id="to-project-b",
+        now_epoch=11,
+    )
+    repository.link_collection_asset(collection.subject_id, "asset-project")
+
+    assert repository.candidate_shared_assets(organization_id="org-b") == ("asset-org",)
+    assert repository.candidate_shared_assets(
+        organization_id="org-b", project_ids=("project-b",)
+    ) == ("asset-org", "asset-project")
+    assert repository.candidate_shared_assets(organization_id="org-c") == ()
+
+
 def test_project_sharing_stays_pending_until_same_owner_signs_twice(tmp_path) -> None:
     repository = _repository(tmp_path)
     subject = ContractSubject(ContractSubjectKind.ASSET, "asset-2")

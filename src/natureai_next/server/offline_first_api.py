@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from collections.abc import Callable
 
 from natureai_next.server.browser_functionality_api import BrowserFunctionalityFieldoraApi
@@ -40,3 +41,13 @@ class OfflineFirstFieldoraApi(
         linked_factory = type(self)._linked_storage_factory
         self._offline_sync = None if sync_factory is None else sync_factory()
         self._linked_storage = None if linked_factory is None else linked_factory()
+        enabled = os.environ.get("FIELDORA_STORAGE_SERVICE_ENABLED", "").strip().casefold()
+        listener_enabled = enabled in {"1", "true", "yes", "on"}
+        self._runtime_profile["storage_service_listener"] = (
+            "listening" if listener_enabled else "disabled"
+        )
+        self._runtime_profile["storage_service_mtls"] = "required"
+        if listener_enabled:
+            self._runtime_profile["storage_service_port"] = os.environ.get(
+                "FIELDORA_STORAGE_SERVICE_PORT", "8766"
+            ).strip()

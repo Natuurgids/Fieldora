@@ -45,6 +45,7 @@ def _item(object_id: str = "object-1", path: str = "Amazon/day-01/image-1.jpg") 
         modified_ns=123456789,
         state=StorageObjectState.AVAILABLE,
         thumbnail_state=PreviewState.MISSING,
+        project_id="project-1",
     )
 
 
@@ -86,6 +87,7 @@ def test_postgres_catalogue_is_idempotent_and_preserves_media_identity() -> None
     records = repository.browse(source.organization_id, source.storage_id)
     assert len(records) == 1
     media_id = records[0].media_id
+    assert records[0].project_id == "project-1"
 
     second = _signed_batch(
         source,
@@ -93,13 +95,14 @@ def test_postgres_catalogue_is_idempotent_and_preserves_media_identity() -> None
         sequence=2,
         previous=first.batch_sha256,
         final=True,
-        items=(replace(_item(), size_bytes=54_321),),
+        items=(replace(_item(), size_bytes=54_321, project_id="project-2"),),
     )
     assert repository.apply_catalogue_batch(second) == (0, 1)
     records = repository.browse(source.organization_id, source.storage_id)
     assert len(records) == 1
     assert records[0].media_id == media_id
     assert records[0].size_bytes == 54_321
+    assert records[0].project_id == "project-2"
 
 
 @pytest.mark.integration

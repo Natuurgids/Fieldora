@@ -6,8 +6,13 @@ import json
 from http.cookies import SimpleCookie
 from urllib.parse import quote, unquote, urlsplit
 
+from natureai_next.application.access_control import AccessAdministrationService
 from natureai_next.application.authentication import AuthenticationFailed
-from natureai_next.domain.access_control import AccessRequest
+from natureai_next.domain.access_control import (
+    AccessRequest,
+    PolicyEffect,
+    PolicySource,
+)
 from natureai_next.server.api import ApiResponse
 from natureai_next.server.browser_functionality_web import (
     patch_browser_functionality_response,
@@ -17,6 +22,25 @@ from natureai_next.server.project_owner_contract_api import ProjectOwnerContract
 
 _COOKIE_NAME = "fieldora_session"
 _COOKIE_PATH = "/api/v1/"
+_PROJECT_OWNER_RESOURCE_TYPES = (
+    "project",
+    "phase",
+    "task",
+    "sprint",
+    "allocation",
+    "dossier",
+    "dossier_review",
+    "observation",
+    "specimen",
+    "encounter",
+    "protocol",
+    "survey_event",
+    "enrichment",
+    "sample",
+    "laboratory_record",
+    "collection",
+    "asset",
+)
 
 
 class BrowserFunctionalityFieldoraApi(ProjectOwnerContractFieldoraApi):
@@ -120,6 +144,34 @@ class BrowserFunctionalityFieldoraApi(ProjectOwnerContractFieldoraApi):
             )
         except ValueError:
             return ApiResponse.json(409, {"error": "revision_conflict"})
+
+        # A creator must be able to work inside the project immediately.  This is
+        # not an administrator bypass: the grant is subject-specific and constrained
+        # to the new project, organization and research purpose.  Later contracts or
+        # explicit denies still participate in the normal PBAC decision.
+        if self._access_repository is not None:
+            administration = AccessAdministrationService(self._access_repository)
+            administration.create_policy(
+                name=f"Project owner workspace: {name}",
+                effect=PolicyEffect.ALLOW,
+                source=PolicySource.OBJECT_GRANT,
+                source_id=resource_id,
+                subject_id=identity.identity_id,
+                actions=(
+                    "view",
+                    "edit",
+                    "upload",
+                    "download",
+                    "search",
+                    "link",
+                    "unlink",
+                    "export",
+                ),
+                resource_types=_PROJECT_OWNER_RESOURCE_TYPES,
+                organization_id=identity.organization_id,
+                project_id=resource_id,
+                purposes=("research",),
+            )
         return ApiResponse.json(201, {"item": record, "revision": revision})
 
 

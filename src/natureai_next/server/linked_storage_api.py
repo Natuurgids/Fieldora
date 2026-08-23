@@ -13,6 +13,7 @@ from urllib.parse import parse_qs, urlsplit
 from natureai_next.application.authentication import AuthenticationFailed
 from natureai_next.domain.access_control import AccessRequest
 from natureai_next.server.api import ApiResponse
+from natureai_next.server.postgres_linked_preview_store import LinkedPreviewObject
 from natureai_next.server.postgres_linked_storage import ServerLinkedMedia
 
 
@@ -37,6 +38,8 @@ class LinkedStorageRepository(Protocol):
         requested_by: str,
     ) -> bool: ...
 
+    def preview(self, media_id: str) -> LinkedPreviewObject | None: ...
+
 
 class LinkedStorageApiMixin:
     """Route linked-storage catalogue operations before the existing API chain."""
@@ -51,6 +54,8 @@ class LinkedStorageApiMixin:
             return self._linked_storage_browse(headers, route.query)
         if route.path == "/api/v1/linked-storage/previews" and method == "POST":
             return self._linked_storage_request_previews(headers, body)
+        if route.path == "/api/v1/linked-storage/thumbnail" and method == "GET":
+            return self._linked_storage_thumbnail(headers, route.query)
         return super().dispatch(method, target, headers, body)  # type: ignore[misc]
 
     def _linked_storage_identity(self, headers: dict[str, str]):
@@ -155,6 +160,39 @@ class LinkedStorageApiMixin:
                 "unavailable_media_ids": unavailable,
                 "queued_count": len(queued),
             },
+        )
+
+    def _linked_storage_thumbnail(
+        self, headers: dict[str, str], query_string: str
+    ) -> ApiResponse:
+        if self._linked_storage is None:
+            return ApiResponse.json(503, {"error": "linked_storage_unavailable"})
+        identity, error = self._linked_storage_identity(headers)
+        if error is not None:
+            return error
+        assert identity is not None
+        query = parse_qs(query_string)
+        media_id = query.get("media_id", [""])[0].strip()
+        if not media_id or len(media_id) > 512:
+            return ApiResponse.json(400, {"error": "invalid_thumbnail_query"})
+        record = self._linked_storage.media(media_id)
+        if (
+            record is None
+            or record.organization_id != identity.organization_id
+            or not self._linked_storage_allowed(identity, headers, record)
+        ):
+            return ApiResponse.json(404, {"error": "linked_thumbnail_not_found"})
+        preview = self._linked_storage.preview(media_id)
+        if preview is None:
+            return ApiResponse.json(404, {"error": "linked_thumbnail_not_ready"})
+        return ApiResponse(
+            200,
+            preview.payload,
+            content_type=preview.mime_type,
+            headers=(
+                ("ETag", f'"{preview.sha256}"'),
+                ("Content-Disposition", "inline"),
+            ),
         )
 
     def _linked_storage_allowed(

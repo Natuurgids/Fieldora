@@ -10,6 +10,7 @@ on:
       - "src/natureai_next/bootstrap/certificate_renewer_cli.py"
       - "src/natureai_next/server/access_contracts.py"
       - "src/natureai_next/server/access_barriers.py"
+      - "src/natureai_next/server/required_access_barriers.py"
       - "src/natureai_next/server/recipient_contract_api.py"
       - "src/natureai_next/server/operator_control.py"
       - "src/natureai_next/server/platform_api.py"
@@ -24,6 +25,7 @@ on:
       - "src/natureai_next/server/http.py"
       - "tests/test_access_contracts.py"
       - "tests/test_access_barriers.py"
+      - "tests/test_required_access_barriers.py"
       - "tests/test_recipient_contract_api.py"
       - "tests/test_platform_server_extensions.py"
       - "tests/test_service_tls_reload.py"
@@ -60,6 +62,7 @@ jobs:
           src/natureai_next/bootstrap/certificate_renewer_cli.py
           src/natureai_next/server/access_contracts.py
           src/natureai_next/server/access_barriers.py
+          src/natureai_next/server/required_access_barriers.py
           src/natureai_next/server/recipient_contract_api.py
           src/natureai_next/server/operator_control.py
           src/natureai_next/server/platform_api.py
@@ -74,6 +77,7 @@ jobs:
           src/natureai_next/server/http.py
           tests/test_access_contracts.py
           tests/test_access_barriers.py
+          tests/test_required_access_barriers.py
           tests/test_recipient_contract_api.py
           tests/test_platform_server_extensions.py
           tests/test_service_tls_reload.py
@@ -84,6 +88,7 @@ jobs:
           python -m pytest -q
           tests/test_access_contracts.py
           tests/test_access_barriers.py
+          tests/test_required_access_barriers.py
           tests/test_recipient_contract_api.py
           tests/test_platform_server_extensions.py
           tests/test_server_web_compatibility.py

@@ -101,7 +101,7 @@ def test_postgres_sync_preserves_disagreement_and_bundle_replay_is_idempotent() 
             (replace(assertion_b, device_id="offline-phone", author_identity_id="second-worker"),),
         )
     )
-    assert second.conflict_logical_record_ids == (logical_id,)
+    assert second.conflict_record_ids == (logical_id,)
 
     preserved = store.assertions(organization_id, "observation", logical_id)
     assert len(preserved) == 2

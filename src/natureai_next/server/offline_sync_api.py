@@ -212,7 +212,7 @@ class OfflineSyncApiMixin:
         if not self._sync_allowed(
             identity,
             headers,
-            action="resolve",
+            action="edit",
             record_type=resolution.record_type,
             logical_record_id=resolution.logical_record_id,
             project_id=resolution.project_id,
@@ -303,7 +303,7 @@ def _decode_bundle(data: object) -> SyncBundle:
         for key, value in metadata.items()
     ):
         raise ValueError("bundle metadata must contain strings")
-    return SyncBundle(
+    bundle = SyncBundle(
         bundle_id=str(data["bundle_id"]).strip(),
         organization_id=str(data["organization_id"]).strip(),
         source_device_id=str(data["source_device_id"]).strip(),
@@ -313,6 +313,17 @@ def _decode_bundle(data: object) -> SyncBundle:
         checkpoint=str(data.get("checkpoint", "")).strip(),
         metadata=dict(metadata),
     )
+    if not all(
+        (
+            bundle.bundle_id,
+            bundle.organization_id,
+            bundle.source_device_id,
+            bundle.source_identity_id,
+            bundle.created_at_utc,
+        )
+    ):
+        raise ValueError("bundle identity fields are required")
+    return bundle
 
 
 def _decode_assertion(data: object) -> SyncAssertion:
@@ -324,7 +335,7 @@ def _decode_assertion(data: object) -> SyncAssertion:
     payload = data.get("payload")
     if not isinstance(payload, dict):
         raise ValueError("assertion payload must be an object")
-    return SyncAssertion(
+    assertion = SyncAssertion(
         assertion_id=str(data["assertion_id"]).strip(),
         logical_record_id=str(data["logical_record_id"]).strip(),
         record_type=str(data["record_type"]).strip(),
@@ -340,6 +351,21 @@ def _decode_assertion(data: object) -> SyncAssertion:
         evidence_ids=tuple(str(item).strip() for item in evidence_ids),
         parent_assertion_id=str(data.get("parent_assertion_id", "")).strip(),
     )
+    if not all(
+        (
+            assertion.assertion_id,
+            assertion.logical_record_id,
+            assertion.record_type,
+            assertion.organization_id,
+            assertion.author_identity_id,
+            assertion.device_id,
+            assertion.created_at_utc,
+        )
+    ):
+        raise ValueError("assertion identity fields are required")
+    if any(not item for item in assertion.evidence_ids):
+        raise ValueError("evidence ids may not be blank")
+    return assertion
 
 
 def _assertion_payload(assertion: SyncAssertion) -> dict[str, Any]:

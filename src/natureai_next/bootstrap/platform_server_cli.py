@@ -23,7 +23,7 @@ from natureai_next.server.operator_control import (
     SqliteOperatorRepository,
 )
 from natureai_next.server.platform_extensions import ProjectOptionalStagedIngestionStore
-from natureai_next.server.runtime_api import RuntimeGovernedFieldoraApi
+from natureai_next.server.recipient_contract_api import RecipientContractFieldoraApi
 from natureai_next.server.service_runtime import ServiceRuntimeSupervisor
 
 _LAST_REPOSITORY: Any = None
@@ -59,7 +59,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             return None
         return base_run_one_job(*args, **kwargs)
 
-    server_cli.FieldoraApi = RuntimeGovernedFieldoraApi
+    server_cli.FieldoraApi = RecipientContractFieldoraApi
     server_cli.StagedIngestionStore = ProjectOptionalStagedIngestionStore
     server_cli.AccessAdministrationService = TrackingAdministration
     if command == "run-job-worker" and supervisor is not None:
@@ -71,7 +71,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     finally:
         if supervisor is not None:
             supervisor.stop()
-        server_cli.FieldoraApi = RuntimeGovernedFieldoraApi
+        server_cli.FieldoraApi = RecipientContractFieldoraApi
         server_cli.StagedIngestionStore = ProjectOptionalStagedIngestionStore
         server_cli.AccessAdministrationService = base_administration
         server_cli.run_one_job = base_run_one_job

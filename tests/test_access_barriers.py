@@ -1,3 +1,5 @@
+import pytest
+
 from natureai_next.infrastructure.database.connection import SqliteConnectionFactory
 from natureai_next.server.access_barriers import AccessBarrierRepository
 from natureai_next.server.access_contracts import (
@@ -94,6 +96,44 @@ def test_collection_contract_can_be_replaced_without_touching_assets(tmp_path) -
     assert not repository.allows(subject, organization_id="org-b")
 
 
+def test_collection_wall_is_cumulative_with_asset_contract(tmp_path) -> None:
+    repository = _repository(tmp_path)
+    asset = ContractSubject(ContractSubjectKind.ASSET, "asset-cumulative")
+    collection = ContractSubject(ContractSubjectKind.COLLECTION, "collection-restricted")
+    repository.create(
+        ContractDraft(
+            (AccessTarget(AccessTargetKind.ALL),),
+            "",
+            False,
+            0,
+            subject=asset,
+        ),
+        requested_by="admin",
+        contract_id="asset-all",
+        now_epoch=10,
+    )
+    repository.create(
+        ContractDraft(
+            (AccessTarget(AccessTargetKind.ORGANIZATION, organization_id="org-a"),),
+            "",
+            False,
+            0,
+            subject=collection,
+        ),
+        requested_by="admin",
+        contract_id="collection-org-a",
+        now_epoch=11,
+    )
+    repository.link_collection_asset(collection.subject_id, asset.subject_id)
+
+    assert repository.collections_for_asset(asset.subject_id) == (collection.subject_id,)
+    assert repository.allows_asset(asset.subject_id, organization_id="org-a")
+    assert not repository.allows_asset(asset.subject_id, organization_id="org-b")
+
+    repository.unlink_collection_asset(collection.subject_id, asset.subject_id)
+    assert repository.allows_asset(asset.subject_id, organization_id="org-b")
+
+
 def test_project_sharing_stays_pending_until_same_owner_signs_twice(tmp_path) -> None:
     repository = _repository(tmp_path)
     subject = ContractSubject(ContractSubjectKind.ASSET, "asset-2")
@@ -175,8 +215,6 @@ def test_second_signature_cannot_be_switched_to_another_owner(tmp_path) -> None:
         signature_id="sig-1",
         now_epoch=20,
     )
-
-    import pytest
 
     with pytest.raises(PermissionError):
         repository.sign(

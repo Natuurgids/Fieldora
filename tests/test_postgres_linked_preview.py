@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import os
 from dataclasses import replace
 from uuid import uuid4
@@ -7,6 +8,7 @@ from uuid import uuid4
 import pytest
 
 from natureai_next.server.postgres_linked_preview import PostgresLinkedPreviewLeases
+from natureai_next.server.postgres_linked_preview_store import PostgresLinkedPreviewStore
 from natureai_next.server.postgres_linked_storage import PostgresLinkedStorageRepository
 from natureai_next.server.storage_exchange import (
     PreviewState,
@@ -165,3 +167,51 @@ def test_preview_completion_rejects_non_terminal_state() -> None:
             worker_id="worker-1",
             state=PreviewState.PROCESSING,
         )
+
+
+@pytest.mark.integration
+def test_leased_preview_store_requires_worker_and_round_trips_bytes() -> None:
+    repository, leases, source, media_id = _seed_preview()
+    connect = _connect()
+    store = PostgresLinkedPreviewStore(connect)
+    assert len(
+        leases.claim(
+            storage_id=source.storage_id,
+            service_id=source.service_id,
+            worker_id="worker-1",
+        )
+    ) == 1
+    payload = b"small-governed-jpeg-derivative"
+    digest = hashlib.sha256(payload).hexdigest()
+
+    with pytest.raises(PermissionError, match="lease"):
+        store.put_leased_preview(
+            media_id=media_id,
+            storage_id=source.storage_id,
+            organization_id=source.organization_id,
+            service_id=source.service_id,
+            worker_id="worker-2",
+            mime_type="image/jpeg",
+            sha256=digest,
+            payload=payload,
+        )
+
+    stored = store.put_leased_preview(
+        media_id=media_id,
+        storage_id=source.storage_id,
+        organization_id=source.organization_id,
+        service_id=source.service_id,
+        worker_id="worker-1",
+        mime_type="image/jpeg",
+        sha256=digest,
+        payload=payload,
+    )
+    assert stored.payload == payload
+    assert stored.sha256 == digest
+    reread = store.preview(media_id)
+    assert reread is not None
+    assert reread.payload == payload
+    media = repository.media(media_id)
+    assert media is not None
+    assert media.thumbnail_state is PreviewState.READY
+    assert media.thumbnail_etag == digest

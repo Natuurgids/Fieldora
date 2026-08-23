@@ -18,12 +18,12 @@ from typing import Any
 from natureai_next import __version__
 from natureai_next.bootstrap.paths import resolve_application_paths
 from natureai_next.domain.access_control import PolicyEffect, PolicySource
+from natureai_next.server.browser_functionality_api import BrowserFunctionalityFieldoraApi
 from natureai_next.server.operator_control import (
     PostgresOperatorRepository,
     SqliteOperatorRepository,
 )
 from natureai_next.server.platform_extensions import ProjectOptionalStagedIngestionStore
-from natureai_next.server.project_owner_contract_api import ProjectOwnerContractFieldoraApi
 from natureai_next.server.service_runtime import ServiceRuntimeSupervisor
 
 _LAST_REPOSITORY: Any = None
@@ -59,7 +59,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             return None
         return base_run_one_job(*args, **kwargs)
 
-    server_cli.FieldoraApi = ProjectOwnerContractFieldoraApi
+    server_cli.FieldoraApi = BrowserFunctionalityFieldoraApi
     server_cli.StagedIngestionStore = ProjectOptionalStagedIngestionStore
     server_cli.AccessAdministrationService = TrackingAdministration
     if command == "run-job-worker" and supervisor is not None:
@@ -71,7 +71,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     finally:
         if supervisor is not None:
             supervisor.stop()
-        server_cli.FieldoraApi = ProjectOwnerContractFieldoraApi
+        server_cli.FieldoraApi = BrowserFunctionalityFieldoraApi
         server_cli.StagedIngestionStore = ProjectOptionalStagedIngestionStore
         server_cli.AccessAdministrationService = base_administration
         server_cli.run_one_job = base_run_one_job
@@ -200,7 +200,23 @@ def _bootstrap_initial_operator(administration_type: Any) -> None:
             "link",
             "unlink",
         ),
-        resource_types=("asset", "collection", "submission", "review_case", "media_association"),
+        resource_types=(
+            "asset",
+            "collection",
+            "submission",
+            "review_case",
+            "media_association",
+        ),
+        organization_id=organization_id,
+        purposes=("research",),
+    )
+    administration.create_policy(
+        name="Initial project portfolio creator",
+        effect=PolicyEffect.ALLOW,
+        source=PolicySource.ROLE,
+        role_id="platform-operator",
+        actions=("create", "view", "edit"),
+        resource_types=("project",),
         organization_id=organization_id,
         purposes=("research",),
     )

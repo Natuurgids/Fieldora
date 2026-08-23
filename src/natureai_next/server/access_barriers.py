@@ -6,6 +6,9 @@ identity's permitted organization/project wall. The two checks are cumulative.
 
 Collection walls are cumulative with asset walls. An asset-specific contract cannot
 silently bypass a restricted collection that still contains the asset.
+
+Contract mutation and tamper-evident audit sealing share one access-database transaction.
+An unaudited governance change therefore cannot commit.
 """
 
 from __future__ import annotations
@@ -13,9 +16,11 @@ from __future__ import annotations
 import json
 import time
 from dataclasses import asdict, dataclass
+from datetime import UTC, datetime
 from typing import Any, Protocol
 from uuid import uuid4
 
+from natureai_next.server.access_audit_events import append_governance_audit
 from natureai_next.server.access_contracts import (
     AccessTarget,
     AccessTargetKind,
@@ -122,6 +127,10 @@ class AccessBarrierRepository:
         self._factory = factory
         connection = factory.connect()
         try:
+            # The access/audit repository is authoritative and must already exist.
+            # Touching the chain here intentionally fails construction when callers try
+            # to create a detached contract database without its audit foundation.
+            connection.execute("SELECT sequence FROM access_audit_chain LIMIT 1").fetchone()
             for statement in _SCHEMA:
                 connection.execute(statement)
             self._backfill_target_index(connection)
@@ -192,6 +201,39 @@ class AccessBarrierRepository:
                     draft.subject,
                     identifier,
                     replaces_contract_id.strip(),
+                )
+            append_governance_audit(
+                connection,
+                subject_id=requested_by.strip(),
+                action=(
+                    "data_contract.requested"
+                    if status == "pending"
+                    else "data_contract.activated"
+                ),
+                resource_type="data_contract",
+                resource_id=identifier,
+                reason="governed evidence access contract persisted",
+                request={
+                    "subject_kind": draft.subject.kind.value,
+                    "subject_id": draft.subject.subject_id,
+                    "source_project_id": draft.source_project_id,
+                    "targets": _target_dicts(draft.targets),
+                    "status": status,
+                    "replaces_contract_id": replaces_contract_id.strip(),
+                    "required_owner_signatures": draft.required_owner_signatures,
+                },
+                occurred_at_utc=_epoch_utc(now),
+            )
+            if status == "active" and replaces_contract_id.strip():
+                append_governance_audit(
+                    connection,
+                    subject_id=requested_by.strip(),
+                    action="data_contract.superseded",
+                    resource_type="data_contract",
+                    resource_id=replaces_contract_id.strip(),
+                    reason="replacement evidence access contract activated",
+                    request={"replacement_contract_id": identifier},
+                    occurred_at_utc=_epoch_utc(now),
                 )
             connection.commit()
         except BaseException:
@@ -268,6 +310,21 @@ class AccessBarrierRepository:
             ).fetchone()
             count = int(count_row[0])
             required = int(row["required_owner_signatures"])
+            append_governance_audit(
+                connection,
+                subject_id=owner_identity.strip(),
+                action="data_contract.attested",
+                resource_type="data_contract",
+                resource_id=contract_id,
+                reason="recorded project owner attestation",
+                request={
+                    "signature_id": signature_id.strip(),
+                    "attestation_number": count,
+                    "required_attestations": required,
+                    "source_project_id": str(row["source_project_id"]),
+                },
+                occurred_at_utc=_epoch_utc(now),
+            )
             if count >= required:
                 connection.execute(
                     "UPDATE access_data_contracts SET status='active',activated_at_epoch=? "
@@ -278,12 +335,39 @@ class AccessBarrierRepository:
                     ContractSubjectKind(str(row["subject_kind"])),
                     str(row["subject_id"]),
                 )
+                replaced = str(row["replaces_contract_id"])
                 self._supersede_other_active(
                     connection,
                     subject,
                     contract_id,
-                    str(row["replaces_contract_id"]),
+                    replaced,
                 )
+                append_governance_audit(
+                    connection,
+                    subject_id=owner_identity.strip(),
+                    action="data_contract.activated",
+                    resource_type="data_contract",
+                    resource_id=contract_id,
+                    reason="required project-owner attestations completed",
+                    request={
+                        "subject_kind": subject.kind.value,
+                        "subject_id": subject.subject_id,
+                        "attestations": count,
+                        "replaces_contract_id": replaced,
+                    },
+                    occurred_at_utc=_epoch_utc(now),
+                )
+                if replaced:
+                    append_governance_audit(
+                        connection,
+                        subject_id=owner_identity.strip(),
+                        action="data_contract.superseded",
+                        resource_type="data_contract",
+                        resource_id=replaced,
+                        reason="approved sharing replacement activated",
+                        request={"replacement_contract_id": contract_id},
+                        occurred_at_utc=_epoch_utc(now),
+                    )
             connection.commit()
         except BaseException:
             connection.rollback()
@@ -307,25 +391,61 @@ class AccessBarrierRepository:
             connection.close()
         return tuple(ContractSignature(*row) for row in rows)
 
-    def link_collection_asset(self, collection_id: str, asset_id: str) -> None:
-        if not collection_id.strip() or not asset_id.strip():
-            raise ValueError("collection_id and asset_id are required")
+    def link_collection_asset(
+        self, collection_id: str, asset_id: str, *, actor_id: str = "system"
+    ) -> None:
+        if not collection_id.strip() or not asset_id.strip() or not actor_id.strip():
+            raise ValueError("collection_id, asset_id and actor_id are required")
         connection = self._factory.connect()
         try:
-            connection.execute(
+            connection.execute("BEGIN IMMEDIATE")
+            cursor = connection.execute(
                 "INSERT OR IGNORE INTO access_collection_assets VALUES(?,?)",
                 (collection_id.strip(), asset_id.strip()),
             )
+            if cursor.rowcount:
+                append_governance_audit(
+                    connection,
+                    subject_id=actor_id.strip(),
+                    action="data_contract.collection_asset_linked",
+                    resource_type="collection",
+                    resource_id=collection_id.strip(),
+                    reason="asset entered collection information-barrier scope",
+                    request={"asset_id": asset_id.strip()},
+                )
+            connection.commit()
+        except BaseException:
+            connection.rollback()
+            raise
         finally:
             connection.close()
 
-    def unlink_collection_asset(self, collection_id: str, asset_id: str) -> None:
+    def unlink_collection_asset(
+        self, collection_id: str, asset_id: str, *, actor_id: str = "system"
+    ) -> None:
+        if not actor_id.strip():
+            raise ValueError("actor_id is required")
         connection = self._factory.connect()
         try:
-            connection.execute(
+            connection.execute("BEGIN IMMEDIATE")
+            cursor = connection.execute(
                 "DELETE FROM access_collection_assets WHERE collection_id=? AND asset_id=?",
                 (collection_id.strip(), asset_id.strip()),
             )
+            if cursor.rowcount:
+                append_governance_audit(
+                    connection,
+                    subject_id=actor_id.strip(),
+                    action="data_contract.collection_asset_unlinked",
+                    resource_type="collection",
+                    resource_id=collection_id.strip(),
+                    reason="asset left collection information-barrier scope",
+                    request={"asset_id": asset_id.strip()},
+                )
+            connection.commit()
+        except BaseException:
+            connection.rollback()
+            raise
         finally:
             connection.close()
 
@@ -462,11 +582,7 @@ class AccessBarrierRepository:
             "WHERE contract_id NOT IN (SELECT DISTINCT contract_id FROM access_data_contract_targets)"
         ).fetchall()
         for row in rows:
-            cls._insert_targets(
-                connection,
-                str(row[0]),
-                _parse_targets(str(row[1])),
-            )
+            cls._insert_targets(connection, str(row[0]), _parse_targets(str(row[1])))
 
     @staticmethod
     def _supersede_other_active(
@@ -515,18 +631,18 @@ def _contract_allows(
 
 
 def _targets_json(targets: tuple[AccessTarget, ...]) -> str:
-    return json.dumps(
-        [
-            {
-                "kind": target.kind.value,
-                "organization_id": target.organization_id,
-                "project_id": target.project_id,
-            }
-            for target in targets
-        ],
-        sort_keys=True,
-        separators=(",", ":"),
-    )
+    return json.dumps(_target_dicts(targets), sort_keys=True, separators=(",", ":"))
+
+
+def _target_dicts(targets: tuple[AccessTarget, ...]) -> list[dict[str, str]]:
+    return [
+        {
+            "kind": target.kind.value,
+            "organization_id": target.organization_id,
+            "project_id": target.project_id,
+        }
+        for target in targets
+    ]
 
 
 def _parse_targets(value: str) -> tuple[AccessTarget, ...]:
@@ -556,3 +672,7 @@ def _contract_row(row: Any) -> DataAccessContract:
         created_at_epoch=int(row["created_at_epoch"]),
         activated_at_epoch=int(row["activated_at_epoch"]),
     )
+
+
+def _epoch_utc(value: int) -> str:
+    return datetime.fromtimestamp(value, tz=UTC).isoformat()

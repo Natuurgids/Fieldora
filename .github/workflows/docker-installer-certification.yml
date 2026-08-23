@@ -63,6 +63,18 @@ jobs:
           }
           Write-Host "Service enrollment, HTTPS, mTLS and live renewal contract: OK"
 
+      - name: Certify Windows curl output handling
+        shell: pwsh
+        run: |
+          $text = Get-Content -LiteralPath ./Install-Fieldora-Clean.ps1 -Raw
+          if ($text.Contains('-o $null')) {
+            throw 'curl.exe -o $null drops the native argument in PowerShell; use -o NUL.'
+          }
+          if (-not $text.Contains('-o NUL')) {
+            throw 'Windows curl smoke tests must discard bodies with -o NUL.'
+          }
+          Write-Host "Windows curl null-device handling: OK"
+
       - name: Ensure root CA is not mounted into running renewal service
         shell: pwsh
         run: |

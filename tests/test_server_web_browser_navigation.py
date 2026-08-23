@@ -6,6 +6,7 @@ import threading
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+import pytest
 from playwright.sync_api import Page, Route, sync_playwright
 
 from natureai_next.server.api import ApiResponse
@@ -73,7 +74,11 @@ def _mock_api(route: Route) -> None:
             ]
         }
     elif path == "runtime":
-        payload = {"version": "5.4.0", "readiness": {"mode": "managed"}, "backends": {}}
+        payload = {
+            "version": "5.4.0",
+            "readiness": {"mode": "managed"},
+            "backends": {},
+        }
     elif path == "operations/assets":
         payload = {
             "items": [
@@ -114,11 +119,14 @@ def _assert_page(page: Page, name: str) -> None:
     assert page.evaluate("location.hash") == f"#{name}"
 
 
+@pytest.mark.parametrize("browser_name", ("chromium", "firefox", "webkit"))
 def test_all_visible_workspaces_have_browser_routes_and_cross_screen_navigation(
     tmp_path: Path,
+    browser_name: str,
 ) -> None:
     with _web_fixture(tmp_path) as url, sync_playwright() as playwright:
-        browser = playwright.chromium.launch(headless=True)
+        browser_type = getattr(playwright, browser_name)
+        browser = browser_type.launch(headless=True)
         page = browser.new_page()
         page.route("**/api/v1/**", _mock_api)
         page.add_init_script(
@@ -154,7 +162,6 @@ def test_all_visible_workspaces_have_browser_routes_and_cross_screen_navigation(
         for name in names:
             _assert_page(page, name)
 
-        # Browser Back/Forward must restore the actual workspace rather than only visual state.
         _assert_page(page, "library")
         _assert_page(page, "projects")
         page.go_back()
@@ -164,7 +171,6 @@ def test_all_visible_workspaces_have_browser_routes_and_cross_screen_navigation(
         page.wait_for_timeout(30)
         assert page.locator("#page-projects").is_visible()
 
-        # Project/portfolio selection must offer a real transition into its project workspace.
         page.locator('.nav[data-page="projects"]').click()
         page.wait_for_selector('#portfolio-list [data-kind="project"]')
         page.locator('#portfolio-list [data-kind="project"]').click()
@@ -172,7 +178,6 @@ def test_all_visible_workspaces_have_browser_routes_and_cross_screen_navigation(
         assert page.locator("#page-research").is_visible()
         assert "Navigation Test Project" in page.locator("#project-detail").inner_text()
 
-        # Operational records with project context must lead to that project rather than dead-end.
         page.locator('.nav[data-page="operations"]').click()
         page.wait_for_selector('[data-operations-id="asset-1"]')
         page.locator('[data-operations-id="asset-1"]').click()

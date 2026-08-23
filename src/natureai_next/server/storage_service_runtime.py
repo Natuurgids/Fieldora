@@ -8,6 +8,7 @@ from pathlib import Path
 
 from natureai_next.server.operator_control import OperatorRepository
 from natureai_next.server.postgres_linked_preview import PostgresLinkedPreviewLeases
+from natureai_next.server.postgres_linked_preview_store import PostgresLinkedPreviewStore
 from natureai_next.server.postgres_linked_storage import PostgresLinkedStorageRepository
 from natureai_next.server.service_http import MutualTLSServer, create_service_server
 from natureai_next.server.storage_service_api import LinkedStorageServiceApi
@@ -44,10 +45,16 @@ class StorageServiceListenerRuntime:
         catalogue: PostgresLinkedStorageRepository,
         leases: PostgresLinkedPreviewLeases,
         operators: OperatorRepository,
+        preview_store: PostgresLinkedPreviewStore | None = None,
     ) -> None:
         config.validate()
         self._config = config
-        self._application = LinkedStorageServiceApi(catalogue, leases, operators)
+        self._application = LinkedStorageServiceApi(
+            catalogue,
+            leases,
+            operators,
+            preview_store=preview_store,
+        )
         self._server: MutualTLSServer | None = None
         self._thread: threading.Thread | None = None
 

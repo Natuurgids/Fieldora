@@ -37,6 +37,8 @@ from natureai_next.server.storage_exchange import (
     StorageSourceRegistration,
 )
 
+_MAX_PREVIEW_UPLOAD_BYTES = 2 * 1024 * 1024
+
 
 @dataclass(frozen=True, slots=True)
 class StorageAgentConfig:
@@ -95,6 +97,17 @@ class StorageExchange(Protocol):
     def register_source(self, source: StorageSourceRegistration) -> dict[str, Any]: ...
     def submit_catalogue(self, payload: dict[str, Any]) -> dict[str, Any]: ...
     def claim_previews(self, payload: dict[str, Any]) -> dict[str, Any]: ...
+    def upload_preview(
+        self,
+        payload: bytes,
+        *,
+        service_id: str,
+        organization_id: str,
+        storage_id: str,
+        worker_id: str,
+        media_id: str,
+        sha256: str,
+    ) -> dict[str, Any]: ...
     def complete_preview(self, payload: dict[str, Any]) -> dict[str, Any]: ...
 
 
@@ -106,6 +119,7 @@ class MutualTLSStorageExchangeClient:
             "/internal/v1/storage/sources",
             "/internal/v1/storage/catalogue",
             "/internal/v1/storage/previews/claim",
+            "/internal/v1/storage/previews/upload",
             "/internal/v1/storage/previews/complete",
         }
     )
@@ -150,10 +164,22 @@ class MutualTLSStorageExchangeClient:
         )
         return context
 
-    def _post(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
-        if path not in self._ALLOWED_PATHS:
-            raise ValueError("storage exchange path is not allowed")
-        encoded = json.dumps(payload, separators=(",", ":"), ensure_ascii=False).encode()
+    @staticmethod
+    def _header_value(value: str) -> str:
+        normalized = value.strip()
+        if not normalized or any(ord(char) < 32 or ord(char) == 127 for char in normalized):
+            raise ValueError("storage exchange header value is invalid")
+        return normalized
+
+    def _request(
+        self,
+        method: str,
+        path: str,
+        payload: bytes,
+        headers: dict[str, str],
+    ) -> dict[str, Any]:
+        if method not in {"POST", "PUT"} or path not in self._ALLOWED_PATHS:
+            raise ValueError("storage exchange request is not allowed")
         connection = http.client.HTTPSConnection(
             self._hostname,
             self._port,
@@ -161,12 +187,7 @@ class MutualTLSStorageExchangeClient:
             context=self._context(),
         )
         try:
-            connection.request(
-                "POST",
-                path,
-                body=encoded,
-                headers={"Content-Type": "application/json", "Accept": "application/json"},
-            )
+            connection.request(method, path, body=payload, headers=headers)
             response = connection.getresponse()
             raw = response.read(1024 * 1024 + 1)
             if len(raw) > 1024 * 1024:
@@ -189,6 +210,15 @@ class MutualTLSStorageExchangeClient:
             raise RuntimeError("storage exchange returned an invalid response")
         return result
 
+    def _post(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
+        encoded = json.dumps(payload, separators=(",", ":"), ensure_ascii=False).encode()
+        return self._request(
+            "POST",
+            path,
+            encoded,
+            {"Content-Type": "application/json", "Accept": "application/json"},
+        )
+
     def register_source(self, source: StorageSourceRegistration) -> dict[str, Any]:
         return self._post("/internal/v1/storage/sources", asdict(source))
 
@@ -197,6 +227,35 @@ class MutualTLSStorageExchangeClient:
 
     def claim_previews(self, payload: dict[str, Any]) -> dict[str, Any]:
         return self._post("/internal/v1/storage/previews/claim", payload)
+
+    def upload_preview(
+        self,
+        payload: bytes,
+        *,
+        service_id: str,
+        organization_id: str,
+        storage_id: str,
+        worker_id: str,
+        media_id: str,
+        sha256: str,
+    ) -> dict[str, Any]:
+        if not 1 <= len(payload) <= _MAX_PREVIEW_UPLOAD_BYTES:
+            raise ValueError("linked preview upload size is invalid")
+        return self._request(
+            "PUT",
+            "/internal/v1/storage/previews/upload",
+            payload,
+            {
+                "Content-Type": "image/jpeg",
+                "Accept": "application/json",
+                "Fieldora-Service-Id": self._header_value(service_id),
+                "Fieldora-Organization-Id": self._header_value(organization_id),
+                "Fieldora-Storage-Id": self._header_value(storage_id),
+                "Fieldora-Worker-Id": self._header_value(worker_id),
+                "Fieldora-Media-Id": self._header_value(media_id),
+                "Fieldora-Preview-Sha256": self._header_value(sha256.casefold()),
+            },
+        )
 
     def complete_preview(self, payload: dict[str, Any]) -> dict[str, Any]:
         return self._post("/internal/v1/storage/previews/complete", payload)
@@ -407,7 +466,7 @@ class LinkedStorageAgent:
                 continue
             local = self.repository.media(object_id)
             state = PreviewState.FAILED
-            etag = ""
+            uploaded = False
             if local is not None:
                 self.preview_queue.request(object_id, 0, "server-priority-lease")
                 rendered = self.preview_worker.run_one()
@@ -416,18 +475,32 @@ class LinkedStorageAgent:
                     if state is PreviewState.READY and rendered.thumbnail_key:
                         preview = (self.preview_root / rendered.thumbnail_key).resolve(strict=True)
                         preview.relative_to(self.preview_root.resolve())
-                        etag = hashlib.sha256(preview.read_bytes()).hexdigest()
-            self.exchange.complete_preview(
-                {
-                    "service_id": self.config.service_id,
-                    "organization_id": self.config.organization_id,
-                    "storage_id": self.config.storage_id,
-                    "worker_id": worker_id,
-                    "media_id": media_id,
-                    "state": state.value,
-                    "thumbnail_etag": etag,
-                }
-            )
+                        payload = preview.read_bytes()
+                        if not 1 <= len(payload) <= _MAX_PREVIEW_UPLOAD_BYTES:
+                            raise ValueError("generated linked preview size is invalid")
+                        digest = hashlib.sha256(payload).hexdigest()
+                        self.exchange.upload_preview(
+                            payload,
+                            service_id=self.config.service_id,
+                            organization_id=self.config.organization_id,
+                            storage_id=self.config.storage_id,
+                            worker_id=worker_id,
+                            media_id=media_id,
+                            sha256=digest,
+                        )
+                        uploaded = True
+            if not uploaded:
+                self.exchange.complete_preview(
+                    {
+                        "service_id": self.config.service_id,
+                        "organization_id": self.config.organization_id,
+                        "storage_id": self.config.storage_id,
+                        "worker_id": worker_id,
+                        "media_id": media_id,
+                        "state": state.value,
+                        "thumbnail_etag": "",
+                    }
+                )
             processed += 1
         return processed
 

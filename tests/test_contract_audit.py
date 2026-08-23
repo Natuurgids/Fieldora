@@ -19,6 +19,11 @@ def _access(tmp_path):
     return SqliteAccessControlRepository(tmp_path / "access.sqlite3")
 
 
+def _assert_audit_chain_verified(access) -> None:
+    verified, detail = access.verify_audit_chain()
+    assert verified, detail
+
+
 def test_contract_creation_and_replacement_are_sealed_in_audit_chain(tmp_path) -> None:
     access = _access(tmp_path)
     repository = AccessBarrierRepository(access._factory)
@@ -53,7 +58,7 @@ def test_contract_creation_and_replacement_are_sealed_in_audit_chain(tmp_path) -
     actions = [event["action"] for event in events]
     assert "data_contract.activated" in actions
     assert "data_contract.superseded" in actions
-    assert access.verify_audit_chain() == (True, "audit chain verified")
+    _assert_audit_chain_verified(access)
 
 
 def test_double_attestation_and_activation_are_audited(tmp_path) -> None:
@@ -107,7 +112,7 @@ def test_double_attestation_and_activation_are_audited(tmp_path) -> None:
     attested = [event for event in events if event["action"] == "data_contract.attested"]
     assert len(attested) == 2
     assert any(event["action"] == "data_contract.activated" for event in events)
-    assert access.verify_audit_chain() == (True, "audit chain verified")
+    _assert_audit_chain_verified(access)
 
 
 def test_owner_governance_changes_are_audited(tmp_path) -> None:
@@ -130,7 +135,7 @@ def test_owner_governance_changes_are_audited(tmp_path) -> None:
     assert "data_contract.required" in actions
     assert "data_contract.project_owner_assigned" in actions
     assert "data_contract.evidence_owner_ceiling_set" in actions
-    assert access.verify_audit_chain() == (True, "audit chain verified")
+    _assert_audit_chain_verified(access)
 
 
 def test_contract_mutation_rolls_back_when_audit_chain_cannot_be_sealed(tmp_path) -> None:

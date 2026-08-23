@@ -11,6 +11,7 @@ from __future__ import annotations
 import os
 import sys
 from collections.abc import Sequence
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -167,10 +168,16 @@ def _command(arguments: list[str]) -> str:
 
 
 def _bootstrap_initial_operator(administration_type: Any) -> None:
+    global _LAST_IDENTITY
     if _LAST_REPOSITORY is None or _LAST_IDENTITY is None:
         raise RuntimeError("initial administrator bootstrap identity was not captured")
+    identity = replace(
+        _LAST_IDENTITY,
+        attributes={**_LAST_IDENTITY.attributes, "platform_admin": "true"},
+    )
+    _LAST_REPOSITORY.put_identity(identity)
+    _LAST_IDENTITY = identity
     administration = administration_type(_LAST_REPOSITORY)
-    identity = _LAST_IDENTITY
     organization_id = identity.organization_id
     administration.grant_role(identity.identity_id, "platform-operator", organization_id)
     administration.create_policy(
@@ -182,6 +189,7 @@ def _bootstrap_initial_operator(administration_type: Any) -> None:
             "view",
             "download",
             "upload",
+            "edit",
             "search",
             "submit_evidence",
             "view_submission",
@@ -192,9 +200,19 @@ def _bootstrap_initial_operator(administration_type: Any) -> None:
             "link",
             "unlink",
         ),
-        resource_types=("asset", "submission", "review_case", "media_association"),
+        resource_types=("asset", "collection", "submission", "review_case", "media_association"),
         organization_id=organization_id,
         purposes=("research",),
+    )
+    administration.create_policy(
+        name="Initial governed data-contract administrator",
+        effect=PolicyEffect.ALLOW,
+        source=PolicySource.ROLE,
+        role_id="platform-operator",
+        actions=("administer_contracts", "approve_contracts"),
+        resource_types=("contract",),
+        organization_id=organization_id,
+        purposes=("administration",),
     )
     administration.create_policy(
         name="Initial facilities planning and relocation access",

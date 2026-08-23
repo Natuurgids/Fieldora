@@ -92,6 +92,10 @@ class RuntimeGovernedFieldoraApi(CompletePlatformFieldoraApi):
 
         if upload is not None and response.status == 201:
             self._contract_completed_upload(upload, response, headers)
+        if method == "POST" and path == "/api/v1/staged-submissions" and response.status == 201:
+            contract_error = self._record_staged_access_context(response, headers)
+            if contract_error is not None:
+                return contract_error
 
         if method == "GET" and path == "/api/v1/media" and response.status == 200:
             return self._filter_media_list(response, headers)
@@ -156,37 +160,125 @@ class RuntimeGovernedFieldoraApi(CompletePlatformFieldoraApi):
         try:
             media_id = str(json.loads(response.body)["media_id"])
             subject = ContractSubject(ContractSubjectKind.ASSET, media_id)
-            # Mark first. If any subsequent derivation/persistence step fails, newly
-            # governed evidence remains preserved but undisclosed rather than falling
-            # through to the legacy PBAC-only compatibility behavior.
             self._barriers.require_contract(subject, reason="direct_governed_intake")
             if self._barriers.current(subject) is not None:
                 return
             _token, identity = self._identity(headers)
-            draft = self._default_contract_for_upload(identity, upload.project_id)
-            draft = ContractDraft(
-                draft.targets,
-                draft.inherited_contract_id,
-                draft.requires_project_owner_approval,
-                draft.required_owner_signatures,
-                source_project_id=draft.source_project_id,
-                subject=subject,
-            )
-            if draft.inherited_contract_id and not draft.targets:
-                targets = self._legacy_contract_targets(draft.inherited_contract_id)
-                draft = ContractDraft(
-                    targets,
+            draft = self._resolved_intake_draft(identity, upload.project_id, "")
+            self._barriers.create(
+                ContractDraft(
+                    draft.targets,
                     draft.inherited_contract_id,
-                    False,
-                    0,
+                    draft.requires_project_owner_approval,
+                    draft.required_owner_signatures,
                     source_project_id=draft.source_project_id,
                     subject=subject,
-                )
-            self._barriers.create(draft, requested_by=identity.identity_id)
+                ),
+                requested_by=identity.identity_id,
+            )
         except (KeyError, TypeError, ValueError, json.JSONDecodeError):
             # The media object is intentionally left contract-required. Operators can
             # inspect/remediate it without making the evidence visible prematurely.
             return
+
+    def _record_staged_access_context(
+        self, response: ApiResponse, headers: dict[str, str]
+    ) -> ApiResponse | None:
+        if self._staged_ingestion is None:
+            return ApiResponse.json(503, {"error": "staged_ingestion_unavailable"})
+        store = self._staged_ingestion.store
+        if not hasattr(store, "record_access_context"):
+            return ApiResponse.json(503, {"error": "staged_contract_context_unavailable"})
+        submission_id = ""
+        try:
+            payload = json.loads(response.body)
+            submission_data = payload.get("submission", payload)
+            submission_id = str(submission_data["submission_id"])
+            submission = store.submission(submission_id)
+            if submission is None:
+                raise KeyError(submission_id)
+            _token, identity = self._identity(headers)
+            draft = self._resolved_intake_draft(
+                identity,
+                submission.project_id,
+                submission.contract_id,
+            )
+            store.record_access_context(
+                submission_id,
+                requested_by=identity.identity_id,
+                draft=draft,
+            )
+            return None
+        except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+            if submission_id:
+                try:
+                    store.set_submission_state(submission_id, "contract_failed")
+                except (KeyError, TypeError, ValueError):
+                    pass
+            return ApiResponse.json(
+                409,
+                {
+                    "error": "staged_contract_context_failed",
+                    "detail": "submission was preserved but cannot proceed without its intake contract",
+                },
+            )
+
+    def _resolved_intake_draft(
+        self,
+        identity: Identity,
+        project_id: str,
+        explicit_contract_id: str,
+    ) -> ContractDraft:
+        contract_id = explicit_contract_id.strip()
+        if contract_id:
+            return ContractDraft(
+                self._legacy_contract_targets(contract_id),
+                contract_id,
+                False,
+                0,
+                source_project_id=project_id.strip(),
+            )
+        draft = self._default_contract_for_upload(identity, project_id)
+        if draft.inherited_contract_id and not draft.targets:
+            return ContractDraft(
+                self._legacy_contract_targets(draft.inherited_contract_id),
+                draft.inherited_contract_id,
+                False,
+                0,
+                source_project_id=draft.source_project_id,
+            )
+        return draft
+
+    def _ensure_staged_contract_bound(self, media_id: str) -> bool:
+        if self._barriers is None or self._staged_ingestion is None:
+            return True
+        store = self._staged_ingestion.store
+        if not hasattr(store, "pending_contract_context"):
+            return True
+        try:
+            context = store.pending_contract_context(media_id)
+            if context is None:
+                return True
+            subject = ContractSubject(ContractSubjectKind.ASSET, media_id)
+            self._barriers.require_contract(subject, reason="staged_governed_intake")
+            if self._barriers.current(subject) is None:
+                draft = context.draft()
+                self._barriers.create(
+                    ContractDraft(
+                        draft.targets,
+                        draft.inherited_contract_id,
+                        False,
+                        0,
+                        source_project_id=draft.source_project_id,
+                        subject=subject,
+                    ),
+                    requested_by=context.requested_by,
+                )
+            store.complete_contract_binding(media_id)
+            return True
+        except (KeyError, TypeError, ValueError):
+            # Pending staged evidence remains undisclosed until binding succeeds.
+            return False
 
     def _default_contract_for_upload(self, identity: Identity, project_id: str) -> ContractDraft:
         memberships = self._project_memberships(identity.identity_id)
@@ -236,6 +328,19 @@ class RuntimeGovernedFieldoraApi(CompletePlatformFieldoraApi):
             ),
         )
 
+    def _asset_allowed(
+        self,
+        media_id: str,
+        *,
+        organization_id: str,
+        project_ids: tuple[str, ...],
+    ) -> bool:
+        return self._ensure_staged_contract_bound(media_id) and self._barriers.allows_asset(
+            media_id,
+            organization_id=organization_id,
+            project_ids=project_ids,
+        )
+
     def _filter_media_list(
         self, response: ApiResponse, headers: dict[str, str]
     ) -> ApiResponse:
@@ -245,7 +350,7 @@ class RuntimeGovernedFieldoraApi(CompletePlatformFieldoraApi):
         items = [
             item
             for item in payload.get("items", [])
-            if self._barriers.allows_asset(
+            if self._asset_allowed(
                 str(item["media_id"]),
                 organization_id=identity.organization_id,
                 project_ids=memberships,
@@ -258,7 +363,7 @@ class RuntimeGovernedFieldoraApi(CompletePlatformFieldoraApi):
     ) -> ApiResponse:
         media_id = path.removeprefix("/api/v1/media/")
         _token, identity = self._identity(headers)
-        if not self._barriers.allows_asset(
+        if not self._asset_allowed(
             media_id,
             organization_id=identity.organization_id,
             project_ids=self._project_memberships(identity.identity_id),
@@ -276,7 +381,7 @@ class RuntimeGovernedFieldoraApi(CompletePlatformFieldoraApi):
         for item in payload.get("items", []):
             resource_type = str(item.get("resource_type", ""))
             resource_id = str(item.get("resource_id", ""))
-            if resource_type == "asset" and not self._barriers.allows_asset(
+            if resource_type == "asset" and not self._asset_allowed(
                 resource_id,
                 organization_id=identity.organization_id,
                 project_ids=memberships,

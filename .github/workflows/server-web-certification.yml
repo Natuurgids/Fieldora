@@ -23,7 +23,7 @@ permissions:
 jobs:
   server-web-certification:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -37,8 +37,8 @@ jobs:
       - name: Install certification dependencies
         run: python -m pip install --upgrade pip && python -m pip install -e ".[dev]"
 
-      - name: Install Chromium for browser wiring certification
-        run: python -m playwright install --with-deps chromium
+      - name: Install Chromium Firefox and WebKit for browser wiring certification
+        run: python -m playwright install --with-deps chromium firefox webkit
 
       - name: Ruff server web and parity compatibility
         run: >-
@@ -51,7 +51,7 @@ jobs:
           tests/test_server_web_compatibility.py
           tests/test_server_web_browser_navigation.py
 
-      - name: Server web and parity compatibility tests
+      - name: Server web and parity compatibility tests across browser engines
         run: >-
           python -m pytest -q
           tests/test_cross_client_parity_contract.py

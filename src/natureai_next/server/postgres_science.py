@@ -83,6 +83,8 @@ class PostgresScienceRepository:
         spec = self._OPERATION_TABLES.get(collection)
         if spec is None:
             return
+        from psycopg import sql
+
         table = spec[0]
         cursor.execute(
             "SELECT column_name FROM information_schema.columns WHERE table_name=%s ORDER BY ordinal_position",
@@ -91,22 +93,44 @@ class PostgresScienceRepository:
         allowed = {str(row[0]) for row in cursor.fetchall()}
         values = {key: value for key, value in record.items() if key in allowed}
         columns = tuple(values)
-        assignments = ",".join(f"{name}=EXCLUDED.{name}" for name in columns if name != "id")
-        placeholders = ",".join(["%s"] * len(columns))
-        cursor.execute(
-            f"INSERT INTO {table}({','.join(columns)}) VALUES({placeholders}) ON CONFLICT(id) DO UPDATE SET {assignments}",
-            tuple(values[name] for name in columns),
+        if not columns or "id" not in values:
+            raise ValueError("Operations record has no writable stable identity")
+        assignments = sql.SQL(",").join(
+            sql.SQL("{}=EXCLUDED.{}").format(sql.Identifier(name), sql.Identifier(name))
+            for name in columns
+            if name != "id"
         )
+        query = sql.SQL(
+            "INSERT INTO {}({}) VALUES({}) ON CONFLICT(id) DO UPDATE SET {}"
+        ).format(
+            sql.Identifier(table),
+            sql.SQL(",").join(sql.Identifier(name) for name in columns),
+            sql.SQL(",").join(sql.Placeholder() for _ in columns),
+            assignments,
+        )
+        cursor.execute(query, tuple(values[name] for name in columns))
 
     def records(self, collection: str) -> tuple[dict, ...]:
         if collection in self._OPERATION_TABLES:
+            from psycopg import sql
+
             table = self._OPERATION_TABLES[collection][0]
             with self._connect() as connection:
                 with connection.cursor() as cursor:
-                    cursor.execute(f"SELECT * FROM {table} ORDER BY created_at_us,id")
+                    cursor.execute(
+                        sql.SQL("SELECT * FROM {} ORDER BY created_at_us,id").format(
+                            sql.Identifier(table)
+                        )
+                    )
                     names = tuple(item[0] for item in cursor.description)
                     rows = cursor.fetchall()
-            return tuple({name: (str(value) if hasattr(value, "hex") else value) for name, value in zip(names, row)} for row in rows)
+            return tuple(
+                {
+                    name: (str(value) if hasattr(value, "hex") else value)
+                    for name, value in zip(names, row)
+                }
+                for row in rows
+            )
         with self._connect() as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
@@ -144,8 +168,11 @@ class PostgresScienceRepository:
                     "record_revision=excluded.record_revision,"
                     "updated_at_us=excluded.updated_at_us",
                     (
-                        collection, record_id, self._encode(record),
-                        revision, time.time_ns() // 1000,
+                        collection,
+                        record_id,
+                        self._encode(record),
+                        revision,
+                        time.time_ns() // 1000,
                     ),
                 )
                 cursor.execute(
@@ -200,7 +227,8 @@ class PostgresScienceRepository:
                 )
                 existing = {
                     (str(row[0]), str(row[1])): (
-                        self._encode(self._payload(row[2])), int(row[3])
+                        self._encode(self._payload(row[2])),
+                        int(row[3]),
                     )
                     for row in cursor.fetchall()
                 }
@@ -227,7 +255,10 @@ class PostgresScienceRepository:
                         "record_revision=excluded.record_revision,"
                         "updated_at_us=excluded.updated_at_us",
                         (
-                            collection, record_id, payload, record_revision,
+                            collection,
+                            record_id,
+                            payload,
+                            record_revision,
                             time.time_ns() // 1000,
                         ),
                     )

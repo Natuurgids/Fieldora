@@ -1,0 +1,96 @@
+name: Fieldora linked original range certification
+
+on:
+  pull_request:
+    paths:
+      - "src/natureai_next/bootstrap/storage_service_cli.py"
+      - "src/natureai_next/server/linked_storage_api.py"
+      - "src/natureai_next/server/postgres_linked_range_transfer.py"
+      - "src/natureai_next/server/storage_range_agent.py"
+      - "src/natureai_next/server/storage_service_api.py"
+      - "src/natureai_next/server/storage_service_runtime.py"
+      - "tests/test_linked_storage_api.py"
+      - "tests/test_postgres_linked_range_transfer.py"
+      - "tests/test_storage_range_agent.py"
+      - "tests/test_storage_service_range_api.py"
+      - ".github/workflows/linked-original-range-certification.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linked-original-range-certification:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: fieldora_range_test
+          POSTGRES_USER: fieldora_test
+          POSTGRES_PASSWORD: fieldora_test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U fieldora_test -d fieldora_range_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      FIELDORA_TEST_POSTGRES_DSN: >-
+        postgresql://fieldora_test:fieldora_test_password@127.0.0.1:5432/fieldora_range_test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install certification dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -e ".[dev,server-postgresql]"
+
+      - name: Ruff linked original range plane
+        run: >-
+          python -m ruff check
+          src/natureai_next/bootstrap/storage_service_cli.py
+          src/natureai_next/server/linked_storage_api.py
+          src/natureai_next/server/postgres_linked_range_transfer.py
+          src/natureai_next/server/storage_range_agent.py
+          src/natureai_next/server/storage_service_api.py
+          src/natureai_next/server/storage_service_runtime.py
+          tests/test_linked_storage_api.py
+          tests/test_postgres_linked_range_transfer.py
+          tests/test_storage_range_agent.py
+          tests/test_storage_service_range_api.py
+
+      - name: Bandit linked original range plane
+        run: >-
+          python -m bandit
+          src/natureai_next/bootstrap/storage_service_cli.py
+          src/natureai_next/server/linked_storage_api.py
+          src/natureai_next/server/postgres_linked_range_transfer.py
+          src/natureai_next/server/storage_range_agent.py
+          src/natureai_next/server/storage_service_api.py
+          src/natureai_next/server/storage_service_runtime.py
+          -c pyproject.toml -ll -ii
+
+      - name: Semgrep OWASP linked original range plane
+        run: >-
+          semgrep scan --config p/owasp-top-ten --metrics off
+          --severity ERROR --error
+          src/natureai_next/bootstrap/storage_service_cli.py
+          src/natureai_next/server/linked_storage_api.py
+          src/natureai_next/server/postgres_linked_range_transfer.py
+          src/natureai_next/server/storage_range_agent.py
+          src/natureai_next/server/storage_service_api.py
+          src/natureai_next/server/storage_service_runtime.py
+
+      - name: Linked original range integration and boundary tests
+        run: >-
+          python -m pytest -q
+          tests/test_linked_storage_api.py
+          tests/test_postgres_linked_range_transfer.py
+          tests/test_storage_range_agent.py
+          tests/test_storage_service_range_api.py

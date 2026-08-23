@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import hashlib
 from datetime import UTC, datetime
 
 import pytest
 
+from natureai_next.server.access_contracts import AccessTarget, AccessTargetKind, ContractDraft
 from natureai_next.server.operator_control import (
     ServiceState,
     SqliteOperatorRepository,
@@ -29,6 +31,67 @@ def test_projectless_staged_intake_is_first_class(tmp_path) -> None:
     assert submission.project_id == ""
     assert submission.organization_id == "institute-a"
     assert submission.state == "uploading"
+
+
+def test_staged_intake_persists_contract_snapshot_until_media_binding(tmp_path) -> None:
+    store = ProjectOptionalStagedIngestionStore(
+        tmp_path / "staging.sqlite3", tmp_path / "quarantine"
+    )
+    submission = store.create_submission(
+        subject_id="phone-user",
+        organization_id="institute-a",
+        project_id="project-a",
+        contract_id="contract-at-intake",
+        purpose="research",
+        publication_policy="review",
+        expected_files=1,
+    )
+    snapshot = store.record_access_context(
+        submission.submission_id,
+        requested_by="phone-user",
+        draft=ContractDraft(
+            (
+                AccessTarget(
+                    AccessTargetKind.ORGANIZATION_PROJECT,
+                    organization_id="institute-a",
+                    project_id="project-a",
+                ),
+            ),
+            "contract-at-intake",
+            False,
+            0,
+            source_project_id="project-a",
+        ),
+        now_epoch=10,
+    )
+    payload = b"a"
+    staged = store.begin_file(
+        submission.submission_id,
+        relative_path="a.jpg",
+        filename="a.jpg",
+        mime_type="image/jpeg",
+        expected_size=1,
+        expected_sha256=hashlib.sha256(payload).hexdigest(),
+    )
+    store.append(staged.staged_file_id, 0, payload)
+    store.record_validation(
+        staged.staged_file_id,
+        accepted=True,
+        detected_mime_type="image/jpeg",
+        evidence={"test": True},
+    )
+    store.mark_processing((staged.staged_file_id,))
+    store.mark_processed((staged.staged_file_id,))
+    store.mark_published(staged.staged_file_id, "media-1")
+
+    restored = store.pending_contract_context("media-1")
+    assert snapshot.targets == restored.targets
+    assert restored.requested_by == "phone-user"
+    assert restored.inherited_contract_id == "contract-at-intake"
+    assert restored.source_project_id == "project-a"
+
+    store.complete_contract_binding("media-1")
+    assert store.pending_contract_context("media-1") is None
 
 
 def test_submission_and_review_do_not_require_project(tmp_path) -> None:

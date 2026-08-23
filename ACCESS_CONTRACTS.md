@@ -59,4 +59,12 @@ When the project owner permits wider sharing, Fieldora requires two distinct own
 
 If an evidence-owner contract blocks the requested sharing scope, project-owner approval cannot override it and the amendment remains ineffective.
 
-All contract creations, owner-contract assignments, replacements, amendments, approvals, signatures, activation, supersession, and revocations are auditable governance events.
+## Audit and transaction integrity
+
+Contract governance is not merely logged after the fact. Mutations that affect the authoritative information barrier are transactionally coupled to Fieldora's tamper-evident access audit chain wherever they share the authoritative access database.
+
+Contract creation, replacement, sharing requests, owner attestations, activation, supersession, evidence-owner ceiling assignment, source-project owner assignment, contract-required intake state, and Collection/Dataset barrier membership changes are sealed in the audit chain before the governing transaction commits.
+
+If the audit event or its chain hash cannot be persisted, the governance mutation is rolled back. Fieldora must not accept an authoritative access-contract change that it cannot durably account for.
+
+This audit coupling applies to the SQLite reference access store and the PostgreSQL parity store through the same repository contract. PostgreSQL serializes audit-chain appends under its access-audit advisory transaction lock.

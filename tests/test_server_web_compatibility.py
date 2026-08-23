@@ -1,5 +1,8 @@
 from natureai_next.server.api import ApiResponse
 from natureai_next.server.contract_web_compatibility import patch_contract_web_response
+from natureai_next.server.navigation_web_compatibility import (
+    patch_navigation_web_response,
+)
 from natureai_next.server.web_compatibility import (
     openapi_document,
     patch_web_response,
@@ -51,6 +54,20 @@ def test_app_bundle_patch_turns_header_import_into_file_picker_action() -> None:
     assert patch_web_response("/app.js", patched).body == patched.body
 
 
+def test_navigation_patch_wires_history_and_cross_screen_project_opening() -> None:
+    original = ApiResponse(200, b"console.log('fieldora');", "text/javascript")
+    patched = patch_navigation_web_response("/app.js", original)
+
+    assert patched.status == 200
+    assert b"history.pushState" in patched.body
+    assert b'window.addEventListener("popstate"' in patched.body
+    assert b'window.addEventListener("hashchange"' in patched.body
+    assert b"Open project workspace" in patched.body
+    assert b"Open related project" in patched.body
+    assert b"openProject(row.dataset.portfolioId)" in patched.body
+    assert patch_navigation_web_response("/app.js", patched).body == patched.body
+
+
 def test_contract_web_patch_exposes_owner_precedence_and_double_attestation() -> None:
     original = ApiResponse(200, b"console.log('fieldora');", "text/javascript")
     patched = patch_contract_web_response("/app.js", original)
@@ -67,3 +84,4 @@ def test_non_app_response_is_untouched() -> None:
     original = ApiResponse.json(200, {"ok": True})
     assert patch_web_response("/api/v1/status", original) is original
     assert patch_contract_web_response("/api/v1/status", original) is original
+    assert patch_navigation_web_response("/api/v1/status", original) is original

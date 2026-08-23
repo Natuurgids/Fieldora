@@ -25,6 +25,7 @@ on:
       - "src/natureai_next/server/service_trust.py"
       - "src/natureai_next/server/service_runtime.py"
       - "src/natureai_next/server/postgres_jobs.py"
+      - "src/natureai_next/server/postgres_science.py"
       - "src/natureai_next/server/facility_platform.py"
       - "src/natureai_next/server/facility_platform_api.py"
       - "src/natureai_next/server/facility_web_compatibility.py"
@@ -36,6 +37,7 @@ on:
       - "tests/test_contract_audit.py"
       - "tests/test_contract_audit_postgres.py"
       - "tests/test_postgres_jobs_worker.py"
+      - "tests/test_postgres_science_concurrency.py"
       - "tests/test_recipient_contract_api.py"
       - "tests/test_platform_server_extensions.py"
       - "tests/test_server_web_compatibility.py"
@@ -102,6 +104,7 @@ jobs:
           src/natureai_next/server/service_trust.py
           src/natureai_next/server/service_runtime.py
           src/natureai_next/server/postgres_jobs.py
+          src/natureai_next/server/postgres_science.py
           src/natureai_next/server/facility_platform.py
           src/natureai_next/server/facility_platform_api.py
           src/natureai_next/server/facility_web_compatibility.py
@@ -113,6 +116,7 @@ jobs:
           tests/test_contract_audit.py
           tests/test_contract_audit_postgres.py
           tests/test_postgres_jobs_worker.py
+          tests/test_postgres_science_concurrency.py
           tests/test_recipient_contract_api.py
           tests/test_platform_server_extensions.py
           tests/test_server_web_compatibility.py
@@ -156,6 +160,7 @@ jobs:
           src/natureai_next/server/service_trust.py
           src/natureai_next/server/service_runtime.py
           src/natureai_next/server/postgres_jobs.py
+          src/natureai_next/server/postgres_science.py
           src/natureai_next/server/facility_platform.py
           src/natureai_next/server/facility_platform_api.py
           src/natureai_next/server/facility_web_compatibility.py
@@ -198,6 +203,7 @@ jobs:
           src/natureai_next/server/service_trust.py
           src/natureai_next/server/service_runtime.py
           src/natureai_next/server/postgres_jobs.py
+          src/natureai_next/server/postgres_science.py
           src/natureai_next/server/facility_platform.py
           src/natureai_next/server/facility_platform_api.py
           src/natureai_next/server/facility_web_compatibility.py
@@ -213,6 +219,7 @@ jobs:
           tests/test_contract_audit.py
           tests/test_contract_audit_postgres.py
           tests/test_postgres_jobs_worker.py
+          tests/test_postgres_science_concurrency.py
           tests/test_recipient_contract_api.py
           tests/test_platform_server_extensions.py
           tests/test_server_web_compatibility.py

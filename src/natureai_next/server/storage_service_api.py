@@ -15,6 +15,7 @@ from typing import Any, Protocol
 from natureai_next.server.api import ApiResponse
 from natureai_next.server.operator_control import OperatorRepository, ServiceState
 from natureai_next.server.postgres_linked_preview import PostgresLinkedPreviewLeases
+from natureai_next.server.postgres_linked_preview_store import PostgresLinkedPreviewStore
 from natureai_next.server.postgres_linked_storage import PostgresLinkedStorageRepository
 from natureai_next.server.storage_exchange import (
     PreviewState,
@@ -26,6 +27,7 @@ from natureai_next.server.storage_exchange import (
 
 _PEER_SERIAL = "fieldora-peer-certificate-serial"
 _HEARTBEAT_INTERVAL_SECONDS = 60
+_MAX_PREVIEW_BYTES = 2 * 1024 * 1024
 
 
 class StorageServiceApplication(Protocol):
@@ -40,10 +42,12 @@ class LinkedStorageServiceApi:
         catalogue: PostgresLinkedStorageRepository,
         leases: PostgresLinkedPreviewLeases,
         operators: OperatorRepository,
+        preview_store: PostgresLinkedPreviewStore | None = None,
     ) -> None:
         self._catalogue = catalogue
         self._leases = leases
         self._operators = operators
+        self._preview_store = preview_store
 
     def dispatch(
         self, method: str, target: str, headers: dict[str, str], body: bytes
@@ -54,6 +58,8 @@ class LinkedStorageServiceApi:
             return self._catalogue_batch(headers, body)
         if target == "/internal/v1/storage/previews/claim" and method == "POST":
             return self._claim_previews(headers, body)
+        if target == "/internal/v1/storage/previews/upload" and method == "PUT":
+            return self._upload_preview(headers, body)
         if target == "/internal/v1/storage/previews/complete" and method == "POST":
             return self._complete_preview(headers, body)
         return ApiResponse.json(404, {"error": "not_found"})
@@ -189,6 +195,51 @@ class LinkedStorageServiceApi:
         except (KeyError, PermissionError, ValueError) as exc:
             return ApiResponse.json(409, {"error": "preview_claim_rejected", "detail": str(exc)})
         return ApiResponse.json(200, {"items": [asdict(item) for item in items]})
+
+    def _upload_preview(self, headers: dict[str, str], body: bytes) -> ApiResponse:
+        if self._preview_store is None:
+            return ApiResponse.json(503, {"error": "preview_store_unavailable"})
+        if not 1 <= len(body) <= _MAX_PREVIEW_BYTES:
+            return ApiResponse.json(413, {"error": "preview_payload_size_invalid"})
+        service_id = headers.get("fieldora-service-id", "").strip()
+        organization_id = headers.get("fieldora-organization-id", "").strip()
+        storage_id = headers.get("fieldora-storage-id", "").strip()
+        worker_id = headers.get("fieldora-worker-id", "").strip()
+        media_id = headers.get("fieldora-media-id", "").strip()
+        digest = headers.get("fieldora-preview-sha256", "").strip().casefold()
+        mime_type = headers.get("content-type", "").split(";", 1)[0].strip().casefold()
+        if not all((service_id, organization_id, storage_id, worker_id, media_id, digest)):
+            return ApiResponse.json(400, {"error": "invalid_preview_upload_identity"})
+        _service, error = self._service(
+            headers, service_id=service_id, organization_id=organization_id
+        )
+        if error is not None:
+            return error
+        source = self._catalogue.source(storage_id)
+        if source is None or source.organization_id != organization_id or source.service_id != service_id:
+            return ApiResponse.json(403, {"error": "storage_source_forbidden"})
+        try:
+            stored = self._preview_store.put_leased_preview(
+                media_id=media_id,
+                storage_id=storage_id,
+                organization_id=organization_id,
+                service_id=service_id,
+                worker_id=worker_id,
+                mime_type=mime_type,
+                sha256=digest,
+                payload=body,
+            )
+        except (KeyError, PermissionError, ValueError) as exc:
+            return ApiResponse.json(409, {"error": "preview_upload_rejected", "detail": str(exc)})
+        return ApiResponse.json(
+            200,
+            {
+                "media_id": stored.media_id,
+                "thumbnail_etag": stored.sha256,
+                "size_bytes": stored.size_bytes,
+                "state": PreviewState.READY.value,
+            },
+        )
 
     def _complete_preview(self, headers: dict[str, str], body: bytes) -> ApiResponse:
         try:

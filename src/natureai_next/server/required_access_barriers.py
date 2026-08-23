@@ -10,7 +10,9 @@ from __future__ import annotations
 import json
 import time
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
+from natureai_next.server.access_audit_events import append_governance_audit
 from natureai_next.server.access_barriers import AccessBarrierRepository
 from natureai_next.server.access_contracts import (
     AccessTarget,
@@ -80,15 +82,35 @@ class RequiredAccessBarrierRepository(AccessBarrierRepository):
         *,
         reason: str = "governed_intake",
         now_epoch: int | None = None,
+        actor_id: str = "fieldora-system",
     ) -> None:
         now = int(time.time()) if now_epoch is None else int(now_epoch)
+        actor = actor_id.strip()
+        if not actor:
+            raise ValueError("actor_id is required")
         connection = self._factory.connect()
         try:
-            connection.execute(
+            connection.execute("BEGIN IMMEDIATE")
+            cursor = connection.execute(
                 "INSERT INTO access_contract_requirements VALUES(?,?,?,?) "
                 "ON CONFLICT(subject_kind,subject_id) DO NOTHING",
                 (subject.kind.value, subject.subject_id, now, reason[:200]),
             )
+            if cursor.rowcount:
+                append_governance_audit(
+                    connection,
+                    subject_id=actor,
+                    action="data_contract.required",
+                    resource_type=subject.kind.value,
+                    resource_id=subject.subject_id,
+                    reason="new governed evidence requires an active access contract",
+                    request={"requirement_reason": reason[:200]},
+                    occurred_at_utc=_epoch_utc(now),
+                )
+            connection.commit()
+        except BaseException:
+            connection.rollback()
+            raise
         finally:
             connection.close()
 
@@ -120,6 +142,11 @@ class RequiredAccessBarrierRepository(AccessBarrierRepository):
         now = int(time.time()) if now_epoch is None else int(now_epoch)
         connection = self._factory.connect()
         try:
+            connection.execute("BEGIN IMMEDIATE")
+            previous = connection.execute(
+                "SELECT owner_identity FROM access_project_contract_owners WHERE project_id=?",
+                (project,),
+            ).fetchone()
             connection.execute(
                 "INSERT INTO access_project_contract_owners VALUES(?,?,?,?) "
                 "ON CONFLICT(project_id) DO UPDATE SET "
@@ -128,6 +155,25 @@ class RequiredAccessBarrierRepository(AccessBarrierRepository):
                 "assigned_at_epoch=excluded.assigned_at_epoch",
                 (project, owner, actor, now),
             )
+            append_governance_audit(
+                connection,
+                subject_id=actor,
+                action="data_contract.project_owner_assigned",
+                resource_type="project",
+                resource_id=project,
+                reason="source project owner for governed sharing changed",
+                request={
+                    "owner_identity": owner,
+                    "previous_owner_identity": (
+                        "" if previous is None else str(previous["owner_identity"])
+                    ),
+                },
+                occurred_at_utc=_epoch_utc(now),
+            )
+            connection.commit()
+        except BaseException:
+            connection.rollback()
+            raise
         finally:
             connection.close()
         result = self.project_owner(project)
@@ -161,19 +207,18 @@ class RequiredAccessBarrierRepository(AccessBarrierRepository):
             raise ValueError("evidence owner, assigning identity and targets are required")
         now = int(time.time()) if now_epoch is None else int(now_epoch)
         payload = json.dumps(
-            [
-                {
-                    "kind": target.kind.value,
-                    "organization_id": target.organization_id,
-                    "project_id": target.project_id,
-                }
-                for target in targets
-            ],
+            _target_dicts(targets),
             sort_keys=True,
             separators=(",", ":"),
         )
         connection = self._factory.connect()
         try:
+            connection.execute("BEGIN IMMEDIATE")
+            previous = connection.execute(
+                "SELECT owner_identity,targets_json FROM access_evidence_owner_contracts "
+                "WHERE subject_kind=? AND subject_id=?",
+                (subject.kind.value, subject.subject_id),
+            ).fetchone()
             connection.execute(
                 "INSERT INTO access_evidence_owner_contracts VALUES(?,?,?,?,?,?) "
                 "ON CONFLICT(subject_kind,subject_id) DO UPDATE SET "
@@ -181,6 +226,27 @@ class RequiredAccessBarrierRepository(AccessBarrierRepository):
                 "assigned_by=excluded.assigned_by,assigned_at_epoch=excluded.assigned_at_epoch",
                 (subject.kind.value, subject.subject_id, owner, payload, actor, now),
             )
+            append_governance_audit(
+                connection,
+                subject_id=actor,
+                action="data_contract.evidence_owner_ceiling_set",
+                resource_type=subject.kind.value,
+                resource_id=subject.subject_id,
+                reason="evidence-owner contract defines upstream sharing ceiling",
+                request={
+                    "owner_identity": owner,
+                    "targets": _target_dicts(targets),
+                    "replaced": previous is not None,
+                    "previous_owner_identity": (
+                        "" if previous is None else str(previous["owner_identity"])
+                    ),
+                },
+                occurred_at_utc=_epoch_utc(now),
+            )
+            connection.commit()
+        except BaseException:
+            connection.rollback()
+            raise
         finally:
             connection.close()
         result = self.evidence_owner_contract(subject)
@@ -337,7 +403,10 @@ def _targets_allow(
     for target in targets:
         if target.kind is AccessTargetKind.ALL:
             return True
-        if target.kind is AccessTargetKind.ORGANIZATION and target.organization_id == organization_id:
+        if (
+            target.kind is AccessTargetKind.ORGANIZATION
+            and target.organization_id == organization_id
+        ):
             return True
         if target.kind is AccessTargetKind.PROJECT and target.project_id in projects:
             return True
@@ -362,7 +431,10 @@ def _target_contains(ceiling: AccessTarget, requested: AccessTarget) -> bool:
             and requested.organization_id == ceiling.organization_id
         )
     if ceiling.kind is AccessTargetKind.PROJECT:
-        return requested.kind is AccessTargetKind.PROJECT and requested.project_id == ceiling.project_id
+        return (
+            requested.kind is AccessTargetKind.PROJECT
+            and requested.project_id == ceiling.project_id
+        )
     if ceiling.kind is AccessTargetKind.ORGANIZATION_PROJECT:
         return (
             requested.kind is AccessTargetKind.ORGANIZATION_PROJECT
@@ -370,3 +442,18 @@ def _target_contains(ceiling: AccessTarget, requested: AccessTarget) -> bool:
             and requested.project_id == ceiling.project_id
         )
     return False
+
+
+def _target_dicts(targets: tuple[AccessTarget, ...]) -> list[dict[str, str]]:
+    return [
+        {
+            "kind": target.kind.value,
+            "organization_id": target.organization_id,
+            "project_id": target.project_id,
+        }
+        for target in targets
+    ]
+
+
+def _epoch_utc(value: int) -> str:
+    return datetime.fromtimestamp(value, tz=UTC).isoformat()

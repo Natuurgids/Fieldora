@@ -37,7 +37,9 @@ def _web_fixture(tmp_path: Path):
         def log_message(self, _format: str, *_args: object) -> None:
             pass
 
-    handler = lambda *args, **kwargs: Handler(*args, directory=str(tmp_path), **kwargs)
+    def handler(*args: object, **kwargs: object):
+        return Handler(*args, directory=str(tmp_path), **kwargs)
+
     server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()

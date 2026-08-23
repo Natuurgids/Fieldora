@@ -1,7 +1,7 @@
 """Governed exchange protocol between Fieldora and organisation storage services.
 
 The internal Fieldora server never exposes or directly trusts a client-supplied NAS
-path.  A managed storage service owns the filesystem mount, reports catalogue metadata,
+path. A managed storage service owns the filesystem mount, reports catalogue metadata,
 and serves bytes/previews only for Fieldora-authorized requests over the service trust
 boundary.
 """
@@ -69,6 +69,7 @@ class StorageCatalogueItem:
     sha256: str = ""
     thumbnail_state: PreviewState = PreviewState.MISSING
     thumbnail_etag: str = ""
+    project_id: str = ""
     metadata: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -81,6 +82,8 @@ class StorageCatalogueItem:
             raise ValueError("invalid catalogue object size/time")
         if self.sha256 and not _valid_sha256(self.sha256):
             raise ValueError("invalid catalogue sha256")
+        if self.project_id != self.project_id.strip() or len(self.project_id) > 512:
+            raise ValueError("invalid catalogue project scope")
 
 
 @dataclass(frozen=True, slots=True)
@@ -120,6 +123,7 @@ class StorageCatalogueBatch:
                     "sha256": item.sha256,
                     "thumbnail_state": item.thumbnail_state.value,
                     "thumbnail_etag": item.thumbnail_etag,
+                    "project_id": item.project_id,
                     "metadata": item.metadata,
                 }
                 for item in self.items

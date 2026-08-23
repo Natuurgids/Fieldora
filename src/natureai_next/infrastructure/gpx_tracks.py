@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-import xml.etree.ElementTree as ET
 from pathlib import Path
+
+from defusedxml import ElementTree as ET
 
 from natureai_next.domain.maps import GpsTrack, GpsTrackPoint
 

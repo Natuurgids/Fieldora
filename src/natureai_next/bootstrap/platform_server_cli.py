@@ -28,9 +28,14 @@ from natureai_next.server.operator_control import (
     SqliteOperatorRepository,
 )
 from natureai_next.server.platform_extensions import ProjectOptionalStagedIngestionStore
+from natureai_next.server.postgres_linked_preview import PostgresLinkedPreviewLeases
 from natureai_next.server.postgres_linked_storage import PostgresLinkedStorageRepository
 from natureai_next.server.postgres_offline_sync import PostgresOfflineSyncStore
 from natureai_next.server.service_runtime import ServiceRuntimeSupervisor
+from natureai_next.server.storage_service_runtime import (
+    StorageServiceListenerConfig,
+    StorageServiceListenerRuntime,
+)
 
 _LAST_REPOSITORY: Any = None
 _LAST_IDENTITY: Any = None
@@ -47,6 +52,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     supervisor = _runtime_supervisor(arguments, command)
     sync_factory = _offline_sync_factory(arguments, command)
     linked_storage_factory = _linked_storage_factory(arguments, command)
+    storage_listener = _storage_service_listener(arguments, command)
     base_administration = server_cli.AccessAdministrationService
     base_run_one_job = server_cli.run_one_job
 
@@ -77,8 +83,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         if supervisor is not None:
             supervisor.start()
+        if storage_listener is not None:
+            storage_listener.start()
+            print(f"Fieldora storage-service mTLS listener: {storage_listener.endpoint}")
         result = server_cli.main(arguments)
     finally:
+        if storage_listener is not None:
+            storage_listener.stop()
         if supervisor is not None:
             supervisor.stop()
         OfflineFirstFieldoraApi.configure_offline_sync(None)
@@ -145,6 +156,49 @@ def _linked_storage_factory(
         return None
     connect = _science_postgres_connect(arguments, capability="linked storage catalogue")
     return lambda: PostgresLinkedStorageRepository(connect)
+
+
+def _storage_service_listener(
+    arguments: list[str], command: str
+) -> StorageServiceListenerRuntime | None:
+    if command != "serve":
+        return None
+    enabled = os.environ.get("FIELDORA_STORAGE_SERVICE_ENABLED", "").strip().casefold()
+    if enabled not in {"1", "true", "yes", "on"}:
+        return None
+    if (_argument_value(arguments, "--science-backend") or "sqlite") != "postgresql":
+        raise SystemExit("storage service listener requires --science-backend postgresql")
+    if (_argument_value(arguments, "--governance-backend") or "sqlite") != "postgresql":
+        raise SystemExit("storage service listener requires --governance-backend postgresql")
+
+    host = os.environ.get("FIELDORA_STORAGE_SERVICE_HOST", "0.0.0.0").strip()
+    try:
+        port = int(os.environ.get("FIELDORA_STORAGE_SERVICE_PORT", "8766"))
+    except ValueError as exc:
+        raise SystemExit("FIELDORA_STORAGE_SERVICE_PORT must be an integer") from exc
+    certificate = Path(os.environ.get("FIELDORA_STORAGE_SERVICE_CERTIFICATE", ""))
+    private_key = Path(os.environ.get("FIELDORA_STORAGE_SERVICE_PRIVATE_KEY", ""))
+    client_ca = Path(os.environ.get("FIELDORA_STORAGE_SERVICE_CLIENT_CA", ""))
+    config = StorageServiceListenerConfig(
+        host=host,
+        port=port,
+        certificate=certificate,
+        private_key=private_key,
+        client_ca=client_ca,
+    )
+    try:
+        config.validate()
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
+
+    connect = _science_postgres_connect(arguments, capability="linked storage service")
+    operators = _operator_repository(arguments)
+    return StorageServiceListenerRuntime(
+        config,
+        PostgresLinkedStorageRepository(connect),
+        PostgresLinkedPreviewLeases(connect),
+        operators,
+    )
 
 
 def _runtime_supervisor(

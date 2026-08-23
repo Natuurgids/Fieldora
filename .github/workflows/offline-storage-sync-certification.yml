@@ -26,6 +26,7 @@ on:
       - "tests/test_postgres_linked_storage.py"
       - "tests/test_postgres_linked_preview.py"
       - "tests/test_storage_exchange.py"
+      - "tests/test_service_http.py"
       - "tests/test_storage_service_api.py"
       - "tests/test_storage_service_runtime.py"
       - ".github/workflows/offline-storage-sync-certification.yml"
@@ -94,6 +95,7 @@ jobs:
             tests/test_postgres_linked_storage.py \
             tests/test_postgres_linked_preview.py \
             tests/test_storage_exchange.py \
+            tests/test_service_http.py \
             tests/test_storage_service_api.py \
             tests/test_storage_service_runtime.py
           python -m ruff check --ignore UP035 src/natureai_next/server/linked_storage.py
@@ -146,5 +148,6 @@ jobs:
           tests/test_postgres_linked_storage.py
           tests/test_postgres_linked_preview.py
           tests/test_storage_exchange.py
+          tests/test_service_http.py
           tests/test_storage_service_api.py
           tests/test_storage_service_runtime.py

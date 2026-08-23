@@ -28,6 +28,22 @@ def test_storage_listener_requires_postgres_governance(monkeypatch: pytest.Monke
         )
 
 
+def test_storage_listener_requires_explicit_bind_host(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("FIELDORA_STORAGE_SERVICE_ENABLED", "true")
+    monkeypatch.delenv("FIELDORA_STORAGE_SERVICE_HOST", raising=False)
+    with pytest.raises(SystemExit, match="FIELDORA_STORAGE_SERVICE_HOST"):
+        _storage_service_listener(
+            [
+                "serve",
+                "--science-backend",
+                "postgresql",
+                "--governance-backend",
+                "postgresql",
+            ],
+            "serve",
+        )
+
+
 def test_listener_config_rejects_missing_tls_material(tmp_path: Path) -> None:
     config = StorageServiceListenerConfig(
         host="127.0.0.1",

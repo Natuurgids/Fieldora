@@ -3,6 +3,9 @@
 These records complement PBAC. PBAC answers whether an identity may perform an action;
 an information-barrier contract answers whether this governed evidence is inside the
 identity's permitted organization/project wall. The two checks are cumulative.
+
+Collection walls are cumulative with asset walls. An asset-specific contract cannot
+silently bypass a restricted collection that still contains the asset.
 """
 
 from __future__ import annotations
@@ -43,7 +46,14 @@ class DataAccessContract:
 
     def as_dict(self) -> dict[str, object]:
         value = asdict(self)
-        value["targets"] = [asdict(item) for item in self.targets]
+        value["targets"] = [
+            {
+                "kind": item.kind.value,
+                "organization_id": item.organization_id,
+                "project_id": item.project_id,
+            }
+            for item in self.targets
+        ]
         return value
 
 
@@ -86,6 +96,13 @@ _SCHEMA = (
         signed_at_epoch BIGINT NOT NULL,
         PRIMARY KEY(contract_id,signature_id)
     )""",
+    """CREATE TABLE IF NOT EXISTS access_collection_assets(
+        collection_id TEXT NOT NULL,
+        asset_id TEXT NOT NULL,
+        PRIMARY KEY(collection_id,asset_id)
+    )""",
+    """CREATE INDEX IF NOT EXISTS ix_access_collection_assets_asset
+        ON access_collection_assets(asset_id,collection_id)""",
 )
 
 
@@ -290,6 +307,40 @@ class AccessBarrierRepository:
             connection.close()
         return tuple(ContractSignature(*row) for row in rows)
 
+    def link_collection_asset(self, collection_id: str, asset_id: str) -> None:
+        if not collection_id.strip() or not asset_id.strip():
+            raise ValueError("collection_id and asset_id are required")
+        connection = self._factory.connect()
+        try:
+            connection.execute(
+                "INSERT OR IGNORE INTO access_collection_assets VALUES(?,?)",
+                (collection_id.strip(), asset_id.strip()),
+            )
+        finally:
+            connection.close()
+
+    def unlink_collection_asset(self, collection_id: str, asset_id: str) -> None:
+        connection = self._factory.connect()
+        try:
+            connection.execute(
+                "DELETE FROM access_collection_assets WHERE collection_id=? AND asset_id=?",
+                (collection_id.strip(), asset_id.strip()),
+            )
+        finally:
+            connection.close()
+
+    def collections_for_asset(self, asset_id: str) -> tuple[str, ...]:
+        connection = self._factory.connect(read_only=True)
+        try:
+            rows = connection.execute(
+                "SELECT collection_id FROM access_collection_assets "
+                "WHERE asset_id=? ORDER BY collection_id",
+                (asset_id.strip(),),
+            ).fetchall()
+        finally:
+            connection.close()
+        return tuple(str(row[0]) for row in rows)
+
     def allows(
         self,
         subject: ContractSubject,
@@ -298,28 +349,37 @@ class AccessBarrierRepository:
         project_ids: tuple[str, ...] = (),
     ) -> bool:
         contract = self.current(subject)
-        if contract is None:
-            # Legacy/uncontracted evidence remains governed by PBAC alone. New intake
-            # is expected to receive an explicit contract before publication.
+        return contract is None or _contract_allows(
+            contract,
+            organization_id=organization_id,
+            project_ids=project_ids,
+        )
+
+    def allows_asset(
+        self,
+        asset_id: str,
+        *,
+        organization_id: str,
+        project_ids: tuple[str, ...] = (),
+    ) -> bool:
+        """Require every active asset/collection barrier covering the asset to allow."""
+        subjects = [ContractSubject(ContractSubjectKind.ASSET, asset_id)]
+        subjects.extend(
+            ContractSubject(ContractSubjectKind.COLLECTION, collection_id)
+            for collection_id in self.collections_for_asset(asset_id)
+        )
+        active = [contract for subject in subjects if (contract := self.current(subject))]
+        if not active:
+            # Legacy evidence remains PBAC-governed. New intake should be contracted.
             return True
-        projects = {value.strip() for value in project_ids if value.strip()}
-        for target in contract.targets:
-            if target.kind is AccessTargetKind.ALL:
-                return True
-            if (
-                target.kind is AccessTargetKind.ORGANIZATION
-                and target.organization_id == organization_id
-            ):
-                return True
-            if target.kind is AccessTargetKind.PROJECT and target.project_id in projects:
-                return True
-            if (
-                target.kind is AccessTargetKind.ORGANIZATION_PROJECT
-                and target.organization_id == organization_id
-                and target.project_id in projects
-            ):
-                return True
-        return False
+        return all(
+            _contract_allows(
+                contract,
+                organization_id=organization_id,
+                project_ids=project_ids,
+            )
+            for contract in active
+        )
 
     @staticmethod
     def _supersede_other_active(
@@ -339,6 +399,32 @@ class AccessBarrierRepository:
             "WHERE subject_kind=? AND subject_id=? AND status='active' AND contract_id<>?",
             (subject.kind.value, subject.subject_id, new_contract_id),
         )
+
+
+def _contract_allows(
+    contract: DataAccessContract,
+    *,
+    organization_id: str,
+    project_ids: tuple[str, ...],
+) -> bool:
+    projects = {value.strip() for value in project_ids if value.strip()}
+    for target in contract.targets:
+        if target.kind is AccessTargetKind.ALL:
+            return True
+        if (
+            target.kind is AccessTargetKind.ORGANIZATION
+            and target.organization_id == organization_id
+        ):
+            return True
+        if target.kind is AccessTargetKind.PROJECT and target.project_id in projects:
+            return True
+        if (
+            target.kind is AccessTargetKind.ORGANIZATION_PROJECT
+            and target.organization_id == organization_id
+            and target.project_id in projects
+        ):
+            return True
+    return False
 
 
 def _contract_row(row: Any) -> DataAccessContract:

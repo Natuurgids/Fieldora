@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import argparse
 import time
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Sequence
 
 from natureai_next.server.lifecycle import ShutdownCoordinator
 from natureai_next.server.storage_service_agent import LinkedStorageAgent, StorageAgentConfig

@@ -3,7 +3,9 @@ name: Fieldora offline storage and sync certification
 on:
   pull_request:
     paths:
+      - "pyproject.toml"
       - "src/natureai_next/bootstrap/platform_server_cli.py"
+      - "src/natureai_next/bootstrap/storage_service_cli.py"
       - "src/natureai_next/domain/synchronization.py"
       - "src/natureai_next/server/offline_first_api.py"
       - "src/natureai_next/server/offline_sync.py"
@@ -16,6 +18,7 @@ on:
       - "src/natureai_next/server/storage_exchange.py"
       - "src/natureai_next/server/service_http.py"
       - "src/natureai_next/server/storage_service_api.py"
+      - "src/natureai_next/server/storage_service_agent.py"
       - "src/natureai_next/server/storage_service_runtime.py"
       - "tests/test_offline_first_composition.py"
       - "tests/test_offline_sync.py"
@@ -28,6 +31,7 @@ on:
       - "tests/test_storage_exchange.py"
       - "tests/test_service_http.py"
       - "tests/test_storage_service_api.py"
+      - "tests/test_storage_service_agent.py"
       - "tests/test_storage_service_runtime.py"
       - ".github/workflows/offline-storage-sync-certification.yml"
   workflow_dispatch:
@@ -74,6 +78,7 @@ jobs:
         run: |
           python -m ruff check \
             src/natureai_next/bootstrap/platform_server_cli.py \
+            src/natureai_next/bootstrap/storage_service_cli.py \
             src/natureai_next/domain/synchronization.py \
             src/natureai_next/server/offline_first_api.py \
             src/natureai_next/server/offline_sync.py \
@@ -85,6 +90,7 @@ jobs:
             src/natureai_next/server/storage_exchange.py \
             src/natureai_next/server/service_http.py \
             src/natureai_next/server/storage_service_api.py \
+            src/natureai_next/server/storage_service_agent.py \
             src/natureai_next/server/storage_service_runtime.py \
             tests/test_offline_first_composition.py \
             tests/test_offline_sync.py \
@@ -97,6 +103,7 @@ jobs:
             tests/test_storage_exchange.py \
             tests/test_service_http.py \
             tests/test_storage_service_api.py \
+            tests/test_storage_service_agent.py \
             tests/test_storage_service_runtime.py
           python -m ruff check --ignore UP035 src/natureai_next/server/linked_storage.py
 
@@ -104,6 +111,7 @@ jobs:
         run: >-
           python -m bandit
           src/natureai_next/bootstrap/platform_server_cli.py
+          src/natureai_next/bootstrap/storage_service_cli.py
           src/natureai_next/server/offline_first_api.py
           src/natureai_next/server/offline_sync.py
           src/natureai_next/server/offline_sync_api.py
@@ -115,6 +123,7 @@ jobs:
           src/natureai_next/server/storage_exchange.py
           src/natureai_next/server/service_http.py
           src/natureai_next/server/storage_service_api.py
+          src/natureai_next/server/storage_service_agent.py
           src/natureai_next/server/storage_service_runtime.py
           -c pyproject.toml -ll -ii
 
@@ -123,6 +132,7 @@ jobs:
           semgrep scan --config p/owasp-top-ten --metrics off
           --severity ERROR --error
           src/natureai_next/bootstrap/platform_server_cli.py
+          src/natureai_next/bootstrap/storage_service_cli.py
           src/natureai_next/server/offline_first_api.py
           src/natureai_next/server/offline_sync.py
           src/natureai_next/server/offline_sync_api.py
@@ -134,6 +144,7 @@ jobs:
           src/natureai_next/server/storage_exchange.py
           src/natureai_next/server/service_http.py
           src/natureai_next/server/storage_service_api.py
+          src/natureai_next/server/storage_service_agent.py
           src/natureai_next/server/storage_service_runtime.py
 
       - name: Offline storage and synchronization tests
@@ -150,4 +161,5 @@ jobs:
           tests/test_storage_exchange.py
           tests/test_service_http.py
           tests/test_storage_service_api.py
+          tests/test_storage_service_agent.py
           tests/test_storage_service_runtime.py

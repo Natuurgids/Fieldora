@@ -19,6 +19,7 @@ from natureai_next import __version__
 from natureai_next.bootstrap.paths import resolve_application_paths
 from natureai_next.domain.access_control import PolicyEffect, PolicySource
 from natureai_next.server.browser_functionality_api import BrowserFunctionalityFieldoraApi
+from natureai_next.server.linked_storage_api import LinkedStorageRepository
 from natureai_next.server.offline_first_api import OfflineFirstFieldoraApi
 from natureai_next.server.offline_sync import OfflineSyncStore
 from natureai_next.server.offline_sync_api import OfflineSyncRepository
@@ -27,6 +28,7 @@ from natureai_next.server.operator_control import (
     SqliteOperatorRepository,
 )
 from natureai_next.server.platform_extensions import ProjectOptionalStagedIngestionStore
+from natureai_next.server.postgres_linked_storage import PostgresLinkedStorageRepository
 from natureai_next.server.postgres_offline_sync import PostgresOfflineSyncStore
 from natureai_next.server.service_runtime import ServiceRuntimeSupervisor
 
@@ -44,6 +46,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     command = _command(arguments)
     supervisor = _runtime_supervisor(arguments, command)
     sync_factory = _offline_sync_factory(arguments, command)
+    linked_storage_factory = _linked_storage_factory(arguments, command)
     base_administration = server_cli.AccessAdministrationService
     base_run_one_job = server_cli.run_one_job
 
@@ -65,6 +68,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return base_run_one_job(*args, **kwargs)
 
     OfflineFirstFieldoraApi.configure_offline_sync(sync_factory)
+    OfflineFirstFieldoraApi.configure_linked_storage(linked_storage_factory)
     server_cli.FieldoraApi = OfflineFirstFieldoraApi
     server_cli.StagedIngestionStore = ProjectOptionalStagedIngestionStore
     server_cli.AccessAdministrationService = TrackingAdministration
@@ -78,6 +82,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         if supervisor is not None:
             supervisor.stop()
         OfflineFirstFieldoraApi.configure_offline_sync(None)
+        OfflineFirstFieldoraApi.configure_linked_storage(None)
         server_cli.FieldoraApi = BrowserFunctionalityFieldoraApi
         server_cli.StagedIngestionStore = ProjectOptionalStagedIngestionStore
         server_cli.AccessAdministrationService = base_administration
@@ -88,6 +93,30 @@ def main(argv: Sequence[str] | None = None) -> int:
     return result
 
 
+def _science_postgres_connect(
+    arguments: list[str], *, capability: str
+) -> Callable[[], Any]:
+    dsn_name = _argument_value(arguments, "--postgres-science-dsn-file")
+    if not dsn_name:
+        raise SystemExit(
+            f"{capability} requires --postgres-science-dsn-file "
+            "with --science-backend postgresql"
+        )
+    dsn_file = Path(dsn_name)
+    if not dsn_file.is_file() or dsn_file.stat().st_size > 16_384:
+        raise SystemExit(f"PostgreSQL Science DSN file is invalid for {capability}")
+    dsn = dsn_file.read_text(encoding="utf-8").strip()
+    if not dsn:
+        raise SystemExit(f"PostgreSQL Science DSN file is empty for {capability}")
+    try:
+        import psycopg
+    except ImportError as exc:
+        raise SystemExit(
+            f"PostgreSQL {capability} requires the server-postgresql dependency"
+        ) from exc
+    return lambda: psycopg.connect(dsn, connect_timeout=10)
+
+
 def _offline_sync_factory(
     arguments: list[str], command: str
 ) -> Callable[[], OfflineSyncRepository] | None:
@@ -95,31 +124,8 @@ def _offline_sync_factory(
         return None
     science_backend = _argument_value(arguments, "--science-backend") or "sqlite"
     if science_backend == "postgresql":
-        dsn_name = _argument_value(arguments, "--postgres-science-dsn-file")
-        if not dsn_name:
-            raise SystemExit(
-                "offline synchronization requires --postgres-science-dsn-file "
-                "with --science-backend postgresql"
-            )
-        dsn_file = Path(dsn_name)
-        if not dsn_file.is_file() or dsn_file.stat().st_size > 16_384:
-            raise SystemExit("PostgreSQL Science DSN file is invalid for synchronization")
-        dsn = dsn_file.read_text(encoding="utf-8").strip()
-        if not dsn:
-            raise SystemExit("PostgreSQL Science DSN file is empty for synchronization")
-        try:
-            import psycopg
-        except ImportError as exc:
-            raise SystemExit(
-                "PostgreSQL synchronization requires the server-postgresql dependency"
-            ) from exc
-
-        def postgres_factory() -> OfflineSyncRepository:
-            return PostgresOfflineSyncStore(
-                lambda: psycopg.connect(dsn, connect_timeout=10)
-            )
-
-        return postgres_factory
+        connect = _science_postgres_connect(arguments, capability="synchronization")
+        return lambda: PostgresOfflineSyncStore(connect)
 
     root_name = _argument_value(arguments, "--data-root")
     root = None if not root_name else Path(root_name)
@@ -127,6 +133,18 @@ def _offline_sync_factory(
     paths.ensure_directories()
     database_path = paths.subsystem_databases_dir / "offline-sync.sqlite3"
     return lambda: OfflineSyncStore(database_path)
+
+
+def _linked_storage_factory(
+    arguments: list[str], command: str
+) -> Callable[[], LinkedStorageRepository] | None:
+    if command != "serve":
+        return None
+    science_backend = _argument_value(arguments, "--science-backend") or "sqlite"
+    if science_backend != "postgresql":
+        return None
+    connect = _science_postgres_connect(arguments, capability="linked storage catalogue")
+    return lambda: PostgresLinkedStorageRepository(connect)
 
 
 def _runtime_supervisor(

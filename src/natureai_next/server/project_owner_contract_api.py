@@ -9,6 +9,7 @@ from urllib.parse import urlsplit
 from natureai_next.domain.access_control import AccessRequest
 from natureai_next.server.access_contracts import ContractSubject, ContractSubjectKind
 from natureai_next.server.api import ApiResponse
+from natureai_next.server.contract_web_compatibility import patch_contract_web_response
 from natureai_next.server.recipient_contract_api import RecipientContractFieldoraApi
 
 
@@ -26,19 +27,17 @@ class ProjectOwnerContractFieldoraApi(RecipientContractFieldoraApi):
             if blocked is not None:
                 return blocked
 
-        response = super().dispatch(method, target, headers, body)
+        response = patch_contract_web_response(
+            target, super().dispatch(method, target, headers, body)
+        )
         if response.status != 404 or self._barriers is None:
             return response
 
         parts = [part for part in path.split("/") if part]
-        project_response = self._project_owner_route(
-            method, parts, headers, body
-        )
+        project_response = self._project_owner_route(method, parts, headers, body)
         if project_response is not None:
             return project_response
-        evidence_response = self._evidence_owner_route(
-            method, parts, headers, body
-        )
+        evidence_response = self._evidence_owner_route(method, parts, headers, body)
         return response if evidence_response is None else evidence_response
 
     def _sharing_ceiling_preflight(self, body: bytes) -> ApiResponse | None:

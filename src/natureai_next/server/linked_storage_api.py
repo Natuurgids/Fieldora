@@ -14,10 +14,17 @@ from natureai_next.application.authentication import AuthenticationFailed
 from natureai_next.domain.access_control import AccessRequest
 from natureai_next.server.api import ApiResponse
 from natureai_next.server.postgres_linked_preview_store import LinkedPreviewObject
+from natureai_next.server.postgres_linked_range_transfer import (
+    PostgresLinkedRangeTransfers,
+    range_retry_after_seconds,
+)
 from natureai_next.server.postgres_linked_storage import ServerLinkedMedia
 
 
 class LinkedStorageRepository(Protocol):
+    @property
+    def connect_factory(self): ...
+
     def media(self, media_id: str) -> ServerLinkedMedia | None: ...
 
     def browse(
@@ -45,6 +52,7 @@ class LinkedStorageApiMixin:
     """Route linked-storage catalogue operations before the existing API chain."""
 
     _linked_storage: LinkedStorageRepository | None
+    _linked_range_transfers: PostgresLinkedRangeTransfers | Any | None = None
 
     def dispatch(
         self, method: str, target: str, headers: dict[str, str], body: bytes
@@ -56,6 +64,10 @@ class LinkedStorageApiMixin:
             return self._linked_storage_request_previews(headers, body)
         if route.path == "/api/v1/linked-storage/thumbnail" and method == "GET":
             return self._linked_storage_thumbnail(headers, route.query)
+        if route.path == "/api/v1/linked-storage/ranges" and method == "POST":
+            return self._linked_storage_request_range(headers, body)
+        if route.path == "/api/v1/linked-storage/ranges" and method == "GET":
+            return self._linked_storage_range(headers, route.query)
         return super().dispatch(method, target, headers, body)  # type: ignore[misc]
 
     def _linked_storage_identity(self, headers: dict[str, str]):
@@ -66,6 +78,17 @@ class LinkedStorageApiMixin:
                 401, {"error": "unauthorized", "detail": str(exc)}
             )
         return identity, None
+
+    def _linked_range_store(self):
+        if self._linked_range_transfers is not None:
+            return self._linked_range_transfers
+        if self._linked_storage is None:
+            return None
+        factory = getattr(self._linked_storage, "connect_factory", None)
+        if factory is None:
+            return None
+        self._linked_range_transfers = PostgresLinkedRangeTransfers(factory)
+        return self._linked_range_transfers
 
     def _linked_storage_browse(
         self, headers: dict[str, str], query_string: str
@@ -85,12 +108,8 @@ class LinkedStorageApiMixin:
             return ApiResponse.json(400, {"error": "invalid_linked_storage_query"})
         if not storage_id or limit < 1:
             return ApiResponse.json(400, {"error": "invalid_linked_storage_query"})
-
         records = self._linked_storage.browse(
-            identity.organization_id,
-            storage_id,
-            prefix,
-            min(limit, 1000),
+            identity.organization_id, storage_id, prefix, min(limit, 1000)
         )
         disclosed = [
             _linked_media_payload(record)
@@ -132,7 +151,6 @@ class LinkedStorageApiMixin:
                 raise ValueError
         except (KeyError, TypeError, ValueError, json.JSONDecodeError):
             return ApiResponse.json(400, {"error": "invalid_preview_request"})
-
         queued: list[str] = []
         unavailable: list[str] = []
         for media_id in normalized:
@@ -152,7 +170,6 @@ class LinkedStorageApiMixin:
                 requested_by=identity.identity_id,
             ):
                 queued.append(media_id)
-
         return ApiResponse.json(
             202,
             {
@@ -189,9 +206,109 @@ class LinkedStorageApiMixin:
             200,
             preview.payload,
             content_type=preview.mime_type,
+            headers=(("ETag", f'"{preview.sha256}"'), ("Content-Disposition", "inline")),
+        )
+
+    def _linked_storage_request_range(
+        self, headers: dict[str, str], body: bytes
+    ) -> ApiResponse:
+        if self._linked_storage is None:
+            return ApiResponse.json(503, {"error": "linked_storage_unavailable"})
+        if len(body) > 64 * 1024:
+            return ApiResponse.json(413, {"error": "request_too_large"})
+        store = self._linked_range_store()
+        if store is None:
+            return ApiResponse.json(503, {"error": "linked_range_unavailable"})
+        identity, error = self._linked_storage_identity(headers)
+        if error is not None:
+            return error
+        assert identity is not None
+        try:
+            data = json.loads(body)
+            media_id = str(data["media_id"]).strip()
+            start = int(data["start_byte"])
+            end = int(data["end_byte"])
+            if not media_id or len(media_id) > 512:
+                raise ValueError
+        except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+            return ApiResponse.json(400, {"error": "invalid_range_request"})
+        record = self._linked_storage.media(media_id)
+        if (
+            record is None
+            or record.organization_id != identity.organization_id
+            or not self._linked_storage_allowed(identity, headers, record)
+        ):
+            return ApiResponse.json(404, {"error": "linked_original_not_found"})
+        try:
+            request_id = store.request_range(
+                media_id=media_id,
+                organization_id=identity.organization_id,
+                requested_by=identity.identity_id,
+                start_byte=start,
+                end_byte=end,
+            )
+        except (KeyError, ValueError):
+            return ApiResponse.json(416, {"error": "linked_range_not_satisfiable"})
+        return ApiResponse.json(
+            202,
+            {
+                "request_id": request_id,
+                "media_id": media_id,
+                "start_byte": start,
+                "end_byte": end,
+                "state": "pending",
+            },
+        )
+
+    def _linked_storage_range(
+        self, headers: dict[str, str], query_string: str
+    ) -> ApiResponse:
+        if self._linked_storage is None:
+            return ApiResponse.json(503, {"error": "linked_storage_unavailable"})
+        store = self._linked_range_store()
+        if store is None:
+            return ApiResponse.json(503, {"error": "linked_range_unavailable"})
+        identity, error = self._linked_storage_identity(headers)
+        if error is not None:
+            return error
+        assert identity is not None
+        request_id = parse_qs(query_string).get("request_id", [""])[0].strip()
+        if not request_id or len(request_id) > 128:
+            return ApiResponse.json(400, {"error": "invalid_range_query"})
+        result = store.result(request_id, identity.organization_id, identity.identity_id)
+        if result is None:
+            return ApiResponse.json(404, {"error": "linked_range_not_found"})
+        record = self._linked_storage.media(result.media_id)
+        if (
+            record is None
+            or record.organization_id != identity.organization_id
+            or not self._linked_storage_allowed(identity, headers, record)
+        ):
+            return ApiResponse.json(404, {"error": "linked_range_not_found"})
+        if result.state != "ready":
+            pending = ApiResponse.json(
+                202,
+                {
+                    "request_id": request_id,
+                    "media_id": result.media_id,
+                    "state": result.state,
+                },
+            )
+            return ApiResponse(
+                pending.status,
+                pending.body,
+                pending.content_type,
+                (("Retry-After", str(range_retry_after_seconds(result))),),
+            )
+        return ApiResponse(
+            206,
+            result.payload,
+            content_type=result.mime_type,
             headers=(
-                ("ETag", f'"{preview.sha256}"'),
-                ("Content-Disposition", "inline"),
+                ("Accept-Ranges", "bytes"),
+                ("Content-Range", f"bytes {result.start_byte}-{result.end_byte}/{result.total_size}"),
+                ("ETag", f'"{result.sha256}"'),
+                ("Content-Disposition", "attachment"),
             ),
         )
 

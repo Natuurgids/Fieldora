@@ -18,7 +18,7 @@ def test_standalone_server_uses_normal_local_subsystem_store(tmp_path: Path) -> 
     assert factory is not None
     store = factory()
     assert isinstance(store, OfflineSyncStore)
-    assert (tmp_path / "databases" / "offline-sync.sqlite3").is_file()
+    assert (tmp_path / "subsystems" / "offline-sync.sqlite3").is_file()
 
 
 def test_non_server_commands_do_not_construct_sync_repository(tmp_path: Path) -> None:

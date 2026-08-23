@@ -8,6 +8,7 @@ registrations, catalogue data, or preview work.
 from __future__ import annotations
 
 import json
+import time
 from dataclasses import asdict
 from typing import Any, Protocol
 
@@ -24,6 +25,7 @@ from natureai_next.server.storage_exchange import (
 )
 
 _PEER_SERIAL = "fieldora-peer-certificate-serial"
+_HEARTBEAT_INTERVAL_SECONDS = 60
 
 
 class StorageServiceApplication(Protocol):
@@ -77,6 +79,12 @@ class LinkedStorageServiceApi:
             return None, ApiResponse.json(403, {"error": "service_not_active"})
         if "storage" not in service.service_type.casefold():
             return None, ApiResponse.json(403, {"error": "service_type_forbidden"})
+        now = int(time.time())
+        if now - service.last_heartbeat_epoch >= _HEARTBEAT_INTERVAL_SECONDS:
+            try:
+                service = self._operators.heartbeat(service_id, now_epoch=now)
+            except (KeyError, PermissionError):
+                return None, ApiResponse.json(403, {"error": "service_not_active"})
         return service, None
 
     def _register_source(self, headers: dict[str, str], body: bytes) -> ApiResponse:

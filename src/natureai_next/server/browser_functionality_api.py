@@ -12,6 +12,7 @@ from natureai_next.server.api import ApiResponse
 from natureai_next.server.browser_functionality_web import (
     patch_browser_functionality_response,
 )
+from natureai_next.server.directory_intake_web import patch_directory_intake_response
 from natureai_next.server.project_owner_contract_api import ProjectOwnerContractFieldoraApi
 
 _COOKIE_NAME = "fieldora_session"
@@ -38,7 +39,8 @@ class BrowserFunctionalityFieldoraApi(ProjectOwnerContractFieldoraApi):
         response = self._browser_session_response(
             method, route.path, routed_headers, cookie_token, response
         )
-        return patch_browser_functionality_response(target, response)
+        response = patch_browser_functionality_response(target, response)
+        return patch_directory_intake_response(target, response)
 
     def _browser_session_response(
         self,

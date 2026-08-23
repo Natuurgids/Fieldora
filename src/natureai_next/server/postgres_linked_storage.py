@@ -224,14 +224,15 @@ class PostgresLinkedStorageRepository:
                         "INSERT INTO linked_storage_media_pg("
                         "media_id,storage_id,object_id,organization_id,relative_path,filename,"
                         "mime_type,size_bytes,modified_ns,object_state,sha256,thumbnail_state,"
-                        "thumbnail_etag,metadata_json"
-                        ") VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb) "
+                        "thumbnail_etag,project_id,metadata_json"
+                        ") VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb) "
                         "ON CONFLICT(storage_id,object_id) DO UPDATE SET "
                         "relative_path=excluded.relative_path,filename=excluded.filename,"
                         "mime_type=excluded.mime_type,size_bytes=excluded.size_bytes,"
                         "modified_ns=excluded.modified_ns,object_state=excluded.object_state,"
                         "sha256=excluded.sha256,thumbnail_state=excluded.thumbnail_state,"
-                        "thumbnail_etag=excluded.thumbnail_etag,metadata_json=excluded.metadata_json",
+                        "thumbnail_etag=excluded.thumbnail_etag,project_id=excluded.project_id,"
+                        "metadata_json=excluded.metadata_json",
                         (
                             media_id,
                             batch.storage_id,
@@ -246,6 +247,7 @@ class PostgresLinkedStorageRepository:
                             item.sha256,
                             item.thumbnail_state.value,
                             item.thumbnail_etag,
+                            item.project_id,
                             json.dumps(item.metadata, sort_keys=True),
                         ),
                     )

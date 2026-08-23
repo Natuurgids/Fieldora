@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "Install-Fieldora-Clean.ps1"
+      - "Install-Fieldora-Clean-Windows.ps1"
       - "src/natureai_next/server/service_trust.py"
       - "src/natureai_next/bootstrap/service_trust_cli.py"
       - "src/natureai_next/bootstrap/certificate_renewer_cli.py"
@@ -20,12 +21,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Parse PowerShell installer
+      - name: Parse PowerShell installers
         shell: pwsh
         run: |
-          $text = Get-Content -LiteralPath ./Install-Fieldora-Clean.ps1 -Raw
-          [void][scriptblock]::Create($text)
-          Write-Host "PowerShell syntax: OK"
+          foreach ($path in @('./Install-Fieldora-Clean.ps1','./Install-Fieldora-Clean-Windows.ps1')) {
+            $text = Get-Content -LiteralPath $path -Raw
+            [void][scriptblock]::Create($text)
+            Write-Host "$path syntax: OK"
+          }
 
       - name: Certify clean-install trust contract
         shell: pwsh
@@ -62,6 +65,28 @@ jobs:
             throw 'Clean installer must not enable insecure HTTP.'
           }
           Write-Host "Service enrollment, HTTPS, mTLS and live renewal contract: OK"
+
+      - name: Certify Windows CurrentUser root trust
+        shell: pwsh
+        run: |
+          $text = Get-Content -LiteralPath ./Install-Fieldora-Clean-Windows.ps1 -Raw
+          foreach ($needle in @(
+            'X509Store',
+            'StoreName]::Root',
+            'StoreLocation]::CurrentUser',
+            'CreateFromPemFile',
+            'Thumbprint',
+            'Windows CurrentUser Fieldora CA trust: VERIFIED',
+            '--ssl-revoke-best-effort'
+          )) {
+            if (-not $text.Contains($needle)) {
+              throw "Windows trust wrapper is missing: $needle"
+            }
+          }
+          if ($text.Contains('--cacert') -or $text.Contains('--insecure')) {
+            throw 'Final Windows browser-trust probe must use the OS trust store, not bypass or explicit CA arguments.'
+          }
+          Write-Host "Windows CurrentUser root trust contract: OK"
 
       - name: Certify Windows curl handling
         shell: pwsh

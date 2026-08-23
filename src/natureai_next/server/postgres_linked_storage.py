@@ -131,6 +131,10 @@ class PostgresLinkedStorageRepository:
                     "ON linked_preview_queue_pg(priority DESC,requested_at,media_id)"
                 )
 
+    @property
+    def connect_factory(self) -> Callable[[], Any]:
+        return self._connect
+
     def register_source(self, source: StorageSourceRegistration) -> None:
         with self._connect() as connection:
             with connection.cursor() as cursor:
@@ -357,6 +361,29 @@ class PostgresLinkedStorageRepository:
                     ),
                 )
         return True
+
+    def preview(self, media_id: str):
+        from natureai_next.server.postgres_linked_preview_store import LinkedPreviewObject
+
+        media_id = media_id.strip()
+        if not media_id:
+            return None
+        with self._connect() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT to_regclass(%s)", ("linked_preview_objects_pg",))
+                if cursor.fetchone()[0] is None:
+                    return None
+                cursor.execute(
+                    "SELECT p.media_id,p.mime_type,p.sha256,p.payload "
+                    "FROM linked_preview_objects_pg p "
+                    "JOIN linked_storage_media_pg m ON m.media_id=p.media_id "
+                    "WHERE p.media_id=%s AND m.thumbnail_state=%s",
+                    (media_id, PreviewState.READY.value),
+                )
+                row = cursor.fetchone()
+        if row is None:
+            return None
+        return LinkedPreviewObject(str(row[0]), str(row[1]), str(row[2]), bytes(row[3]))
 
 
 def _decode_media(row: Any) -> ServerLinkedMedia:

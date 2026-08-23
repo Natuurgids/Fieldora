@@ -7,7 +7,6 @@ import os
 from urllib.parse import parse_qs, urlsplit
 
 from natureai_next.domain.access_control import AccessRequest, Identity, IdentityKind
-from natureai_next.server.access_barriers import AccessBarrierRepository
 from natureai_next.server.access_contracts import (
     AccessTarget,
     AccessTargetKind,
@@ -23,6 +22,7 @@ from natureai_next.server.access_contracts import (
 from natureai_next.server.api import ApiResponse
 from natureai_next.server.facility_platform_api import CompletePlatformFieldoraApi
 from natureai_next.server.operator_control import ServiceState
+from natureai_next.server.required_access_barriers import RequiredAccessBarrierRepository
 
 
 class RuntimeGovernedFieldoraApi(CompletePlatformFieldoraApi):
@@ -33,7 +33,7 @@ class RuntimeGovernedFieldoraApi(CompletePlatformFieldoraApi):
         self._barriers = (
             None
             if self._access_repository is None
-            else AccessBarrierRepository(self._access_repository._factory)
+            else RequiredAccessBarrierRepository(self._access_repository._factory)
         )
 
     def dispatch(
@@ -139,16 +139,27 @@ class RuntimeGovernedFieldoraApi(CompletePlatformFieldoraApi):
                     "detail": "select one of the projects governing this intake",
                 },
             )
-        if project_id and memberships and project_id not in memberships and not self._is_platform_admin(identity):
+        if (
+            project_id
+            and memberships
+            and project_id not in memberships
+            and not self._is_platform_admin(identity)
+        ):
             return ApiResponse.json(403, {"error": "project_membership_required"})
         return None
 
-    def _contract_completed_upload(self, upload, response: ApiResponse, headers: dict[str, str]) -> None:
+    def _contract_completed_upload(
+        self, upload, response: ApiResponse, headers: dict[str, str]
+    ) -> None:
         if self._barriers is None:
             return
         try:
             media_id = str(json.loads(response.body)["media_id"])
             subject = ContractSubject(ContractSubjectKind.ASSET, media_id)
+            # Mark first. If any subsequent derivation/persistence step fails, newly
+            # governed evidence remains preserved but undisclosed rather than falling
+            # through to the legacy PBAC-only compatibility behavior.
+            self._barriers.require_contract(subject, reason="direct_governed_intake")
             if self._barriers.current(subject) is not None:
                 return
             _token, identity = self._identity(headers)
@@ -173,8 +184,8 @@ class RuntimeGovernedFieldoraApi(CompletePlatformFieldoraApi):
                 )
             self._barriers.create(draft, requested_by=identity.identity_id)
         except (KeyError, TypeError, ValueError, json.JSONDecodeError):
-            # Upload publication succeeded. Failure to derive the barrier is surfaced
-            # through certification/diagnostics rather than deleting evidence.
+            # The media object is intentionally left contract-required. Operators can
+            # inspect/remediate it without making the evidence visible prematurely.
             return
 
     def _default_contract_for_upload(self, identity: Identity, project_id: str) -> ContractDraft:

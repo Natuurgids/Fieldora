@@ -9,16 +9,16 @@ network exchange replays the exact same hash-chained batch after restart.
 from __future__ import annotations
 
 import hashlib
+import http.client
 import json
 import mimetypes
 import sqlite3
 import ssl
 import time
-import urllib.error
-import urllib.request
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Any, Protocol
+from urllib.parse import urlsplit
 from uuid import uuid4
 
 from natureai_next.server.linked_storage import (
@@ -55,8 +55,21 @@ class StorageAgentConfig:
     maximum_preview_edge: int = 512
 
     def validate(self) -> None:
-        if not self.endpoint.startswith("https://"):
-            raise ValueError("storage exchange endpoint must use HTTPS")
+        parsed = urlsplit(self.endpoint)
+        if (
+            parsed.scheme != "https"
+            or not parsed.hostname
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.query
+            or parsed.fragment
+            or parsed.path not in {"", "/"}
+        ):
+            raise ValueError("storage exchange endpoint must be an HTTPS origin")
+        try:
+            parsed.port
+        except ValueError as exc:
+            raise ValueError("storage exchange endpoint port is invalid") from exc
         if not all(
             value.strip()
             for value in (
@@ -86,7 +99,16 @@ class StorageExchange(Protocol):
 
 
 class MutualTLSStorageExchangeClient:
-    """Small mTLS client that reloads renewed certificate material for every request."""
+    """mTLS client using one validated HTTPS origin and fixed internal API paths."""
+
+    _ALLOWED_PATHS = frozenset(
+        {
+            "/internal/v1/storage/sources",
+            "/internal/v1/storage/catalogue",
+            "/internal/v1/storage/previews/claim",
+            "/internal/v1/storage/previews/complete",
+        }
+    )
 
     def __init__(
         self,
@@ -97,10 +119,23 @@ class MutualTLSStorageExchangeClient:
         *,
         timeout_seconds: float = 15.0,
     ) -> None:
-        endpoint = endpoint.rstrip("/")
-        if not endpoint.startswith("https://"):
-            raise ValueError("storage exchange endpoint must use HTTPS")
-        self._endpoint = endpoint
+        parsed = urlsplit(endpoint.strip())
+        if (
+            parsed.scheme != "https"
+            or not parsed.hostname
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.query
+            or parsed.fragment
+            or parsed.path not in {"", "/"}
+        ):
+            raise ValueError("storage exchange endpoint must be an HTTPS origin")
+        try:
+            port = parsed.port or 443
+        except ValueError as exc:
+            raise ValueError("storage exchange endpoint port is invalid") from exc
+        self._hostname = parsed.hostname
+        self._port = port
         self._certificate = certificate
         self._private_key = private_key
         self._ca_certificate = ca_certificate
@@ -116,24 +151,40 @@ class MutualTLSStorageExchangeClient:
         return context
 
     def _post(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
+        if path not in self._ALLOWED_PATHS:
+            raise ValueError("storage exchange path is not allowed")
         encoded = json.dumps(payload, separators=(",", ":"), ensure_ascii=False).encode()
-        request = urllib.request.Request(
-            f"{self._endpoint}{path}",
-            data=encoded,
-            headers={"Content-Type": "application/json"},
-            method="POST",
+        connection = http.client.HTTPSConnection(
+            self._hostname,
+            self._port,
+            timeout=self._timeout,
+            context=self._context(),
         )
         try:
-            with urllib.request.urlopen(
-                request, context=self._context(), timeout=self._timeout
-            ) as response:
-                result = json.loads(response.read())
-        except urllib.error.HTTPError as exc:
-            try:
-                detail = json.loads(exc.read()).get("error", "storage_exchange_rejected")
-            except (AttributeError, json.JSONDecodeError):
-                detail = "storage_exchange_rejected"
-            raise RuntimeError(f"{detail} ({exc.code})") from exc
+            connection.request(
+                "POST",
+                path,
+                body=encoded,
+                headers={"Content-Type": "application/json", "Accept": "application/json"},
+            )
+            response = connection.getresponse()
+            raw = response.read(1024 * 1024 + 1)
+            if len(raw) > 1024 * 1024:
+                raise RuntimeError("storage exchange response exceeds limit")
+            if not 200 <= response.status < 300:
+                try:
+                    error_payload = json.loads(raw)
+                    detail = (
+                        error_payload.get("error", "storage_exchange_rejected")
+                        if isinstance(error_payload, dict)
+                        else "storage_exchange_rejected"
+                    )
+                except json.JSONDecodeError:
+                    detail = "storage_exchange_rejected"
+                raise RuntimeError(f"{detail} ({response.status})")
+            result = json.loads(raw)
+        finally:
+            connection.close()
         if not isinstance(result, dict):
             raise RuntimeError("storage exchange returned an invalid response")
         return result
@@ -295,12 +346,14 @@ class LinkedStorageAgent:
         root = self.config.root_path.resolve(strict=True)
         last_relative = state.checkpoint
         for path in _walk_files(root):
+            try:
+                resolved = path.resolve(strict=True)
+                resolved.relative_to(root)
+                stat = resolved.stat()
+            except (OSError, ValueError):
+                continue
             relative = path.relative_to(root).as_posix()
             if last_relative and relative <= last_relative:
-                continue
-            try:
-                stat = path.stat()
-            except OSError:
                 continue
             local = self.repository.upsert_media(
                 LinkedMediaRecord(

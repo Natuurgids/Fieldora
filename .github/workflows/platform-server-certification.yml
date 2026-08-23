@@ -86,6 +86,9 @@ jobs:
           tests/test_service_tls_reload.py
           tests/test_certificate_renewal.py
 
+      - name: Bandit security scan
+        run: python -m bandit -r src/natureai_next -c pyproject.toml -ll -ii
+
       - name: Platform server tests
         run: >-
           python -m pytest -q

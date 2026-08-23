@@ -56,7 +56,21 @@ try {
     Write-Host "==> Certifying Windows CurrentUser browser trust" -ForegroundColor Cyan
     Write-Host "============================================================" -ForegroundColor DarkCyan
 
-    $ca = [System.Security.Cryptography.X509Certificates.X509Certificate2]::CreateFromPemFile($caPath)
+    # CreateFromPemFile(path) attempts to load an associated private key as well as
+    # the certificate. The exported Fieldora trust file intentionally contains only
+    # the public CA certificate because the root private key stays offline. Import
+    # the certificate-only PEM explicitly instead.
+    $pemText = [System.IO.File]::ReadAllText($caPath)
+    try {
+        $ca = [System.Security.Cryptography.X509Certificates.X509Certificate2]::CreateFromPem($pemText)
+    }
+    catch {
+        throw "Could not parse the Fieldora public root CA PEM at $caPath. $($_.Exception.Message)"
+    }
+    if (-not $ca.Subject -or -not $ca.Thumbprint) {
+        throw "Fieldora root CA PEM did not produce a valid X.509 certificate."
+    }
+
     $store = [System.Security.Cryptography.X509Certificates.X509Store]::new(
         [System.Security.Cryptography.X509Certificates.StoreName]::Root,
         [System.Security.Cryptography.X509Certificates.StoreLocation]::CurrentUser

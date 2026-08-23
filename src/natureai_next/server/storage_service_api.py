@@ -8,7 +8,7 @@ catalogue data or leasing preview work.
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, replace
+from dataclasses import asdict
 from typing import Any, Protocol
 
 from natureai_next.server.api import ApiResponse
@@ -185,7 +185,7 @@ def _decode_batch(data: Any) -> StorageCatalogueBatch:
     if not isinstance(items_data, list) or len(items_data) > 10_000:
         raise ValueError("catalogue items must be a bounded list")
     items = tuple(_decode_item(item) for item in items_data)
-    batch = StorageCatalogueBatch(
+    return StorageCatalogueBatch(
         batch_id=str(data["batch_id"]).strip(),
         storage_id=str(data["storage_id"]).strip(),
         organization_id=str(data["organization_id"]).strip(),
@@ -198,7 +198,6 @@ def _decode_batch(data: Any) -> StorageCatalogueBatch:
         previous_batch_sha256=str(data.get("previous_batch_sha256", "")).strip(),
         batch_sha256=str(data["batch_sha256"]).strip(),
     )
-    return batch
 
 
 def _decode_item(data: Any) -> StorageCatalogueItem:

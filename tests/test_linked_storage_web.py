@@ -87,6 +87,24 @@ def _mock_api(route: Route) -> None:
     if path in {"dossiers", "media"}:
         route.fulfill(status=200, content_type="application/json", body='{"items":[]}')
         return
+    if path == "linked-storage/sources":
+        route.fulfill(
+            status=200,
+            content_type="application/json",
+            body=json.dumps(
+                {
+                    "items": [
+                        {
+                            "storage_id": "archive-1",
+                            "display_name": "Primary research archive",
+                            "read_only": True,
+                        }
+                    ],
+                    "count": 1,
+                }
+            ),
+        )
+        return
     if path == "linked-storage/browse":
         route.fulfill(
             status=200,
@@ -144,6 +162,7 @@ def test_patch_is_app_only_and_idempotent() -> None:
     base = ApiResponse(200, b"console.log('base');", "text/javascript; charset=utf-8")
     patched = patch_linked_storage_web_response("/app.js", base)
     assert b"Fieldora linked archives" in patched.body
+    assert b"/api/v1/linked-storage/sources" in patched.body
     assert b"/api/v1/linked-storage/browse" in patched.body
     assert b"/api/v1/linked-storage/ranges" in patched.body
     assert patch_linked_storage_web_response("/app.js", patched).body == patched.body
@@ -164,7 +183,10 @@ def test_linked_archive_library_browse_preview_and_original_download(
         page.goto(url)
         page.wait_for_selector("#workspace:not([hidden])")
         page.locator('.nav[data-page="library"]').click()
-        page.locator("#linked-storage-id").fill("archive-1")
+        page.wait_for_function("document.getElementById('linked-storage-id').value === 'archive-1'")
+        assert "Primary research archive" in page.locator(
+            '#linked-storage-sources option[value="archive-1"]'
+        ).inner_text()
         page.locator("#linked-storage-prefix").fill("Amazon/day-01")
         page.locator("#linked-storage-browse").click()
         card = page.locator('[data-linked-media="linked:archive-1:object-1"]')

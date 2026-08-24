@@ -201,6 +201,20 @@ def _mock_api(route: Route) -> None:
                             "stale": False,
                         },
                     ],
+                    "linked_archive_events": [
+                        {
+                            "storage_id": "archive-disabled",
+                            "actor_id": "operator-1",
+                            "event_type": "source_disabled",
+                            "occurred_at": "2026-08-24T01:02:03+00:00",
+                        },
+                        {
+                            "storage_id": "archive-1",
+                            "actor_id": "storage-service-1",
+                            "event_type": "source_registered",
+                            "occurred_at": "2026-08-24T00:00:00+00:00",
+                        },
+                    ],
                 }
             ),
         )
@@ -237,6 +251,7 @@ def test_patch_is_app_only_and_idempotent() -> None:
     operator = patch_linked_storage_operator_web_response("/app.js", base)
     assert b"linked archive ownership" in operator.body
     assert b"operator-linked-archives" in operator.body
+    assert b"operator-linked-archive-events" in operator.body
     assert b"/api/v1/operator/linked-archives/" in operator.body
     assert patch_linked_storage_operator_web_response("/app.js", operator).body == operator.body
 
@@ -289,6 +304,15 @@ def test_linked_archive_library_browse_preview_original_and_operator_health(
         assert "Disabled archive" in operator_text
         assert "active · Disabled" in operator_text
         assert "/mnt/" not in operator_text
+
+        page.wait_for_selector("#operator-linked-archive-events .row")
+        event_text = page.locator("#operator-linked-archive-events").inner_text()
+        assert "source_disabled" in event_text
+        assert "archive-disabled · operator-1" in event_text
+        assert "source_registered" in event_text
+        assert "archive-1 · storage-service-1" in event_text
+        assert "root_alias" not in event_text
+        assert "/mnt/" not in event_text
 
         enabled_row = page.locator('[data-linked-archive="archive-1"]')
         with page.expect_request(

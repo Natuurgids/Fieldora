@@ -17,6 +17,9 @@ from natureai_next.server.desktop_alignment_web import (
     patch_desktop_alignment_web_response,
 )
 from natureai_next.server.facility_web_compatibility import patch_facility_web_response
+from natureai_next.server.library_collections_web import (
+    patch_library_collections_web_response,
+)
 from natureai_next.server.linked_storage_web import patch_linked_storage_web_response
 from natureai_next.server.navigation_web_compatibility import patch_navigation_web_response
 from natureai_next.server.web_compatibility import patch_web_response
@@ -38,6 +41,7 @@ def _web_fixture(tmp_path: Path):
         patch_navigation_web_response,
         patch_linked_storage_web_response,
         patch_desktop_alignment_web_response,
+        patch_library_collections_web_response,
     ):
         response = patch("/app.js", response)
     (tmp_path / "app.js").write_bytes(response.body)
@@ -157,6 +161,7 @@ def test_server_web_matches_desktop_workspace_model_and_single_import_action(
         assert page.locator("#page-research .research-records-card h2").inner_text() == (
             "Research records"
         )
+        assert page.locator("#page-research #collection-list").count() == 0
         page.get_by_role("button", name="Projects & Portfolio").click()
         assert page.locator("#page-projects").is_visible()
         assert (
@@ -190,6 +195,13 @@ def test_server_web_matches_desktop_workspace_model_and_single_import_action(
         assert page.locator("#library-browse-panel").is_visible()
         assert page.locator("#linked-storage-card").is_hidden()
         assert page.locator("#import-card").is_hidden()
+        assert page.locator("#library-collections-card").is_visible()
+        assert page.locator("#library-collections-card h2").inner_text() == (
+            "Collections & Datasets"
+        )
+        assert "without changing its provenance" in page.locator(
+            "#library-collections-card"
+        ).inner_text()
         assert "Browse governed evidence" in page.locator(
             "#library-workspace-intro"
         ).inner_text()
@@ -198,6 +210,7 @@ def test_server_web_matches_desktop_workspace_model_and_single_import_action(
         assert page.locator("#library-browse-panel").is_hidden()
         assert page.locator("#linked-storage-card").is_visible()
         assert page.locator("#import-card").is_hidden()
+        assert page.locator("#library-collections-card").is_hidden()
         assert "authoritative storage" in page.locator(
             "#library-workspace-intro"
         ).inner_text()

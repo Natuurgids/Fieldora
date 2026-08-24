@@ -1,7 +1,5 @@
 """Desktop-aligned information architecture for the managed Fieldora web client."""
 
-from urllib.parse import urlsplit
-
 from natureai_next.server.api import ApiResponse
 
 
@@ -123,7 +121,7 @@ def patch_desktop_alignment_web_response(
     target: str, response: ApiResponse
 ) -> ApiResponse:
     if (
-        urlsplit(target).path != "/app.js"
+        target.partition("?")[0] != "/app.js"
         or response.status != 200
         or _DESKTOP_ALIGNMENT_PATCH in response.body
     ):

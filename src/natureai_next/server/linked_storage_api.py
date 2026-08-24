@@ -25,6 +25,8 @@ class LinkedStorageRepository(Protocol):
     @property
     def connect_factory(self): ...
 
+    def source(self, storage_id: str) -> Any | None: ...
+
     def media(self, media_id: str) -> ServerLinkedMedia | None: ...
 
     def browse(
@@ -318,6 +320,8 @@ class LinkedStorageApiMixin:
         headers: dict[str, str],
         record: ServerLinkedMedia,
     ) -> bool:
+        if self._linked_storage is None or self._linked_storage.source(record.storage_id) is None:
+            return False
         decision = self._decisions.decide(  # type: ignore[attr-defined]
             AccessRequest(
                 identity.identity_id,

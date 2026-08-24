@@ -56,7 +56,12 @@ class VerifiedModelBundle:
     files: tuple[dict[str, object], ...]
     total_bytes: int
 
-    def registry_record(self, install_path: Path) -> dict[str, object]:
+    @property
+    def artifact_storage_id(self) -> str:
+        return f"model:{self.model_id}:{self.version}"
+
+    def registry_record(self) -> dict[str, object]:
+        """Return browser-safe governed metadata; never expose filesystem paths."""
         return {
             "id": self.model_id,
             "name": self.model_id,
@@ -65,7 +70,7 @@ class VerifiedModelBundle:
             "network": "offline",
             "enabled": True,
             "status": "installed",
-            "artifact_store_path": str(install_path),
+            "artifact_storage_id": self.artifact_storage_id,
             "artifact_total_bytes": self.total_bytes,
             "artifact_files": list(self.files),
             "source": self.source,
@@ -78,6 +83,8 @@ def _require_token(value: object, field: str) -> str:
     token = str(value or "").strip()
     if not token or token in {".", ".."} or "/" in token or "\\" in token:
         raise ModelBundleError(f"manifest {field} must be a non-empty path-safe token")
+    if not all(character.isalnum() or character in "._-" for character in token):
+        raise ModelBundleError(f"manifest {field} contains unsupported characters")
     return token
 
 
@@ -192,7 +199,7 @@ def install_model_bundle(
     model_store.mkdir(parents=True, exist_ok=True)
     destination = model_store / verified.model_id / verified.version
     if destination.exists():
-        raise ModelBundleError(f"model version is already installed: {destination}")
+        raise ModelBundleError(f"model version is already installed: {verified.artifact_storage_id}")
     parent = destination.parent
     parent.mkdir(parents=True, exist_ok=True)
     temp_root = Path(tempfile.mkdtemp(prefix=".fieldora-model-", dir=parent))
@@ -203,9 +210,9 @@ def install_model_bundle(
             target = temp_root.joinpath(*relative.parts)
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(source, target, follow_symlinks=False)
-        receipt = verified.registry_record(destination)
         (temp_root / "FIELDORA-INSTALL.json").write_text(
-            json.dumps(receipt, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+            json.dumps(verified.registry_record(), ensure_ascii=False, sort_keys=True, indent=2)
+            + "\n",
             encoding="utf-8",
         )
         os.replace(temp_root, destination)
@@ -242,12 +249,12 @@ def main(argv: list[str] | None = None) -> int:
                 "verification": "sha256-per-file",
             }
         else:
-            verified, destination = install_model_bundle(
+            verified, _destination = install_model_bundle(
                 args.bundle,
                 args.store,
                 max_total_bytes=args.max_bytes,
             )
-            output = verified.registry_record(destination)
+            output = verified.registry_record()
     except ModelBundleError as exc:
         print(json.dumps({"ok": False, "error": str(exc)}, separators=(",", ":")))
         return 2

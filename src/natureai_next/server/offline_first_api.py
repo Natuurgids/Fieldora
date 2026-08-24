@@ -10,11 +10,13 @@ from natureai_next.server.linked_storage_api import (
     LinkedStorageRepository,
 )
 from natureai_next.server.linked_storage_browser_api import LinkedStorageBrowserFieldoraApi
+from natureai_next.server.linked_storage_operator_api import LinkedStorageOperatorApiMixin
 from natureai_next.server.linked_storage_sources_api import LinkedStorageSourcesApiMixin
 from natureai_next.server.offline_sync_api import OfflineSyncApiMixin, OfflineSyncRepository
 
 
 class OfflineFirstFieldoraApi(
+    LinkedStorageOperatorApiMixin,
     LinkedStorageSourcesApiMixin,
     LinkedStorageApiMixin,
     OfflineSyncApiMixin,

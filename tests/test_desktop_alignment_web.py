@@ -17,6 +17,7 @@ from natureai_next.server.desktop_alignment_web import (
     patch_desktop_alignment_web_response,
 )
 from natureai_next.server.facility_web_compatibility import patch_facility_web_response
+from natureai_next.server.linked_storage_web import patch_linked_storage_web_response
 from natureai_next.server.navigation_web_compatibility import patch_navigation_web_response
 from natureai_next.server.web_compatibility import patch_web_response
 
@@ -35,6 +36,7 @@ def _web_fixture(tmp_path: Path):
         patch_web_response,
         patch_facility_web_response,
         patch_navigation_web_response,
+        patch_linked_storage_web_response,
         patch_desktop_alignment_web_response,
     ):
         response = patch("/app.js", response)
@@ -78,6 +80,17 @@ def _mock_api(route: Route) -> None:
             "services": [],
             "storage": [],
             "jobs": {},
+        }
+    elif path == "linked-storage/sources":
+        payload = {
+            "items": [
+                {
+                    "storage_id": "archive-1",
+                    "display_name": "Research archive",
+                    "read_only": True,
+                    "availability": "online",
+                }
+            ]
         }
     elif path == "audit":
         payload = {"items": [], "chain_verified": True}
@@ -150,6 +163,27 @@ def test_server_web_matches_desktop_workspace_model_and_single_import_action(
         ]
 
         page.locator('.sidebar .nav[data-page="library"]').click()
+        assert page.locator("#library-workspace-nav button").all_inner_texts() == [
+            "Browse evidence",
+            "Linked archives",
+            "Import",
+        ]
+        assert page.locator("#library-browse-panel").is_visible()
+        assert page.locator("#linked-storage-card").is_hidden()
+        assert page.locator("#import-card").is_hidden()
+        assert "Browse governed evidence" in page.locator(
+            "#library-workspace-intro"
+        ).inner_text()
+
+        page.get_by_role("button", name="Linked archives", exact=True).click()
+        assert page.locator("#library-browse-panel").is_hidden()
+        assert page.locator("#linked-storage-card").is_visible()
+        assert page.locator("#import-card").is_hidden()
+        assert "authoritative storage" in page.locator(
+            "#library-workspace-intro"
+        ).inner_text()
+
+        page.get_by_role("button", name="Browse evidence", exact=True).click()
         import_button = page.locator("#page-library .go-import")
         assert import_button.inner_text() == "＋ Import"
         import_button.click()
@@ -160,6 +194,11 @@ def test_server_web_matches_desktop_workspace_model_and_single_import_action(
         ]
         assert page.locator("#upload-folder").count() == 0
         assert page.locator("#upload-file").is_hidden()
+
+        page.get_by_role("button", name="Import", exact=True).click()
+        assert page.locator("#library-browse-panel").is_hidden()
+        assert page.locator("#linked-storage-card").is_hidden()
+        assert page.locator("#import-card").is_visible()
         assert "Choose Files or Folder from Import." in page.locator(
             "#import-source-summary"
         ).inner_text()

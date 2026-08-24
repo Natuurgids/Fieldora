@@ -138,7 +138,8 @@ class PostgresLinkedPreviewStore:
                     "SELECT p.media_id,p.mime_type,p.sha256,p.payload "
                     "FROM linked_preview_objects_pg p "
                     "JOIN linked_storage_media_pg m ON m.media_id=p.media_id "
-                    "WHERE p.media_id=%s AND m.thumbnail_state=%s",
+                    "JOIN linked_storage_sources_pg s ON s.storage_id=m.storage_id "
+                    "WHERE p.media_id=%s AND m.thumbnail_state=%s AND s.enabled=TRUE",
                     (media_id.strip(), PreviewState.READY.value),
                 )
                 row = cursor.fetchone()

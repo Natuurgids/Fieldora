@@ -66,6 +66,7 @@ class VerifiedModelBundle:
     total_bytes: int
     signature_verified: bool = False
     signing_key_id: str = ""
+    malware_scan: dict[str, object] | None = None
 
     @property
     def artifact_storage_id(self) -> str:
@@ -77,7 +78,7 @@ class VerifiedModelBundle:
 
     def registry_record(self) -> dict[str, object]:
         """Return browser-safe governed metadata; never expose filesystem paths."""
-        return {
+        record: dict[str, object] = {
             "id": self.registry_id,
             "model_id": self.model_id,
             "name": self.model_id,
@@ -96,6 +97,9 @@ class VerifiedModelBundle:
             "manifest_signature": "ed25519" if self.signature_verified else "unsigned",
             "signing_key_id": self.signing_key_id,
         }
+        if self.malware_scan is not None:
+            record["malware_scan"] = dict(self.malware_scan)
+        return record
 
 
 def _require_token(value: object, field: str) -> str:
@@ -177,12 +181,57 @@ def _verify_manifest_signature(
     return True, key_id
 
 
+def _malware_scan_attestation(
+    manifest: dict[str, object],
+    file_count: int,
+    *,
+    signature_verified: bool,
+    require_clean_scan: bool,
+) -> dict[str, object] | None:
+    inspection = manifest.get("inspection")
+    if inspection is None:
+        if require_clean_scan:
+            raise ModelBundleError("signed clean malware scan attestation is required")
+        return None
+    if not isinstance(inspection, dict):
+        raise ModelBundleError("manifest inspection must be an object")
+    scan = inspection.get("malware_scan")
+    if scan is None:
+        if require_clean_scan:
+            raise ModelBundleError("signed clean malware scan attestation is required")
+        return None
+    if not isinstance(scan, dict):
+        raise ModelBundleError("manifest malware_scan must be an object")
+    if not signature_verified:
+        raise ModelBundleError("malware scan attestation requires a verified signed manifest")
+    result = str(scan.get("result") or "").strip().lower()
+    if result != "clean":
+        raise ModelBundleError("malware scan attestation is not clean")
+    try:
+        scanned_files = int(scan.get("file_count"))
+    except (TypeError, ValueError) as exc:
+        raise ModelBundleError("malware scan file_count is invalid") from exc
+    if scanned_files != file_count:
+        raise ModelBundleError("malware scan file_count does not match manifest payload")
+    return {
+        "result": "clean",
+        "scanner": _bounded_text(scan.get("scanner"), "scanner", "unknown"),
+        "scanner_version": _bounded_text(
+            scan.get("scanner_version"), "scanner_version", "unknown"
+        ),
+        "definitions": _bounded_text(scan.get("definitions"), "definitions", "unknown"),
+        "scanned_at": _bounded_text(scan.get("scanned_at"), "scanned_at", "unknown"),
+        "file_count": scanned_files,
+    }
+
+
 def verify_model_bundle(
     bundle_dir: Path,
     *,
     max_total_bytes: int = _DEFAULT_MAX_BYTES,
     trusted_signing_key: Path | None = None,
     require_signature: bool = False,
+    require_clean_scan: bool = False,
 ) -> VerifiedModelBundle:
     if bundle_dir.is_symlink():
         raise ModelBundleError("bundle root must not be a symlink")
@@ -207,7 +256,7 @@ def verify_model_bundle(
         bundle_dir,
         manifest_bytes,
         trusted_signing_key,
-        require_signature,
+        require_signature or require_clean_scan,
     )
 
     model_id = _require_token(manifest.get("model_id"), "model_id")
@@ -219,6 +268,12 @@ def verify_model_bundle(
         raise ModelBundleError("manifest files must be a non-empty list")
     if len(entries) > _MAX_MANIFEST_FILES:
         raise ModelBundleError("manifest contains too many files")
+    malware_scan = _malware_scan_attestation(
+        manifest,
+        len(entries),
+        signature_verified=signature_verified,
+        require_clean_scan=require_clean_scan,
+    )
 
     verified: list[dict[str, object]] = []
     seen: set[str] = set()
@@ -280,6 +335,7 @@ def verify_model_bundle(
         total_bytes=total,
         signature_verified=signature_verified,
         signing_key_id=signing_key_id,
+        malware_scan=malware_scan,
     )
 
 
@@ -290,12 +346,14 @@ def install_model_bundle(
     max_total_bytes: int = _DEFAULT_MAX_BYTES,
     trusted_signing_key: Path | None = None,
     require_signature: bool = False,
+    require_clean_scan: bool = False,
 ) -> tuple[VerifiedModelBundle, Path]:
     verified = verify_model_bundle(
         bundle_dir,
         max_total_bytes=max_total_bytes,
         trusted_signing_key=trusted_signing_key,
         require_signature=require_signature,
+        require_clean_scan=require_clean_scan,
     )
     model_store.mkdir(parents=True, exist_ok=True)
     destination = model_store / verified.model_id / verified.version
@@ -335,6 +393,7 @@ def _parser() -> argparse.ArgumentParser:
         command.add_argument("--max-bytes", type=int, default=_DEFAULT_MAX_BYTES)
         command.add_argument("--trusted-signing-key", type=Path)
         command.add_argument("--require-signature", action="store_true")
+        command.add_argument("--require-clean-scan", action="store_true")
         if name == "install":
             command.add_argument("--store", type=Path, required=True)
     return parser
@@ -347,6 +406,7 @@ def main(argv: list[str] | None = None) -> int:
             "max_total_bytes": args.max_bytes,
             "trusted_signing_key": args.trusted_signing_key,
             "require_signature": args.require_signature,
+            "require_clean_scan": args.require_clean_scan,
         }
         if args.command == "verify":
             verified = verify_model_bundle(args.bundle, **kwargs)
@@ -359,6 +419,7 @@ def main(argv: list[str] | None = None) -> int:
                     "ed25519" if verified.signature_verified else "unsigned"
                 ),
                 "signing_key_id": verified.signing_key_id,
+                "malware_scan": verified.malware_scan,
             }
         else:
             verified, _destination = install_model_bundle(

@@ -13,6 +13,7 @@ on:
       - "src/natureai_next/server/postgres_offline_sync.py"
       - "src/natureai_next/server/linked_storage.py"
       - "src/natureai_next/server/linked_storage_api.py"
+      - "src/natureai_next/server/linked_storage_sources_api.py"
       - "src/natureai_next/server/postgres_linked_storage.py"
       - "src/natureai_next/server/postgres_linked_preview.py"
       - "src/natureai_next/server/storage_exchange.py"
@@ -26,6 +27,7 @@ on:
       - "tests/test_postgres_offline_sync.py"
       - "tests/test_linked_storage.py"
       - "tests/test_linked_storage_api.py"
+      - "tests/test_linked_storage_sources_api.py"
       - "tests/test_postgres_linked_storage.py"
       - "tests/test_postgres_linked_preview.py"
       - "tests/test_storage_exchange.py"
@@ -85,6 +87,7 @@ jobs:
             src/natureai_next/server/offline_sync_api.py \
             src/natureai_next/server/postgres_offline_sync.py \
             src/natureai_next/server/linked_storage_api.py \
+            src/natureai_next/server/linked_storage_sources_api.py \
             src/natureai_next/server/postgres_linked_storage.py \
             src/natureai_next/server/postgres_linked_preview.py \
             src/natureai_next/server/storage_exchange.py \
@@ -98,6 +101,7 @@ jobs:
             tests/test_postgres_offline_sync.py \
             tests/test_linked_storage.py \
             tests/test_linked_storage_api.py \
+            tests/test_linked_storage_sources_api.py \
             tests/test_postgres_linked_storage.py \
             tests/test_postgres_linked_preview.py \
             tests/test_storage_exchange.py \
@@ -118,6 +122,7 @@ jobs:
           src/natureai_next/server/postgres_offline_sync.py
           src/natureai_next/server/linked_storage.py
           src/natureai_next/server/linked_storage_api.py
+          src/natureai_next/server/linked_storage_sources_api.py
           src/natureai_next/server/postgres_linked_storage.py
           src/natureai_next/server/postgres_linked_preview.py
           src/natureai_next/server/storage_exchange.py
@@ -139,6 +144,7 @@ jobs:
           src/natureai_next/server/postgres_offline_sync.py
           src/natureai_next/server/linked_storage.py
           src/natureai_next/server/linked_storage_api.py
+          src/natureai_next/server/linked_storage_sources_api.py
           src/natureai_next/server/postgres_linked_storage.py
           src/natureai_next/server/postgres_linked_preview.py
           src/natureai_next/server/storage_exchange.py
@@ -156,6 +162,7 @@ jobs:
           tests/test_postgres_offline_sync.py
           tests/test_linked_storage.py
           tests/test_linked_storage_api.py
+          tests/test_linked_storage_sources_api.py
           tests/test_postgres_linked_storage.py
           tests/test_postgres_linked_preview.py
           tests/test_storage_exchange.py

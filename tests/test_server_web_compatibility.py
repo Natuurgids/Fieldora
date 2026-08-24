@@ -111,11 +111,17 @@ def test_production_web_composition_includes_certified_browser_surfaces() -> Non
     assert b"New research record" in patched.body
     assert b"fieldoraLibraryCollectionsWired" in patched.body
     assert b"Collections & Datasets" in patched.body
+    assert b"fieldoraScienceWorkflowWired" in patched.body
+    assert b"Review observations" in patched.body
+    assert b"Add identification" in patched.body
     assert patched.body.rfind(b"fieldoraDesktopAlignmentWired") > patched.body.rfind(
         b"Fieldora linked archives"
     )
     assert patched.body.rfind(b"fieldoraLibraryCollectionsWired") > patched.body.rfind(
         b"fieldoraDesktopAlignmentWired"
+    )
+    assert patched.body.rfind(b"fieldoraScienceWorkflowWired") > patched.body.rfind(
+        b"fieldoraLibraryCollectionsWired"
     )
 
 

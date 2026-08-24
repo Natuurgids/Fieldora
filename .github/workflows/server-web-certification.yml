@@ -10,6 +10,7 @@ on:
       - "src/natureai_next/server/navigation_web_compatibility.py"
       - "src/natureai_next/server/desktop_alignment_web.py"
       - "src/natureai_next/server/library_collections_web.py"
+      - "src/natureai_next/server/science_workflow_web.py"
       - "src/natureai_next/server/contract_web_compatibility.py"
       - "src/natureai_next/server/facility_web_compatibility.py"
       - "src/natureai_next/server/browser_functionality_web.py"
@@ -63,6 +64,7 @@ jobs:
           src/natureai_next/server/navigation_web_compatibility.py
           src/natureai_next/server/desktop_alignment_web.py
           src/natureai_next/server/library_collections_web.py
+          src/natureai_next/server/science_workflow_web.py
           src/natureai_next/server/browser_functionality_web.py
           src/natureai_next/server/linked_storage_web.py
           src/natureai_next/server/linked_storage_browser_api.py

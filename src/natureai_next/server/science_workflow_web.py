@@ -10,6 +10,11 @@ _SCIENCE_WORKFLOW_PATCH = bytes(
  if(window.__fieldoraScienceWorkflowWired)return;
  window.__fieldoraScienceWorkflowWired=true;
  const q=id=>document.getElementById(id);
+ const style=document.createElement("style");
+ style.textContent=`
+  #observation-review-panel[hidden],#knowledge-review-panel[hidden],#knowledge-add-panel[hidden]{display:none!important}
+ `;
+ document.head.appendChild(style);
 
  function makeTaskNav(host,id,entries,onSelect){
   if(!host||q(id))return null;
@@ -32,6 +37,7 @@ _SCIENCE_WORKFLOW_PATCH = bytes(
  const observations=q("page-observations");
  if(observations){
   const review=observations.querySelector(".split"),editor=q("observation-editor");
+  if(review)review.id="observation-review-panel";
   let observationView="review";
   let observationNav=null;
   const intro=document.createElement("p");intro.id="observation-workspace-intro";intro.className="library-workspace-intro";
@@ -65,6 +71,8 @@ _SCIENCE_WORKFLOW_PATCH = bytes(
  if(knowledgePage){
   const review=knowledgePage.querySelector(".split");
   const add=q("knowledge-status")?.closest(".card");
+  if(review)review.id="knowledge-review-panel";
+  if(add)add.id="knowledge-add-panel";
   const search=q("knowledge-search"),run=q("run-analysis");
   let knowledgeView="review";
   let knowledgeNav=null;

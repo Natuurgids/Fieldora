@@ -66,6 +66,24 @@ class PostgresLinkedStorageRepository:
                 )
                 cursor.execute(
                     """
+                    CREATE TABLE IF NOT EXISTS linked_storage_source_events_pg(
+                        sequence BIGSERIAL PRIMARY KEY,
+                        storage_id TEXT NOT NULL
+                            REFERENCES linked_storage_sources_pg(storage_id) ON DELETE CASCADE,
+                        organization_id TEXT NOT NULL,
+                        actor_id TEXT NOT NULL,
+                        event_type TEXT NOT NULL,
+                        occurred_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                    )
+                    """
+                )
+                cursor.execute(
+                    "CREATE INDEX IF NOT EXISTS ix_linked_storage_source_events_scope_pg "
+                    "ON linked_storage_source_events_pg("
+                    "organization_id,storage_id,occurred_at,sequence)"
+                )
+                cursor.execute(
+                    """
                     CREATE TABLE IF NOT EXISTS linked_storage_media_pg(
                         media_id TEXT PRIMARY KEY,
                         storage_id TEXT NOT NULL REFERENCES linked_storage_sources_pg(storage_id),
@@ -158,6 +176,50 @@ class PostgresLinkedStorageRepository:
                 )
                 if cursor.rowcount != 1:
                     raise ValueError("storage source ownership cannot be changed")
+
+    def set_source_enabled(
+        self,
+        storage_id: str,
+        organization_id: str,
+        enabled: bool,
+        *,
+        actor_id: str,
+    ) -> bool:
+        storage_id = storage_id.strip()
+        organization_id = organization_id.strip()
+        actor_id = actor_id.strip()
+        if not all((storage_id, organization_id, actor_id)):
+            raise ValueError("linked storage lifecycle identity is required")
+        target = bool(enabled)
+        with self._connect() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT enabled FROM linked_storage_sources_pg "
+                    "WHERE storage_id=%s AND organization_id=%s FOR UPDATE",
+                    (storage_id, organization_id),
+                )
+                row = cursor.fetchone()
+                if row is None:
+                    return False
+                if bool(row[0]) == target:
+                    return True
+                cursor.execute(
+                    "UPDATE linked_storage_sources_pg SET enabled=%s "
+                    "WHERE storage_id=%s AND organization_id=%s",
+                    (target, storage_id, organization_id),
+                )
+                cursor.execute(
+                    "INSERT INTO linked_storage_source_events_pg("
+                    "storage_id,organization_id,actor_id,event_type"
+                    ") VALUES(%s,%s,%s,%s)",
+                    (
+                        storage_id,
+                        organization_id,
+                        actor_id,
+                        "source_enabled" if target else "source_disabled",
+                    ),
+                )
+        return True
 
     def source(self, storage_id: str) -> StorageSourceRegistration | None:
         with self._connect() as connection:

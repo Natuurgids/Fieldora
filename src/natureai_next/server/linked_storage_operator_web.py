@@ -26,6 +26,14 @@ _LINKED_STORAGE_OPERATOR_WEB_PATCH = bytes(
   }catch(error){if(status)status.textContent=error.message}
  }
 
+ function renderArchiveEvents(events){
+  const target=byId("operator-linked-archive-events");if(!target)return;
+  target.innerHTML=events.length?events.map(event=>{
+   const when=event.occurred_at?new Date(event.occurred_at).toLocaleString():"unknown time";
+   return `<div class="row" data-linked-archive-event="${html(event.event_type)}"><strong>${html(event.event_type)}</strong><span>${html(event.storage_id)} · ${html(event.actor_id)}</span><span>${html(when)}</span></div>`;
+  }).join(""):'<div class="empty">No linked archive lifecycle events recorded.</div>';
+ }
+
  async function loadLinkedArchives(){
   const target=byId("operator-linked-archives");if(!target)return;
   try{
@@ -35,6 +43,7 @@ _LINKED_STORAGE_OPERATOR_WEB_PATCH = bytes(
     const health=!enabled?"Disabled":item.stale?"Needs attention":"Healthy",operation=enabled?"disable":"enable",label=enabled?"Disable archive":"Enable archive";
     return `<div class="row" data-linked-archive="${html(item.storage_id)}"><strong>${html(item.display_name||item.storage_id)}</strong><span>${html(item.storage_id)} · ${html(item.service_name||item.service_id)}</span><span class="pill">${html(item.service_state)} · ${html(health)}</span><span>${html(item.node_name||"unregistered node")} · ${html(age)}${item.read_only?" · read only":""}</span><div class="actions"><button data-linked-archive-action="${operation}" data-linked-storage-id="${html(item.storage_id)}">${label}</button></div></div>`;
    }).join(""):'<div class="empty">No linked archives registered for this organization.</div>';
+   renderArchiveEvents(overview.linked_archive_events||[]);
    target.querySelectorAll("[data-linked-archive-action]").forEach(button=>button.addEventListener("click",()=>setArchiveEnabled(button.dataset.linkedStorageId,button.dataset.linkedArchiveAction==="enable")));
   }catch(error){target.innerHTML=`<div class="empty">${html(error.message)}</div>`}
  }
@@ -43,7 +52,7 @@ _LINKED_STORAGE_OPERATOR_WEB_PATCH = bytes(
   const page=byId("page-operator");if(!page)return false;
   if(!byId("operator-linked-archives")){
    const section=document.createElement("section");section.className="card section";
-   section.innerHTML='<h2>Linked archives</h2><p class="muted">Archive ownership, enrolled storage service and heartbeat freshness. Disablement revokes Library access without exposing or changing storage-node paths.</p><p id="operator-linked-archives-status" class="status"></p><div id="operator-linked-archives" class="list"></div>';
+   section.innerHTML='<h2>Linked archives</h2><p class="muted">Archive ownership, enrolled storage service and heartbeat freshness. Disablement revokes Library access without exposing or changing storage-node paths.</p><p id="operator-linked-archives-status" class="status"></p><div id="operator-linked-archives" class="list"></div><h3>Recent lifecycle activity</h3><p class="muted">Newest registration and Operator lifecycle events for this organization.</p><div id="operator-linked-archive-events" class="list"></div>';
    const storage=byId("operator-storage")?.closest("section");
    if(storage)storage.after(section);else page.appendChild(section);
   }

@@ -13,6 +13,9 @@ from natureai_next.server.api import ApiResponse
 from natureai_next.server.browser_functionality_web import patch_browser_functionality_response
 from natureai_next.server.contract_web_compatibility import patch_contract_web_response
 from natureai_next.server.facility_web_compatibility import patch_facility_web_response
+from natureai_next.server.linked_storage_operator_web import (
+    patch_linked_storage_operator_web_response,
+)
 from natureai_next.server.linked_storage_web import patch_linked_storage_web_response
 from natureai_next.server.navigation_web_compatibility import patch_navigation_web_response
 from natureai_next.server.web_compatibility import patch_web_response
@@ -34,6 +37,7 @@ def _web_fixture(tmp_path: Path):
         patch_navigation_web_response,
         patch_browser_functionality_response,
         patch_linked_storage_web_response,
+        patch_linked_storage_operator_web_response,
     ):
         response = patch("/app.js", response)
     (tmp_path / "app.js").write_bytes(response.body)
@@ -155,6 +159,38 @@ def _mock_api(route: Route) -> None:
     if path == "linked-storage/ranges" and method == "GET":
         route.fulfill(status=206, content_type="application/octet-stream", body=b"ABCDEF")
         return
+    if path == "operator/overview":
+        route.fulfill(
+            status=200,
+            content_type="application/json",
+            body=json.dumps(
+                {
+                    "organization_id": "org-1",
+                    "checked_at_epoch": 1000,
+                    "service_counts": {"active": 1},
+                    "stale_service_count": 0,
+                    "expiring_certificate_count": 0,
+                    "services": [],
+                    "storage": [],
+                    "jobs": {},
+                    "runtime": {},
+                    "linked_archives": [
+                        {
+                            "storage_id": "archive-1",
+                            "display_name": "Primary research archive",
+                            "read_only": True,
+                            "service_id": "storage-service-1",
+                            "service_name": "Archive service",
+                            "node_name": "storage-node-1",
+                            "service_state": "active",
+                            "heartbeat_age_seconds": 18,
+                            "stale": False,
+                        }
+                    ],
+                }
+            ),
+        )
+        return
     route.fulfill(status=200, content_type="application/json", body='{"items":[]}')
 
 
@@ -168,9 +204,14 @@ def test_patch_is_app_only_and_idempotent() -> None:
     assert patch_linked_storage_web_response("/app.js", patched).body == patched.body
     assert patch_linked_storage_web_response("/other.js", base).body == base.body
 
+    operator = patch_linked_storage_operator_web_response("/app.js", base)
+    assert b"linked archive ownership" in operator.body
+    assert b"operator-linked-archives" in operator.body
+    assert patch_linked_storage_operator_web_response("/app.js", operator).body == operator.body
+
 
 @pytest.mark.parametrize("browser_name", ("chromium", "firefox", "webkit"))
-def test_linked_archive_library_browse_preview_and_original_download(
+def test_linked_archive_library_browse_preview_original_and_operator_health(
     tmp_path: Path, browser_name: str
 ) -> None:
     with _web_fixture(tmp_path) as url, sync_playwright() as playwright:
@@ -203,4 +244,13 @@ def test_linked_archive_library_browse_preview_and_original_download(
         download = download_info.value
         assert download.suggested_filename == "image.jpg"
         assert Path(download.path()).read_bytes() == b"ABCDEF"
+
+        page.locator('.nav[data-page="operator"]').click()
+        page.wait_for_selector("#operator-linked-archives .row")
+        operator_text = page.locator("#operator-linked-archives").inner_text()
+        assert "Primary research archive" in operator_text
+        assert "Archive service" in operator_text
+        assert "active · Healthy" in operator_text
+        assert "18s heartbeat age" in operator_text
+        assert "/mnt/" not in operator_text
         browser.close()

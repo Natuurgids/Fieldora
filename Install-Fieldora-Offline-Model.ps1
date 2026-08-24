@@ -10,7 +10,9 @@ application container and are mounted read-only into the API and worker.
 param(
     [Parameter(Mandatory)][string]$InstallRoot,
     [Parameter(Mandatory)][string]$BundlePath,
-    [ValidateRange(1,1099511627776)][Int64]$MaxBytes = 68719476736
+    [ValidateRange(1,1099511627776)][Int64]$MaxBytes = 68719476736,
+    [string]$TrustedSigningKey = "",
+    [switch]$RequireSignature
 )
 
 $ErrorActionPreference = "Stop"
@@ -42,6 +44,16 @@ if (-not (Test-Path -LiteralPath $bundleFull -PathType Container)) {
 if (-not (Test-Path -LiteralPath (Join-Path $bundleFull "manifest.json") -PathType Leaf)) {
     throw "Offline model bundle must contain manifest.json."
 }
+if ($RequireSignature -and [string]::IsNullOrWhiteSpace($TrustedSigningKey)) {
+    throw "-RequireSignature requires -TrustedSigningKey."
+}
+$signingKeyFull = ""
+if (-not [string]::IsNullOrWhiteSpace($TrustedSigningKey)) {
+    $signingKeyFull = [IO.Path]::GetFullPath($TrustedSigningKey)
+    if (-not (Test-Path -LiteralPath $signingKeyFull -PathType Leaf)) {
+        throw "Trusted signing public key was not found: $signingKeyFull"
+    }
+}
 New-Item -ItemType Directory -Force -Path $modelStore | Out-Null
 
 $image = (@(& docker images --format "{{.Repository}}:{{.Tag}}" "fieldora-v5-rocky:local") -join "").Trim()
@@ -50,16 +62,32 @@ if ($image -ne "fieldora-v5-rocky:local") {
 }
 
 Write-Host "Verifying and installing offline model bundle..." -ForegroundColor Cyan
-& docker run --rm `
-    --network none `
-    --read-only `
-    --cap-drop ALL `
-    --security-opt no-new-privileges:true `
-    --user 0 `
-    -v "${bundleFull}:/bundle:ro" `
-    -v "${modelStore}:/models" `
-    fieldora-v5-rocky:local `
-    fieldora-model-bundle install /bundle --store /models --max-bytes $MaxBytes
+$dockerArgs = @(
+    "run", "--rm",
+    "--network", "none",
+    "--read-only",
+    "--cap-drop", "ALL",
+    "--security-opt", "no-new-privileges:true",
+    "--user", "0",
+    "-v", "${bundleFull}:/bundle:ro",
+    "-v", "${modelStore}:/models"
+)
+if ($signingKeyFull) {
+    $dockerArgs += @("-v", "${signingKeyFull}:/trusted-signing-key.pem:ro")
+}
+$dockerArgs += @(
+    "fieldora-v5-rocky:local",
+    "fieldora-model-bundle", "install", "/bundle",
+    "--store", "/models",
+    "--max-bytes", "$MaxBytes"
+)
+if ($signingKeyFull) {
+    $dockerArgs += @("--trusted-signing-key", "/trusted-signing-key.pem")
+}
+if ($RequireSignature) {
+    $dockerArgs += "--require-signature"
+}
+& docker @dockerArgs
 if ($LASTEXITCODE -ne 0) {
     throw "Offline model verification or installation failed."
 }
@@ -87,5 +115,8 @@ if ($LASTEXITCODE -ne 0) {
 
 Write-Host ""
 Write-Host "Offline model installed and model store mounted read-only." -ForegroundColor Green
+if ($RequireSignature) {
+    Write-Host "Manifest signature: required and verified against the supplied Ed25519 public key." -ForegroundColor Green
+}
 Write-Host "Model registry metadata uses opaque artifact storage IDs; host paths are not browser metadata."
 Write-Host "For future docker compose operations, include compose.models.yaml so the model mount remains part of the desired state."

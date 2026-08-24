@@ -103,8 +103,10 @@ _DESKTOP_ALIGNMENT_PATCH = bytes(
  });
  const uploadInput=q("upload-file");
  if(uploadInput){const label=uploadInput.closest("label");if(label)label.hidden=true;}
- const oldFolderButton=q("upload-folder");if(oldFolderButton)oldFolderButton.closest(".import-source-actions")?.remove();
  const folderInput=q("upload-folder-input");
+ const oldFolderButton=q("upload-folder");
+ if(folderInput)q("import-card")?.appendChild(folderInput);
+ if(oldFolderButton)oldFolderButton.closest(".import-source-actions")?.remove();
  const sourceSummary=document.createElement("p");sourceSummary.id="import-source-summary";sourceSummary.className="import-source-summary";sourceSummary.textContent="Choose Files or Folder from Import.";
  q("import-card")?.querySelector(".form-grid")?.after(sourceSummary);
  if(uploadInput)uploadInput.addEventListener("change",()=>{const n=uploadInput.files?.length||0;sourceSummary.textContent=n?`${n} file${n===1?"":"s"} selected for governed import.`:"Choose Files or Folder from Import."});

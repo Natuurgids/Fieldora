@@ -106,6 +106,9 @@ def test_production_web_composition_includes_certified_browser_surfaces() -> Non
     assert b"Fieldora linked archives" in patched.body
     assert b"Recent lifecycle activity" in patched.body
     assert b"fieldoraDesktopAlignmentWired" in patched.body
+    assert b"Continue scientific work" in patched.body
+    assert b"Create and inspect scientific records here" in patched.body
+    assert b"New research record" in patched.body
     assert patched.body.rfind(b"fieldoraDesktopAlignmentWired") > patched.body.rfind(
         b"Fieldora linked archives"
     )

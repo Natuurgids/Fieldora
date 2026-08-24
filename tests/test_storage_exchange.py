@@ -86,7 +86,6 @@ def test_catalogue_batch_digest_detects_tampering_and_supports_chain() -> None:
         items=(),
         previous_batch_sha256=signed.batch_sha256,
     )
-    second = replace(second, batch_sha256=batch.calculated_sha256())
     second = replace(second, batch_sha256=second.calculated_sha256())
     assert second.verify()
     assert second.previous_batch_sha256 == signed.batch_sha256

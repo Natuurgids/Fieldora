@@ -5,7 +5,7 @@ from natureai_next.server.api import ApiResponse
 _DESKTOP_ALIGNMENT_PATCH = bytes(
     r"""
 
-/* Fieldora desktop/server alignment: one stable workspace model and one Import action. */
+/* Fieldora desktop/server alignment: stable workspaces, coherent Library, one Import action. */
 (()=>{
  if(window.__fieldoraDesktopAlignmentWired)return;window.__fieldoraDesktopAlignmentWired=true;
  const q=id=>document.getElementById(id);
@@ -18,6 +18,8 @@ _DESKTOP_ALIGNMENT_PATCH = bytes(
   .import-menu{position:fixed;z-index:1000;display:grid;min-width:220px;padding:7px;background:var(--panel2);border:1px solid var(--line);border-radius:10px;box-shadow:0 12px 30px #0008}
   .import-menu[hidden]{display:none!important}.import-menu button{border:0;background:transparent;text-align:left}.import-menu button:hover{background:#203b32}
   .import-source-summary{color:var(--muted);font-size:13px;margin-top:8px}
+  .library-workspace-intro{margin:-6px 0 14px;color:var(--muted);max-width:880px}
+  #library-browse-panel[hidden],#linked-storage-card[hidden],#import-card[hidden]{display:none!important}
  `;
  document.head.appendChild(style);
 
@@ -83,6 +85,48 @@ _DESKTOP_ALIGNMENT_PATCH = bytes(
   document.querySelectorAll(".workspace-subnav [data-workspace-target]").forEach(b=>b.setAttribute("aria-selected",String(b.dataset.workspaceTarget===page)));
  };
 
+ /* The Library is one workspace with three clear tasks instead of a vertical
+    accumulation of unrelated cards. Existing evidence controls remain intact. */
+ const library=q("page-library");
+ let libraryView="browse";
+ let librarySubnav=null;
+ let libraryBrowsePanel=null;
+ function ensureLibraryStructure(){
+  if(!library)return;
+  if(!librarySubnav){
+   const top=library.querySelector(".top");
+   librarySubnav=document.createElement("div");librarySubnav.id="library-workspace-nav";librarySubnav.className="workspace-subnav";librarySubnav.setAttribute("role","tablist");
+   [["browse","Browse evidence"],["linked","Linked archives"],["import","Import"]].forEach(([view,label])=>{
+    const b=document.createElement("button");b.type="button";b.dataset.libraryView=view;b.textContent=label;b.onclick=()=>setLibraryView(view);librarySubnav.appendChild(b);
+   });
+   const intro=document.createElement("p");intro.id="library-workspace-intro";intro.className="library-workspace-intro";
+   if(top){top.after(librarySubnav);librarySubnav.after(intro)}else{library.prepend(librarySubnav);librarySubnav.after(intro)}
+  }
+  if(!libraryBrowsePanel){
+   const mediaTabs=[...library.children].find(node=>node.classList?.contains("tabs"));
+   const evidenceSplit=[...library.children].find(node=>node.classList?.contains("split")&&node.querySelector?.("#media-grid"));
+   if(mediaTabs||evidenceSplit){
+    libraryBrowsePanel=document.createElement("section");libraryBrowsePanel.id="library-browse-panel";
+    if(mediaTabs){mediaTabs.before(libraryBrowsePanel);libraryBrowsePanel.appendChild(mediaTabs)}
+    if(evidenceSplit)libraryBrowsePanel.appendChild(evidenceSplit);
+   }
+  }
+  applyLibraryView();
+ }
+ function applyLibraryView(){
+  if(!library)return;
+  const linked=q("linked-storage-card"),importCard=q("import-card"),intro=q("library-workspace-intro");
+  if(libraryBrowsePanel)libraryBrowsePanel.hidden=libraryView!=="browse";
+  if(linked)linked.hidden=libraryView!=="linked";
+  if(importCard)importCard.hidden=libraryView!=="import";
+  librarySubnav?.querySelectorAll("[data-library-view]").forEach(b=>b.setAttribute("aria-selected",String(b.dataset.libraryView===libraryView)));
+  if(intro)intro.textContent=libraryView==="browse"?"Browse governed evidence already available to you. Filters change the evidence view without changing its provenance.":libraryView==="linked"?"Browse organization-controlled linked archives in place; originals stay on their authoritative storage.":"Add new evidence to the governed Library. Project context is optional and the source is chosen from the Import action.";
+ }
+ function setLibraryView(view){libraryView=view;ensureLibraryStructure();applyLibraryView()}
+ ensureLibraryStructure();
+ const libraryObserver=library?new MutationObserver(()=>{if(q("linked-storage-card")&&!q("linked-storage-card").dataset.libraryAligned){q("linked-storage-card").dataset.libraryAligned="true";applyLibraryView()}}):null;
+ if(libraryObserver)libraryObserver.observe(library,{childList:true});
+
  const menu=document.createElement("div");menu.id="fieldora-import-menu";menu.className="import-menu";menu.hidden=true;menu.setAttribute("role","menu");
  menu.innerHTML='<button type="button" data-import-source="files" role="menuitem">Files…</button><button type="button" data-import-source="folder" role="menuitem">Folder with subfolders…</button>';
  document.body.appendChild(menu);
@@ -105,8 +149,8 @@ _DESKTOP_ALIGNMENT_PATCH = bytes(
  const sourceSummary=document.createElement("p");sourceSummary.id="import-source-summary";sourceSummary.className="import-source-summary";sourceSummary.textContent="Choose Files or Folder from Import.";
  q("import-card")?.querySelector(".form-grid")?.after(sourceSummary);
  if(uploadInput)uploadInput.addEventListener("change",()=>{const n=uploadInput.files?.length||0;sourceSummary.textContent=n?`${n} file${n===1?"":"s"} selected for governed import.`:"Choose Files or Folder from Import."});
- menu.querySelector('[data-import-source="files"]').onclick=()=>{closeImportMenu();showPage("library");q("import-card")?.scrollIntoView({behavior:"smooth",block:"start"});uploadInput?.click()};
- menu.querySelector('[data-import-source="folder"]').onclick=()=>{closeImportMenu();showPage("library");q("import-card")?.scrollIntoView({behavior:"smooth",block:"start"});folderInput?.click()};
+ menu.querySelector('[data-import-source="files"]').onclick=()=>{closeImportMenu();showPage("library");setLibraryView("import");q("import-card")?.scrollIntoView({behavior:"smooth",block:"start"});uploadInput?.click()};
+ menu.querySelector('[data-import-source="folder"]').onclick=()=>{closeImportMenu();showPage("library");setLibraryView("import");q("import-card")?.scrollIntoView({behavior:"smooth",block:"start"});folderInput?.click()};
  const uploadButton=q("upload-start");if(uploadButton)uploadButton.textContent="Import selected files";
 
  const active=(location.hash||"#home").slice(1);if(q(`page-${active}`))showPage(active);else showPage("home");

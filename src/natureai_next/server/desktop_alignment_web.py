@@ -2,7 +2,6 @@
 
 from natureai_next.server.api import ApiResponse
 
-
 _DESKTOP_ALIGNMENT_PATCH = bytes(
     r"""
 

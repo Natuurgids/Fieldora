@@ -54,7 +54,14 @@ def _safe_scan_metadata(value: object) -> dict[str, object] | None:
         file_count = max(0, int(value.get("file_count", 0)))
     except (TypeError, ValueError):
         return None
-    result: dict[str, object] = {"result": "clean", "file_count": file_count}
+    payload_sha256 = str(value.get("payload_sha256") or "").strip().lower()
+    if len(payload_sha256) != 64 or any(c not in "0123456789abcdef" for c in payload_sha256):
+        return None
+    result: dict[str, object] = {
+        "result": "clean",
+        "file_count": file_count,
+        "payload_sha256": payload_sha256,
+    }
     for key in ("scanner", "scanner_version", "definitions", "scanned_at"):
         text = str(value.get(key) or "").strip()
         if not text or len(text) > _MAX_SCAN_TEXT:
@@ -167,13 +174,13 @@ class InstalledModelApiMixin:
         for record in store.records():
             decision = self._decisions.decide(  # type: ignore[attr-defined]
                 AccessRequest(
-                    subject_id=identity.identity_id,
-                    action="view",
-                    resource_type="ai_model",
-                    resource_id=str(record["id"]),
-                    organization_id=identity.organization_id,
-                    project_id="platform",
-                    purpose=purpose,
+                    identity.identity_id,
+                    "view",
+                    "ai_model",
+                    str(record["id"]),
+                    identity.organization_id,
+                    "platform",
+                    purpose,
                 )
             )
             if decision.allowed:

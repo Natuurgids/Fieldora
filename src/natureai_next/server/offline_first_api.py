@@ -5,18 +5,18 @@ from __future__ import annotations
 import os
 from collections.abc import Callable
 
-from natureai_next.server.browser_functionality_api import BrowserFunctionalityFieldoraApi
 from natureai_next.server.linked_storage_api import (
     LinkedStorageApiMixin,
     LinkedStorageRepository,
 )
+from natureai_next.server.linked_storage_browser_api import LinkedStorageBrowserFieldoraApi
 from natureai_next.server.offline_sync_api import OfflineSyncApiMixin, OfflineSyncRepository
 
 
 class OfflineFirstFieldoraApi(
     LinkedStorageApiMixin,
     OfflineSyncApiMixin,
-    BrowserFunctionalityFieldoraApi,
+    LinkedStorageBrowserFieldoraApi,
 ):
     """Browser/platform API with explicitly configured offline-first repositories."""
 

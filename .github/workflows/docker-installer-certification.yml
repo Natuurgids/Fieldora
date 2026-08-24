@@ -5,6 +5,7 @@ on:
     paths:
       - "Install-Fieldora-Clean.ps1"
       - "Install-Fieldora-Clean-Windows.ps1"
+      - "Install-Fieldora-Bootstrap-Handoff.ps1"
       - "src/natureai_next/server/service_trust.py"
       - "src/natureai_next/bootstrap/service_trust_cli.py"
       - "src/natureai_next/bootstrap/certificate_renewer_cli.py"
@@ -24,7 +25,7 @@ jobs:
       - name: Parse PowerShell installers
         shell: pwsh
         run: |
-          foreach ($path in @('./Install-Fieldora-Clean.ps1','./Install-Fieldora-Clean-Windows.ps1')) {
+          foreach ($path in @('./Install-Fieldora-Clean.ps1','./Install-Fieldora-Clean-Windows.ps1','./Install-Fieldora-Bootstrap-Handoff.ps1')) {
             $text = Get-Content -LiteralPath $path -Raw
             [void][scriptblock]::Create($text)
             Write-Host "$path syntax: OK"
@@ -65,6 +66,23 @@ jobs:
             throw 'Clean installer must not enable insecure HTTP.'
           }
           Write-Host "Service enrollment, HTTPS, mTLS and live renewal contract: OK"
+
+      - name: Certify automatic bootstrap credential handoff
+        shell: pwsh
+        run: |
+          $text = Get-Content -LiteralPath ./Install-Fieldora-Clean-Windows.ps1 -Raw
+          foreach ($needle in @(
+            '[ValidateRange(1,90)][int]$CredentialHandoffRetentionDays = 7',
+            'Install-Fieldora-Bootstrap-Handoff.ps1',
+            '-RetentionDays $CredentialHandoffRetentionDays',
+            'bootstrap-handoff\\ADMIN-CREDENTIALS.txt',
+            'Credential handoff retention:'
+          )) {
+            if (-not $text.Contains($needle)) {
+              throw "Windows clean install does not automatically configure expiring credential handoff: $needle"
+            }
+          }
+          Write-Host "Automatic temporary administrator credential handoff: OK"
 
       - name: Certify Windows CurrentUser root trust
         shell: pwsh

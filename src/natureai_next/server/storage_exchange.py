@@ -55,6 +55,8 @@ class StorageSourceRegistration:
             raise ValueError("storage source registration fields are required")
         if "/" in self.root_alias or "\\" in self.root_alias:
             raise ValueError("root_alias is an opaque service-side name, not a path")
+        if not self.read_only:
+            raise ValueError("linked storage sources must be read only")
 
 
 @dataclass(frozen=True, slots=True)
@@ -186,13 +188,14 @@ class GovernedStorageRead:
                 self.organization_id,
                 self.subject_id,
                 self.purpose,
+                self.authorization_sha256,
             )
         ):
-            raise ValueError("governed storage read identity is required")
+            raise ValueError("governed storage read fields are required")
         if self.start < 0 or self.end < self.start:
-            raise ValueError("invalid governed byte range")
+            raise ValueError("invalid governed storage read range")
         if not _valid_sha256(self.authorization_sha256):
-            raise ValueError("authorization decision digest is required")
+            raise ValueError("invalid authorization digest")
 
 
 @dataclass(frozen=True, slots=True)
@@ -216,30 +219,28 @@ class PreviewPriorityRequest:
                 self.requested_by,
             )
         ):
-            raise ValueError("preview priority request fields are required")
-        if not self.media_ids or len(self.media_ids) > 1000:
-            raise ValueError("preview priority request must contain 1..1000 media ids")
+            raise ValueError("preview request fields are required")
+        if not self.media_ids or any(not media_id.strip() for media_id in self.media_ids):
+            raise ValueError("preview request media ids are required")
         if len(set(self.media_ids)) != len(self.media_ids):
-            raise ValueError("preview priority request contains duplicate media ids")
+            raise ValueError("preview request media ids must be unique")
         if not 0 <= self.priority <= 1000:
-            raise ValueError("preview priority must be between 0 and 1000")
+            raise ValueError("preview request priority is out of range")
 
 
-def authorization_digest(decision: dict[str, Any]) -> str:
-    """Stable digest included in read grants for audit correlation, not authorization."""
-    encoded = json.dumps(
-        decision, sort_keys=True, separators=(",", ":"), ensure_ascii=False
-    ).encode("utf-8")
-    return hashlib.sha256(encoded).hexdigest()
+def authorization_digest(payload: dict[str, Any]) -> str:
+    canonical = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 def _safe_relative_path(value: str) -> str:
-    normalized = value.replace("\\", "/").strip("/")
-    parts = tuple(part for part in normalized.split("/") if part)
-    if not parts or any(part in {".", ".."} for part in parts):
-        raise ValueError("invalid storage relative path")
+    if not value or value.startswith(("/", "\\")) or "\\" in value:
+        raise ValueError("relative_path must use forward slashes and remain relative")
+    parts = value.split("/")
+    if any(part in ("", ".", "..") for part in parts):
+        raise ValueError("relative_path contains unsafe segments")
     return "/".join(parts)
 
 
 def _valid_sha256(value: str) -> bool:
-    return len(value) == 64 and all(char in "0123456789abcdef" for char in value)
+    return len(value) == 64 and all(char in "0123456789abcdefABCDEF" for char in value)

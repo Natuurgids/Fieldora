@@ -93,7 +93,9 @@ def test_administration_navigation_is_grouped_without_losing_destinations(
         assert nav.is_visible()
         groups = nav.locator(".administration-nav-group")
         assert groups.count() == 3
-        assert groups.locator(".administration-nav-group-label").all_inner_texts() == [
+        # innerText reflects the intentional CSS text-transform used for section labels.
+        # Assert the semantic DOM labels instead of coupling the test to presentation case.
+        assert groups.locator(".administration-nav-group-label").all_text_contents() == [
             "Governance & review",
             "Operations",
             "Platform services",

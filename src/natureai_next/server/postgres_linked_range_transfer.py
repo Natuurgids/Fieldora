@@ -117,8 +117,10 @@ class PostgresLinkedRangeTransfers:
             with connection.cursor() as cursor:
                 self._delete_expired(cursor)
                 cursor.execute(
-                    "SELECT storage_id,size_bytes,mime_type,object_state "
-                    "FROM linked_storage_media_pg WHERE media_id=%s AND organization_id=%s",
+                    "SELECT m.storage_id,m.size_bytes,m.mime_type,m.object_state "
+                    "FROM linked_storage_media_pg m "
+                    "JOIN linked_storage_sources_pg s ON s.storage_id=m.storage_id "
+                    "WHERE m.media_id=%s AND m.organization_id=%s AND s.enabled=TRUE",
                     (media_id, organization_id),
                 )
                 media = cursor.fetchone()

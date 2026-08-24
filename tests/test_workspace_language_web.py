@@ -68,6 +68,13 @@ def _mock_api(route: Route) -> None:
         payload = {"items": []}
     elif path == "audit":
         payload = {"items": [], "chain_verified": True}
+    elif path == "specimens":
+        payload = {
+            "items": [
+                {"id": "specimen-1", "name": "Moss voucher", "status": "active"},
+                {"id": "specimen-2", "name": "Lichen voucher", "status": "active"},
+            ]
+        }
     else:
         payload = {"items": []}
     route.fulfill(status=200, content_type="application/json", body=json.dumps(payload))
@@ -88,8 +95,10 @@ def test_workspace_search_language_matches_current_information_architecture(
         page.goto(url)
         page.wait_for_selector("#workspace:not([hidden])")
 
+        home_search = page.locator("#page-home input.search")
+        assert home_search.is_hidden()
+
         expectations = {
-            "home": ("Search Fieldora", "Search Fieldora"),
             "library": ("Search evidence", "Search governed evidence"),
             "observations": ("Search observations", "Search observations"),
             "research": ("Search research records", "Search research records"),
@@ -100,6 +109,21 @@ def test_workspace_search_language_matches_current_information_architecture(
             search = page.locator(f"#page-{workspace} input.search")
             assert search.get_attribute("placeholder") == placeholder
             assert search.get_attribute("aria-label") == label
+
+        page.locator('.sidebar .nav[data-page="research"]').click()
+        research_search = page.locator("#page-research input.search")
+        assert "global-search" not in (research_search.get_attribute("class") or "")
+        page.wait_for_selector("#research-domain-list .row")
+        assert page.locator("#research-domain-list .row").count() == 2
+        research_search.fill("moss")
+        assert page.locator("#research-domain-list .row:visible").count() == 1
+        assert "Moss voucher" in page.locator("#research-domain-list .row:visible").inner_text()
+        research_search.fill("fern")
+        assert page.locator("#research-domain-list .row:visible").count() == 0
+        assert page.locator("#research-search-empty").is_visible()
+        research_search.fill("")
+        assert page.locator("#research-domain-list .row:visible").count() == 2
+        assert page.locator("#research-search-empty").is_hidden()
 
         page.locator('.sidebar .nav[data-page="library"]').click()
         assert page.locator("#page-library .go-import").get_attribute("aria-label") == (

@@ -1,5 +1,6 @@
 from natureai_next.server.api import ApiResponse
 from natureai_next.server.contract_web_compatibility import patch_contract_web_response
+from natureai_next.server.http import patch_managed_web_response
 from natureai_next.server.linked_storage_operator_web import (
     patch_linked_storage_operator_web_response,
 )
@@ -93,6 +94,21 @@ def test_linked_storage_operator_patch_exposes_lifecycle_history_without_paths()
     assert b"root_alias" not in patched.body
     assert b"root_path" not in patched.body
     assert patch_linked_storage_operator_web_response("/app.js", patched).body == patched.body
+
+
+def test_production_web_composition_includes_certified_browser_surfaces() -> None:
+    original = ApiResponse(200, b"console.log('fieldora');", "text/javascript")
+    patched = patch_managed_web_response("/app.js", original)
+
+    assert b"fieldoraBrowserFunctionalityWired" in patched.body
+    assert b"Data Access &amp; Contracts" in patched.body
+    assert b"Folder validation" in patched.body
+    assert b"Fieldora linked archives" in patched.body
+    assert b"Recent lifecycle activity" in patched.body
+    assert b"fieldoraDesktopAlignmentWired" in patched.body
+    assert patched.body.rfind(b"fieldoraDesktopAlignmentWired") > patched.body.rfind(
+        b"Fieldora linked archives"
+    )
 
 
 def test_non_app_response_is_untouched() -> None:

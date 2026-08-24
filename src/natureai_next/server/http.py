@@ -36,6 +36,7 @@ from natureai_next.server.web_compatibility import (
     public_response,
     rewrite_public_target,
 )
+from natureai_next.server.workspace_language_web import patch_workspace_language_web_response
 
 
 class ReloadingCertificateChain:
@@ -113,6 +114,7 @@ def patch_managed_web_response(target: str, response):
         patch_library_collections_web_response,
         patch_science_workflow_web_response,
         patch_administration_workspace_web_response,
+        patch_workspace_language_web_response,
     ):
         response = patch(target, response)
     return response

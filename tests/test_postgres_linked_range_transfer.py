@@ -153,3 +153,22 @@ def test_range_request_rejects_oversize_and_out_of_bounds_ranges() -> None:
             start_byte=0,
             end_byte=4 * 1024 * 1024,
         )
+
+
+@pytest.mark.integration
+def test_disabled_source_cannot_create_new_range_request() -> None:
+    repository, transfers, source, media = _seed()
+    with repository.connect_factory() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "UPDATE linked_storage_sources_pg SET enabled=FALSE WHERE storage_id=%s",
+                (source.storage_id,),
+            )
+    with pytest.raises(KeyError):
+        transfers.request_range(
+            media_id=media.media_id,
+            organization_id=source.organization_id,
+            requested_by="researcher-1",
+            start_byte=0,
+            end_byte=7,
+        )

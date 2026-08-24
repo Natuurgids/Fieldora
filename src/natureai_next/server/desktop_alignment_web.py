@@ -1,7 +1,5 @@
 """Desktop-aligned information architecture for the managed Fieldora web client."""
 
-from __future__ import annotations
-
 from urllib.parse import urlsplit
 
 from natureai_next.server.api import ApiResponse

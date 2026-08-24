@@ -60,12 +60,18 @@ class VerifiedModelBundle:
     def artifact_storage_id(self) -> str:
         return f"model:{self.model_id}:{self.version}"
 
+    @property
+    def registry_id(self) -> str:
+        return f"{self.model_id}@{self.version}"
+
     def registry_record(self) -> dict[str, object]:
         """Return browser-safe governed metadata; never expose filesystem paths."""
         return {
-            "id": self.model_id,
+            "id": self.registry_id,
+            "model_id": self.model_id,
             "name": self.model_id,
             "version": self.version,
+            "project_id": "platform",
             "provider_id": "fieldora-offline",
             "network": "offline",
             "enabled": True,

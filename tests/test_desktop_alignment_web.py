@@ -101,19 +101,24 @@ def test_server_web_matches_desktop_workspace_model_and_single_import_action(
         page.goto(url)
         page.wait_for_selector("#workspace:not([hidden])")
 
-        labels = page.locator(".sidebar .nav[data-page]").all_inner_texts()
+        labels = [
+            "".join(text.split())
+            for text in page.locator(".sidebar .nav[data-page]").all_inner_texts()
+        ]
         assert labels == [
             "⌂Home",
             "▣Library",
             "◎Observations",
             "⚗Research",
-            "◫Knowledge & AI",
+            "◫Knowledge&AI",
             "⚙Administration",
-            "?Help & Guides",
+            "?Help&Guides",
         ]
 
         page.locator('.sidebar .nav[data-page="research"]').click()
-        research_targets = page.locator("#page-research .workspace-subnav button").all_inner_texts()
+        research_targets = page.locator(
+            "#page-research .workspace-subnav button"
+        ).all_inner_texts()
         assert research_targets == [
             "Projects & Portfolio",
             "Research records",
@@ -122,10 +127,17 @@ def test_server_web_matches_desktop_workspace_model_and_single_import_action(
         ]
         page.get_by_role("button", name="Projects & Portfolio").click()
         assert page.locator("#page-projects").is_visible()
-        assert page.locator('.sidebar .nav[data-page="research"]').get_attribute("aria-selected") == "true"
+        assert (
+            page.locator('.sidebar .nav[data-page="research"]').get_attribute(
+                "aria-selected"
+            )
+            == "true"
+        )
 
         page.locator('.sidebar .nav[data-page="administration"]').click()
-        admin_targets = page.locator("#page-administration .workspace-subnav button").all_inner_texts()
+        admin_targets = page.locator(
+            "#page-administration .workspace-subnav button"
+        ).all_inner_texts()
         assert admin_targets == [
             "Governance",
             "Assets & Facilities",
@@ -148,5 +160,7 @@ def test_server_web_matches_desktop_workspace_model_and_single_import_action(
         ]
         assert page.locator("#upload-folder").count() == 0
         assert page.locator("#upload-file").is_hidden()
-        assert "Choose Files or Folder from Import." in page.locator("#import-source-summary").inner_text()
+        assert "Choose Files or Folder from Import." in page.locator(
+            "#import-source-summary"
+        ).inner_text()
         browser.close()

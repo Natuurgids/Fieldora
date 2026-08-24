@@ -21,7 +21,8 @@ _OFFLINE_MODELS_WEB_PATCH = bytes(
   <p id="offline-model-status" class="status"></p>`;
  const modelList=document.getElementById("model-list");
  const modelCard=modelList?.closest(".card");
- (modelCard||page).insertAdjacentElement("afterend",section);
+ if(modelCard)modelCard.insertAdjacentElement("afterend",section);
+ else page.appendChild(section);
  let installedModels=new Map();
  const renderOfflineModels=async()=>{
   const list=document.getElementById("offline-model-list");

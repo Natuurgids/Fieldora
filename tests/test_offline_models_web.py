@@ -64,6 +64,16 @@ def test_offline_model_artifact_registers_through_governed_ai_models(
         "source": "fieldora-bastion",
         "license_id": "test-license",
         "verification": "sha256-per-file",
+        "manifest_signature": "ed25519",
+        "signing_key_id": "ab" * 16,
+        "malware_scan": {
+            "result": "clean",
+            "scanner": "clamav",
+            "scanner_version": "1.4.0",
+            "definitions": "daily-12345",
+            "scanned_at": "2026-08-24T17:00:00Z",
+            "file_count": 2,
+        },
         "formats": ["safetensors"],
     }
 
@@ -113,6 +123,7 @@ def test_offline_model_artifact_registers_through_governed_ai_models(
         section.wait_for(state="visible")
         assert "Biodiversity model" in section.inner_text()
         assert "1.2.3" in section.inner_text()
+        assert "Signed + clean scanned · clamav" in section.inner_text()
         assert "/var/lib/fieldora-models" not in section.inner_text()
         assert administration_requests
         assert all(purpose == "administration" for _path, purpose in administration_requests)
@@ -126,6 +137,8 @@ def test_offline_model_artifact_registers_through_governed_ai_models(
         assert record["id"] == "bio-model@1.2.3"
         assert record["project_id"] == "platform"
         assert record["artifact_storage_id"] == "model:bio-model:1.2.3"
+        assert record["manifest_signature"] == "ed25519"
+        assert record["malware_scan"]["result"] == "clean"
         assert record["enabled"] is True
         assert "artifact_store_path" not in record
         assert "/var/lib/fieldora-models" not in json.dumps(record)

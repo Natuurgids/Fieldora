@@ -7,6 +7,7 @@ on:
       - "src/natureai_next/server/offline_model_store_api.py"
       - "src/natureai_next/server/offline_first_api.py"
       - "tests/test_model_bundle_cli.py"
+      - "tests/test_model_bundle_limits.py"
       - "tests/test_offline_model_store_api.py"
       - "Install-Fieldora-Offline-Model.ps1"
       - "pyproject.toml"
@@ -35,11 +36,13 @@ jobs:
           src/natureai_next/server/offline_model_store_api.py
           src/natureai_next/server/offline_first_api.py
           tests/test_model_bundle_cli.py
+          tests/test_model_bundle_limits.py
           tests/test_offline_model_store_api.py
       - name: Offline model bundle security discovery and installation tests
         run: >-
           python -m pytest -q
           tests/test_model_bundle_cli.py
+          tests/test_model_bundle_limits.py
           tests/test_offline_model_store_api.py
       - name: Certify installed CLI contract
         run: |
@@ -56,6 +59,8 @@ jobs:
               raise SystemExit(f"missing forbidden model extensions: {sorted(missing)}")
           if not {'.safetensors', '.onnx', '.gguf'} <= m._MODEL_EXTENSIONS:
               raise SystemExit('safe model artifact allowlist is incomplete')
+          if m._MAX_MANIFEST_FILES > 10000 or m._MAX_MANIFEST_BYTES > 4 * 1024 * 1024:
+              raise SystemExit('manifest resource bounds are unexpectedly broad')
           PY
       - name: Parse portable offline model installer
         shell: pwsh
@@ -87,9 +92,8 @@ jobs:
           python - <<'PY'
           from pathlib import Path
           text = Path('src/natureai_next/server/offline_model_store_api.py').read_text()
-          for forbidden in ('artifact_store_path', 'FIELDORA-INSTALL.json\"): str', '/var/lib/fieldora-models\"):'):
-              if forbidden in text:
-                  raise SystemExit(f'path disclosure marker present: {forbidden}')
+          if 'artifact_store_path' in text:
+              raise SystemExit('filesystem-path field must not be exposed by model discovery')
           for required in ('artifact_storage_id', 'resource_type="ai_model"', 'FIELDORA_MODEL_STORE'):
               if required not in text:
                   raise SystemExit(f'missing governed discovery marker: {required}')

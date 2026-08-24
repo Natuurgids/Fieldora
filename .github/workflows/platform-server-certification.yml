@@ -19,6 +19,7 @@ on:
       - "src/natureai_next/server/project_owner_contract_api.py"
       - "src/natureai_next/server/contract_web_compatibility.py"
       - "src/natureai_next/server/operator_control.py"
+      - "src/natureai_next/server/linked_storage_operator_api.py"
       - "src/natureai_next/server/platform_api.py"
       - "src/natureai_next/server/platform_extensions.py"
       - "src/natureai_next/server/scientific_collaboration.py"
@@ -39,6 +40,7 @@ on:
       - "tests/test_postgres_jobs_worker.py"
       - "tests/test_postgres_science_concurrency.py"
       - "tests/test_recipient_contract_api.py"
+      - "tests/test_linked_storage_operator_api.py"
       - "tests/test_platform_server_extensions.py"
       - "tests/test_server_web_compatibility.py"
       - "tests/test_service_tls_reload.py"
@@ -98,6 +100,7 @@ jobs:
           src/natureai_next/server/project_owner_contract_api.py
           src/natureai_next/server/contract_web_compatibility.py
           src/natureai_next/server/operator_control.py
+          src/natureai_next/server/linked_storage_operator_api.py
           src/natureai_next/server/platform_api.py
           src/natureai_next/server/platform_extensions.py
           src/natureai_next/server/scientific_collaboration.py
@@ -118,6 +121,7 @@ jobs:
           tests/test_postgres_jobs_worker.py
           tests/test_postgres_science_concurrency.py
           tests/test_recipient_contract_api.py
+          tests/test_linked_storage_operator_api.py
           tests/test_platform_server_extensions.py
           tests/test_server_web_compatibility.py
           tests/test_service_tls_reload.py
@@ -155,6 +159,7 @@ jobs:
           src/natureai_next/server/project_owner_contract_api.py
           src/natureai_next/server/contract_web_compatibility.py
           src/natureai_next/server/operator_control.py
+          src/natureai_next/server/linked_storage_operator_api.py
           src/natureai_next/server/platform_api.py
           src/natureai_next/server/platform_extensions.py
           src/natureai_next/server/service_trust.py
@@ -198,6 +203,7 @@ jobs:
           src/natureai_next/server/project_owner_contract_api.py
           src/natureai_next/server/contract_web_compatibility.py
           src/natureai_next/server/operator_control.py
+          src/natureai_next/server/linked_storage_operator_api.py
           src/natureai_next/server/platform_api.py
           src/natureai_next/server/platform_extensions.py
           src/natureai_next/server/service_trust.py
@@ -221,6 +227,7 @@ jobs:
           tests/test_postgres_jobs_worker.py
           tests/test_postgres_science_concurrency.py
           tests/test_recipient_contract_api.py
+          tests/test_linked_storage_operator_api.py
           tests/test_platform_server_extensions.py
           tests/test_server_web_compatibility.py
           tests/test_facility_server_api.py

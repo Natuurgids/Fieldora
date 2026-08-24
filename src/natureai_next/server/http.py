@@ -7,7 +7,6 @@ import socket
 import ssl
 import threading
 import time
-from collections.abc import Callable
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 

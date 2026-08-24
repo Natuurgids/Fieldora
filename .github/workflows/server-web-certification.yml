@@ -10,10 +10,16 @@ on:
       - "src/natureai_next/server/navigation_web_compatibility.py"
       - "src/natureai_next/server/contract_web_compatibility.py"
       - "src/natureai_next/server/facility_web_compatibility.py"
+      - "src/natureai_next/server/browser_functionality_web.py"
+      - "src/natureai_next/server/linked_storage_web.py"
+      - "src/natureai_next/server/linked_storage_browser_api.py"
+      - "src/natureai_next/server/offline_first_api.py"
       - "src/natureai_next/resources/server_web/**"
       - "tests/test_cross_client_parity_contract.py"
       - "tests/test_server_web_compatibility.py"
       - "tests/test_server_web_browser_navigation.py"
+      - "tests/test_browser_functionality_web.py"
+      - "tests/test_linked_storage_web.py"
       - ".github/workflows/server-web-certification.yml"
   workflow_dispatch:
 
@@ -47,9 +53,15 @@ jobs:
           src/natureai_next/server/http.py
           src/natureai_next/server/web_compatibility.py
           src/natureai_next/server/navigation_web_compatibility.py
+          src/natureai_next/server/browser_functionality_web.py
+          src/natureai_next/server/linked_storage_web.py
+          src/natureai_next/server/linked_storage_browser_api.py
+          src/natureai_next/server/offline_first_api.py
           tests/test_cross_client_parity_contract.py
           tests/test_server_web_compatibility.py
           tests/test_server_web_browser_navigation.py
+          tests/test_browser_functionality_web.py
+          tests/test_linked_storage_web.py
 
       - name: Server web and parity compatibility tests across browser engines
         run: >-
@@ -57,3 +69,5 @@ jobs:
           tests/test_cross_client_parity_contract.py
           tests/test_server_web_compatibility.py
           tests/test_server_web_browser_navigation.py
+          tests/test_browser_functionality_web.py
+          tests/test_linked_storage_web.py

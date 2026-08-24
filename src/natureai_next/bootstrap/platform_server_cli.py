@@ -381,6 +381,8 @@ def _bootstrap_initial_operator(administration_type: Any) -> None:
             "service.drain",
             "service.stop",
             "service.revoke",
+            "storage.enable",
+            "storage.disable",
             "bulk_ingest.create",
             "bulk_ingest.view",
             "logs.view",

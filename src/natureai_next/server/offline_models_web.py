@@ -36,6 +36,14 @@ _OFFLINE_MODELS_WEB_PATCH = bytes(
  if(modelCard)modelCard.insertAdjacentElement("afterend",section);
  else page.appendChild(section);
  let installedModels=new Map();
+ const trustLabel=item=>{
+  if(item.malware_scan?.result==="clean"){
+   const scanner=item.malware_scan.scanner||"approved scanner";
+   return `Signed + clean scanned · ${scanner}`;
+  }
+  if(item.manifest_signature==="ed25519")return "Signed manifest";
+  return "Unsigned local bundle";
+ };
  const renderOfflineModels=async()=>{
   const list=document.getElementById("offline-model-list");
   const statusNode=document.getElementById("offline-model-status");
@@ -50,7 +58,8 @@ _OFFLINE_MODELS_WEB_PATCH = bytes(
    list.innerHTML=(installed.items||[]).map(item=>{
     const exists=registered.has(item.id);
     const size=(Number(item.artifact_total_bytes||0)/1073741824).toFixed(2);
-    return `<div class="row" data-offline-model="${esc(item.id)}"><div><strong>${esc(item.name||item.model_id)}</strong><br><span class="muted">${esc(item.version)} · ${esc((item.formats||[]).join(", "))}</span></div><span>${size} GiB</span><span>${esc(item.license_id||"unspecified")}</span><button data-register-offline-model="${esc(item.id)}" ${exists?"disabled":""}>${exists?"Registered":"Register & enable"}</button></div>`;
+    const trust=trustLabel(item);
+    return `<div class="row" data-offline-model="${esc(item.id)}"><div><strong>${esc(item.name||item.model_id)}</strong><br><span class="muted">${esc(item.version)} · ${esc((item.formats||[]).join(", "))}<br>${esc(trust)}</span></div><span>${size} GiB</span><span>${esc(item.license_id||"unspecified")}</span><button data-register-offline-model="${esc(item.id)}" ${exists?"disabled":""}>${exists?"Registered":"Register & enable"}</button></div>`;
    }).join("")||'<div class="empty">No verified offline model artifacts are installed.</div>';
    statusNode.textContent="";
   }catch(error){

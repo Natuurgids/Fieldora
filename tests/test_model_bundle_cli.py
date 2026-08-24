@@ -62,6 +62,7 @@ def test_verifies_safe_model_bundle_with_per_file_hashes(tmp_path: Path) -> None
 
     assert verified.model_id == "fieldora-test-model"
     assert verified.version == "1.0.0"
+    assert verified.registry_id == "fieldora-test-model@1.0.0"
     assert verified.total_bytes == sum(int(item["size_bytes"]) for item in verified.files)
     assert {item["path"] for item in verified.files} == {
         "model/model.safetensors",
@@ -160,7 +161,9 @@ def test_install_is_versioned_atomic_and_writes_registry_receipt(tmp_path: Path)
     assert destination == store / "fieldora-test-model" / "1.0.0"
     assert (destination / "model/model.safetensors").read_bytes() == b"model"
     receipt = json.loads((destination / "FIELDORA-INSTALL.json").read_text(encoding="utf-8"))
-    assert receipt["id"] == verified.model_id
+    assert receipt["id"] == "fieldora-test-model@1.0.0"
+    assert receipt["model_id"] == verified.model_id
+    assert receipt["project_id"] == "platform"
     assert receipt["provider_id"] == "fieldora-offline"
     assert receipt["network"] == "offline"
     assert receipt["verification"] == "sha256-per-file"

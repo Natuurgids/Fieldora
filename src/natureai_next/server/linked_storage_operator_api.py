@@ -16,6 +16,7 @@ from natureai_next.application.authentication import AuthenticationFailed
 from natureai_next.server.api import ApiResponse
 
 _HEARTBEAT_STALE_SECONDS = 120
+_LINKED_ARCHIVE_EVENT_LIMIT = 100
 
 
 class LinkedStorageOperatorApiMixin:
@@ -46,6 +47,10 @@ class LinkedStorageOperatorApiMixin:
                 operator,
                 organization_id,
                 checked_at,
+            )
+            payload["linked_archive_events"] = _linked_archive_events(
+                connect_factory,
+                organization_id,
             )
             return ApiResponse.json(200, payload)
 
@@ -94,6 +99,33 @@ class LinkedStorageOperatorApiMixin:
                 }
             },
         )
+
+
+def _linked_archive_events(
+    connect_factory: Any,
+    organization_id: str,
+) -> list[dict[str, object]]:
+    with connect_factory() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT storage_id,actor_id,event_type,occurred_at "
+                "FROM linked_storage_source_events_pg "
+                "WHERE organization_id=%s "
+                "ORDER BY sequence DESC LIMIT %s",
+                (organization_id, _LINKED_ARCHIVE_EVENT_LIMIT),
+            )
+            rows = cursor.fetchall()
+    return [
+        {
+            "storage_id": str(row[0]),
+            "actor_id": str(row[1]),
+            "event_type": str(row[2]),
+            "occurred_at": (
+                row[3].isoformat() if hasattr(row[3], "isoformat") else str(row[3])
+            ),
+        }
+        for row in rows
+    ]
 
 
 def _linked_archive_health(

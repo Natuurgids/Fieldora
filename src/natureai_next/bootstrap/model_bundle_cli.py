@@ -112,9 +112,7 @@ def _require_token(value: object, field: str) -> str:
 
 
 def _bounded_text(value: object, field: str, default: str) -> str:
-    text = str(value or default).strip()
-    if not text:
-        text = default
+    text = str(value or default).strip() or default
     if len(text) > _MAX_METADATA_TEXT:
         raise ModelBundleError(f"manifest {field} is too long")
     return text
@@ -133,6 +131,22 @@ def _file_sha256(path: Path) -> str:
     with path.open("rb") as stream:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _payload_tree_sha256(entries: tuple[dict[str, object], ...] | list[dict[str, object]]) -> str:
+    """Digest canonical path/size/content-hash tuples used by Bastion scanning."""
+    digest = hashlib.sha256()
+    normalized = sorted(
+        (
+            str(entry["path"]),
+            int(entry["size_bytes"]),
+            str(entry["sha256"]),
+        )
+        for entry in entries
+    )
+    for path, size, sha256 in normalized:
+        digest.update(f"{path}\0{size}\0{sha256}\n".encode("utf-8"))
     return digest.hexdigest()
 
 
@@ -183,7 +197,7 @@ def _verify_manifest_signature(
 
 def _malware_scan_attestation(
     manifest: dict[str, object],
-    file_count: int,
+    verified_files: tuple[dict[str, object], ...],
     *,
     signature_verified: bool,
     require_clean_scan: bool,
@@ -204,15 +218,19 @@ def _malware_scan_attestation(
         raise ModelBundleError("manifest malware_scan must be an object")
     if not signature_verified:
         raise ModelBundleError("malware scan attestation requires a verified signed manifest")
-    result = str(scan.get("result") or "").strip().lower()
-    if result != "clean":
+    if str(scan.get("result") or "").strip().lower() != "clean":
         raise ModelBundleError("malware scan attestation is not clean")
     try:
         scanned_files = int(scan.get("file_count"))
     except (TypeError, ValueError) as exc:
         raise ModelBundleError("malware scan file_count is invalid") from exc
-    if scanned_files != file_count:
+    if scanned_files != len(verified_files):
         raise ModelBundleError("malware scan file_count does not match manifest payload")
+    payload_sha256 = str(scan.get("payload_sha256") or "").strip().lower()
+    if len(payload_sha256) != 64 or any(c not in "0123456789abcdef" for c in payload_sha256):
+        raise ModelBundleError("malware scan payload_sha256 is invalid")
+    if payload_sha256 != _payload_tree_sha256(verified_files):
+        raise ModelBundleError("malware scan payload digest does not match manifest payload")
     return {
         "result": "clean",
         "scanner": _bounded_text(scan.get("scanner"), "scanner", "unknown"),
@@ -222,6 +240,7 @@ def _malware_scan_attestation(
         "definitions": _bounded_text(scan.get("definitions"), "definitions", "unknown"),
         "scanned_at": _bounded_text(scan.get("scanned_at"), "scanned_at", "unknown"),
         "file_count": scanned_files,
+        "payload_sha256": payload_sha256,
     }
 
 
@@ -233,6 +252,8 @@ def verify_model_bundle(
     require_signature: bool = False,
     require_clean_scan: bool = False,
 ) -> VerifiedModelBundle:
+    if max_total_bytes <= 0:
+        raise ModelBundleError("maximum bundle size must be positive")
     if bundle_dir.is_symlink():
         raise ModelBundleError("bundle root must not be a symlink")
     bundle_dir = bundle_dir.resolve()
@@ -268,12 +289,6 @@ def verify_model_bundle(
         raise ModelBundleError("manifest files must be a non-empty list")
     if len(entries) > _MAX_MANIFEST_FILES:
         raise ModelBundleError("manifest contains too many files")
-    malware_scan = _malware_scan_attestation(
-        manifest,
-        len(entries),
-        signature_verified=signature_verified,
-        require_clean_scan=require_clean_scan,
-    )
 
     verified: list[dict[str, object]] = []
     seen: set[str] = set()
@@ -292,7 +307,6 @@ def verify_model_bundle(
             raise ModelBundleError(f"unsupported or executable model bundle file: {relative_text}")
         if suffix in _MODEL_EXTENSIONS:
             model_artifacts += 1
-
         expected_hash = str(entry.get("sha256") or "").lower()
         if len(expected_hash) != 64 or any(c not in "0123456789abcdef" for c in expected_hash):
             raise ModelBundleError(f"invalid SHA-256 for {relative_text}")
@@ -302,7 +316,6 @@ def verify_model_bundle(
             raise ModelBundleError(f"invalid size_bytes for {relative_text}") from exc
         if expected_size < 0:
             raise ModelBundleError(f"invalid size_bytes for {relative_text}")
-
         source_path = bundle_dir.joinpath(*relative.parts)
         if source_path.is_symlink() or not source_path.is_file():
             raise ModelBundleError(f"bundle file must be a regular non-symlink: {relative_text}")
@@ -326,12 +339,19 @@ def verify_model_bundle(
 
     if model_artifacts == 0:
         raise ModelBundleError("bundle contains no supported model artifact")
+    verified_files = tuple(verified)
+    malware_scan = _malware_scan_attestation(
+        manifest,
+        verified_files,
+        signature_verified=signature_verified,
+        require_clean_scan=require_clean_scan,
+    )
     return VerifiedModelBundle(
         model_id=model_id,
         version=version,
         source=source,
         license_id=license_id,
-        files=tuple(verified),
+        files=verified_files,
         total_bytes=total,
         signature_verified=signature_verified,
         signing_key_id=signing_key_id,

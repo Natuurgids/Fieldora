@@ -12,9 +12,18 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from natureai_next.server.api import FieldoraApi
+from natureai_next.server.browser_functionality_web import (
+    patch_browser_functionality_response,
+)
+from natureai_next.server.contract_web_compatibility import patch_contract_web_response
 from natureai_next.server.desktop_alignment_web import patch_desktop_alignment_web_response
+from natureai_next.server.directory_intake_web import patch_directory_intake_response
 from natureai_next.server.facility_web_compatibility import patch_facility_web_response
 from natureai_next.server.lifecycle import ShutdownCoordinator
+from natureai_next.server.linked_storage_operator_web import (
+    patch_linked_storage_operator_web_response,
+)
+from natureai_next.server.linked_storage_web import patch_linked_storage_web_response
 from natureai_next.server.navigation_web_compatibility import patch_navigation_web_response
 from natureai_next.server.web_compatibility import (
     patch_web_response,
@@ -83,6 +92,23 @@ class ReloadingTLSServer(ThreadingHTTPServer):
         return wrapped, address
 
 
+def patch_managed_web_response(target: str, response):
+    """Apply every certified managed-browser patch in production order."""
+    for patch in (
+        patch_browser_functionality_response,
+        patch_web_response,
+        patch_contract_web_response,
+        patch_facility_web_response,
+        patch_navigation_web_response,
+        patch_directory_intake_response,
+        patch_linked_storage_web_response,
+        patch_linked_storage_operator_web_response,
+        patch_desktop_alignment_web_response,
+    ):
+        response = patch(target, response)
+    return response
+
+
 def handler_for(
     application: FieldoraApi, *, tls_enabled: bool = False
 ) -> type[BaseHTTPRequestHandler]:
@@ -117,10 +143,7 @@ def handler_for(
                 response = application.dispatch(
                     self.command, target, request_headers, body,
                 )
-                response = patch_web_response(target, response)
-                response = patch_facility_web_response(target, response)
-                response = patch_navigation_web_response(target, response)
-                response = patch_desktop_alignment_web_response(target, response)
+                response = patch_managed_web_response(target, response)
             self.send_response(response.status)
             self.send_header("Content-Type", response.content_type)
             if not any(
@@ -179,7 +202,11 @@ def serve(
     if not 0 <= shutdown_grace_seconds <= 300:
         raise ValueError("shutdown grace must be between 0 and 300 seconds")
     server = create_server(
-        application, host, port, certificate=certificate, private_key=private_key
+        application,
+        host,
+        port,
+        certificate=certificate,
+        private_key=private_key,
     )
 
     def stop_after_drain() -> None:

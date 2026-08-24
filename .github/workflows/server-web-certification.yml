@@ -13,6 +13,8 @@ on:
       - "src/natureai_next/server/workspace_language_web.py"
       - "src/natureai_next/server/library_collections_web.py"
       - "src/natureai_next/server/science_workflow_web.py"
+      - "src/natureai_next/server/offline_models_web.py"
+      - "src/natureai_next/server/offline_model_store_api.py"
       - "src/natureai_next/server/contract_web_compatibility.py"
       - "src/natureai_next/server/facility_web_compatibility.py"
       - "src/natureai_next/server/browser_functionality_web.py"
@@ -30,6 +32,8 @@ on:
       - "tests/test_administration_workspace_web.py"
       - "tests/test_workspace_language_web.py"
       - "tests/test_browser_functionality_web.py"
+      - "tests/test_offline_models_web.py"
+      - "tests/test_offline_model_store_api.py"
       - "tests/test_linked_storage_web.py"
       - "tests/test_linked_storage_sources_api.py"
       - "tests/test_linked_storage_operator_api.py"
@@ -71,6 +75,8 @@ jobs:
           src/natureai_next/server/workspace_language_web.py
           src/natureai_next/server/library_collections_web.py
           src/natureai_next/server/science_workflow_web.py
+          src/natureai_next/server/offline_models_web.py
+          src/natureai_next/server/offline_model_store_api.py
           src/natureai_next/server/browser_functionality_web.py
           src/natureai_next/server/linked_storage_web.py
           src/natureai_next/server/linked_storage_browser_api.py
@@ -85,6 +91,8 @@ jobs:
           tests/test_administration_workspace_web.py
           tests/test_workspace_language_web.py
           tests/test_browser_functionality_web.py
+          tests/test_offline_models_web.py
+          tests/test_offline_model_store_api.py
           tests/test_linked_storage_web.py
           tests/test_linked_storage_sources_api.py
           tests/test_linked_storage_operator_api.py
@@ -99,6 +107,8 @@ jobs:
           tests/test_administration_workspace_web.py
           tests/test_workspace_language_web.py
           tests/test_browser_functionality_web.py
+          tests/test_offline_models_web.py
+          tests/test_offline_model_store_api.py
           tests/test_linked_storage_web.py
           tests/test_linked_storage_sources_api.py
           tests/test_linked_storage_operator_api.py

@@ -97,10 +97,10 @@ _DESKTOP_ALIGNMENT_PATCH = bytes(
   button.textContent="＋ Import";button.setAttribute("aria-haspopup","menu");button.onclick=e=>{e.preventDefault();e.stopPropagation();menu.hidden?openImportMenu(button):closeImportMenu()};
  });
  const uploadInput=q("upload-file");
- if(uploadInput){const label=uploadInput.closest("label");if(label)label.hidden=true;}
+ if(uploadInput){uploadInput.hidden=true;const label=uploadInput.closest("label");if(label)label.hidden=true;}
  const folderInput=q("upload-folder-input");
  const oldFolderButton=q("upload-folder");
- if(folderInput)q("import-card")?.appendChild(folderInput);
+ if(folderInput){folderInput.hidden=true;q("import-card")?.appendChild(folderInput);}
  if(oldFolderButton)oldFolderButton.closest(".import-source-actions")?.remove();
  const sourceSummary=document.createElement("p");sourceSummary.id="import-source-summary";sourceSummary.className="import-source-summary";sourceSummary.textContent="Choose Files or Folder from Import.";
  q("import-card")?.querySelector(".form-grid")?.after(sourceSummary);

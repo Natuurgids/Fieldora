@@ -38,13 +38,18 @@ _LINKED_STORAGE_WEB_PATCH = bytes(
  const thumbUrls=new Map();
  const setLinkedStatus=(text,error=false)=>{const node=byId("linked-storage-status");node.textContent=text;node.style.color=error?"var(--danger)":"var(--green)";};
  const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+ const availabilityLabel=value=>({online:"online",stale:"stale",unavailable:"unavailable",unknown:"status unknown"}[String(value||"unknown")]||"status unknown");
 
  async function loadSources(){
   try{
    const result=await api("/api/v1/linked-storage/sources",{purpose:"research"}),items=result.items||[],list=byId("linked-storage-sources");
-   list.innerHTML=items.map(source=>`<option value="${html(source.storage_id)}">${html(source.display_name||source.storage_id)}${source.read_only?" · read only":""}</option>`).join("");
+   list.innerHTML=items.map(source=>`<option value="${html(source.storage_id)}">${html(source.display_name||source.storage_id)}${source.read_only?" · read only":""} · ${html(availabilityLabel(source.availability))}</option>`).join("");
    if(items.length===1&&!byId("linked-storage-id").value)byId("linked-storage-id").value=items[0].storage_id;
-   if(items.length)setLinkedStatus(`${items.length} linked archive${items.length===1?"":"s"} available for this organization.`);
+   if(items.length){
+    const counts=items.reduce((result,source)=>{const state=String(source.availability||"unknown");result[state]=(result[state]||0)+1;return result},{});
+    const health=[counts.online?`${counts.online} online`:"",counts.stale?`${counts.stale} stale`:"",counts.unavailable?`${counts.unavailable} unavailable`:"",counts.unknown?`${counts.unknown} status unknown`:""].filter(Boolean).join(" · ");
+    setLinkedStatus(`${items.length} linked archive${items.length===1?"":"s"} discovered${health?` · ${health}`:""}.`);
+   }
   }catch(_error){
    setLinkedStatus("Linked archive discovery is unavailable; enter a known opaque storage ID to continue.");
   }

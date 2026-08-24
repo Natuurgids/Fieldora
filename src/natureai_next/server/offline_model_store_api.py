@@ -80,6 +80,14 @@ def _read_receipt(path: Path, model_id: str, version: str) -> dict[str, object] 
         total_bytes = max(0, int(value.get("artifact_total_bytes", 0)))
     except (TypeError, ValueError):
         return None
+    manifest_signature = str(value.get("manifest_signature") or "unsigned")
+    if manifest_signature not in {"unsigned", "ed25519"}:
+        return None
+    signing_key_id = str(value.get("signing_key_id") or "").strip()
+    if len(signing_key_id) > 128:
+        return None
+    if manifest_signature == "ed25519" and not signing_key_id:
+        return None
     return {
         "id": registry_id,
         "model_id": model_id,
@@ -94,6 +102,8 @@ def _read_receipt(path: Path, model_id: str, version: str) -> dict[str, object] 
         "source": str(value.get("source") or "offline-bundle"),
         "license_id": str(value.get("license_id") or "unspecified"),
         "verification": "sha256-per-file",
+        "manifest_signature": manifest_signature,
+        "signing_key_id": signing_key_id,
         "formats": sorted(formats),
     }
 

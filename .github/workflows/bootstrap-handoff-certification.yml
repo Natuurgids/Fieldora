@@ -1,0 +1,49 @@
+name: Fieldora bootstrap handoff certification
+
+on:
+  pull_request:
+    paths:
+      - "src/natureai_next/bootstrap/bootstrap_handoff_cleanup_cli.py"
+      - "tests/test_bootstrap_handoff_cleanup.py"
+      - "deployment/bootstrap-handoff/compose.yaml"
+      - ".github/workflows/bootstrap-handoff-certification.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bootstrap-handoff-certification:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: python -m pip install --upgrade pip && python -m pip install -e ".[dev]"
+      - name: Ruff bootstrap handoff cleanup
+        run: python -m ruff check src/natureai_next/bootstrap/bootstrap_handoff_cleanup_cli.py tests/test_bootstrap_handoff_cleanup.py
+      - name: Bootstrap handoff cleanup tests
+        run: python -m pytest -q tests/test_bootstrap_handoff_cleanup.py
+      - name: Certify container isolation contract
+        shell: pwsh
+        run: |
+          $text = Get-Content -LiteralPath ./deployment/bootstrap-handoff/compose.yaml -Raw
+          foreach ($needle in @(
+            'network_mode: none',
+            'read_only: true',
+            'cap_drop:',
+            '- ALL',
+            'no-new-privileges:true',
+            './bootstrap-handoff:/run/fieldora-bootstrap-handoff'
+          )) {
+            if (-not $text.Contains($needle)) {
+              throw "Bootstrap handoff cleaner isolation contract is missing: $needle"
+            }
+          }
+          foreach ($forbidden in @('fieldora-postgres-trust','fieldora-api-trust','fieldora-governance-dsn','service-trust')) {
+            if ($text.Contains($forbidden)) {
+              throw "Bootstrap handoff cleaner must not mount protected runtime material: $forbidden"
+            }
+          }

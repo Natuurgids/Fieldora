@@ -22,6 +22,7 @@ from natureai_next.server.library_collections_web import (
 )
 from natureai_next.server.linked_storage_web import patch_linked_storage_web_response
 from natureai_next.server.navigation_web_compatibility import patch_navigation_web_response
+from natureai_next.server.science_workflow_web import patch_science_workflow_web_response
 from natureai_next.server.web_compatibility import patch_web_response
 
 
@@ -42,6 +43,7 @@ def _web_fixture(tmp_path: Path):
         patch_linked_storage_web_response,
         patch_desktop_alignment_web_response,
         patch_library_collections_web_response,
+        patch_science_workflow_web_response,
     ):
         response = patch("/app.js", response)
     (tmp_path / "app.js").write_bytes(response.body)
@@ -142,6 +144,26 @@ def test_server_web_matches_desktop_workspace_model_and_single_import_action(
         ]
         assert page.locator("#page-home .home-system-context").count() == 1
         assert page.locator("#page-home .home-system-context").get_attribute("open") is None
+
+        page.get_by_role("button", name="Review observations", exact=True).click()
+        assert page.locator("#page-observations").is_visible()
+        assert page.locator("#observation-workspace-nav button").all_inner_texts() == [
+            "Review observations",
+            "New observation",
+        ]
+        assert page.locator("#page-observations .split").is_visible()
+        assert page.locator("#observation-editor").is_hidden()
+        page.get_by_role("button", name="New observation", exact=True).click()
+        assert page.locator("#page-observations .split").is_hidden()
+        assert page.locator("#observation-editor").is_visible()
+        assert "Create a field observation" in page.locator(
+            "#observation-workspace-intro"
+        ).inner_text()
+        page.get_by_role("button", name="Review observations", exact=True).click()
+        assert page.locator("#page-observations .split").is_visible()
+        assert page.locator("#observation-editor").is_hidden()
+
+        page.locator('.sidebar .nav[data-page="home"]').click()
         page.get_by_role("button", name="Research records", exact=True).click()
         assert page.locator("#page-research").is_visible()
 
@@ -170,6 +192,26 @@ def test_server_web_matches_desktop_workspace_model_and_single_import_action(
             )
             == "true"
         )
+
+        page.locator('.sidebar .nav[data-page="knowledge"]').click()
+        assert page.locator("#knowledge-workspace-nav button").all_inner_texts() == [
+            "Review knowledge",
+            "Add identification",
+        ]
+        assert page.locator("#page-knowledge .split").is_visible()
+        assert page.locator("#knowledge-status").locator("xpath=..").is_hidden()
+        page.get_by_role("button", name="Add identification", exact=True).click()
+        assert page.locator("#page-knowledge .split").is_hidden()
+        assert page.locator("#knowledge-status").locator("xpath=..").is_visible()
+        assert page.locator("#knowledge-search").is_hidden()
+        assert page.locator("#run-analysis").is_hidden()
+        assert "provenance-bearing enrichment" in page.locator(
+            "#knowledge-workspace-intro"
+        ).inner_text()
+        page.get_by_role("button", name="Review knowledge", exact=True).click()
+        assert page.locator("#page-knowledge .split").is_visible()
+        assert page.locator("#knowledge-search").is_visible()
+        assert page.locator("#run-analysis").is_visible()
 
         page.locator('.sidebar .nav[data-page="administration"]').click()
         admin_targets = page.locator(

@@ -102,6 +102,7 @@ def _mock_api(route: Route) -> None:
                             "storage_id": "archive-1",
                             "display_name": "Primary research archive",
                             "read_only": True,
+                            "availability": "online",
                         }
                     ],
                     "count": 1,
@@ -225,8 +226,11 @@ def test_linked_archive_library_browse_preview_original_and_operator_health(
         page.wait_for_selector("#workspace:not([hidden])")
         page.locator('.nav[data-page="library"]').click()
         page.wait_for_function("document.getElementById('linked-storage-id').value === 'archive-1'")
-        assert "Primary research archive" in page.locator(
-            '#linked-storage-sources option[value="archive-1"]'
+        source_option = page.locator('#linked-storage-sources option[value="archive-1"]')
+        assert "Primary research archive" in source_option.inner_text()
+        assert "read only · online" in source_option.inner_text()
+        assert "1 linked archive discovered · 1 online." in page.locator(
+            "#linked-storage-status"
         ).inner_text()
         page.locator("#linked-storage-prefix").fill("Amazon/day-01")
         page.locator("#linked-storage-browse").click()

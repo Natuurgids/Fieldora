@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 
 from natureai_next.application.authentication import AuthenticationFailed
 from natureai_next.domain.access_control import Identity, IdentityKind
@@ -10,16 +11,38 @@ from natureai_next.server.operator_control import ServiceRecord, ServiceState
 
 
 class _Cursor:
+    def __init__(self) -> None:
+        self._query = ""
+
     def __enter__(self):
         return self
 
     def __exit__(self, *_args):
         return None
 
-    def execute(self, _sql: str, parameters: tuple[str]) -> None:
-        assert parameters == ("org-1",)
+    def execute(self, sql: str, parameters: tuple[object, ...]) -> None:
+        self._query = sql
+        if "linked_storage_source_events_pg" in sql:
+            assert parameters == ("org-1", 100)
+        else:
+            assert parameters == ("org-1",)
 
     def fetchall(self):
+        if "linked_storage_source_events_pg" in self._query:
+            return [
+                (
+                    "archive-disabled",
+                    "operator-1",
+                    "source_disabled",
+                    datetime(2026, 8, 24, 1, 2, 3, tzinfo=UTC),
+                ),
+                (
+                    "archive-healthy",
+                    "service-healthy",
+                    "source_registered",
+                    "2026-08-24T00:00:00+00:00",
+                ),
+            ]
         return [
             ("archive-healthy", "service-healthy", "Healthy archive", True, True),
             ("archive-stale", "service-stale", "Stale archive", True, True),
@@ -144,7 +167,7 @@ class _ManageApi(LinkedStorageOperatorApiMixin, _BaseApi):
         return self.allowed
 
 
-def test_operator_overview_correlates_linked_archives_without_storage_paths() -> None:
+def test_operator_overview_correlates_linked_archives_and_events_without_storage_paths() -> None:
     response = _Api().dispatch("GET", "/api/v1/operator/overview", {}, b"")
     assert response.status == 200
     payload = json.loads(response.body)
@@ -168,6 +191,21 @@ def test_operator_overview_correlates_linked_archives_without_storage_paths() ->
     disabled = archives["archive-disabled"]
     assert disabled["enabled"] is False
     assert disabled["service_state"] == "active"
+
+    assert payload["linked_archive_events"] == [
+        {
+            "storage_id": "archive-disabled",
+            "actor_id": "operator-1",
+            "event_type": "source_disabled",
+            "occurred_at": "2026-08-24T01:02:03+00:00",
+        },
+        {
+            "storage_id": "archive-healthy",
+            "actor_id": "service-healthy",
+            "event_type": "source_registered",
+            "occurred_at": "2026-08-24T00:00:00+00:00",
+        },
+    ]
 
     serialized = response.body.decode()
     assert "root_alias" not in serialized

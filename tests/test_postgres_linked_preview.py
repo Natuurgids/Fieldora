@@ -170,6 +170,33 @@ def test_preview_completion_rejects_non_terminal_state() -> None:
 
 
 @pytest.mark.integration
+def test_disabled_source_cannot_queue_new_preview_request() -> None:
+    repository, _leases, source, media_id = _seed_preview()
+    with repository.connect_factory() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute("DELETE FROM linked_preview_queue_pg WHERE media_id=%s", (media_id,))
+            cursor.execute(
+                "UPDATE linked_storage_media_pg SET thumbnail_state=%s WHERE media_id=%s",
+                (PreviewState.MISSING.value, media_id),
+            )
+            cursor.execute(
+                "UPDATE linked_storage_sources_pg SET enabled=FALSE WHERE storage_id=%s",
+                (source.storage_id,),
+            )
+    assert not repository.request_preview(
+        media_id=media_id,
+        organization_id=source.organization_id,
+        priority=900,
+        reason="opened-detail",
+        requested_by="researcher-1",
+    )
+    with repository.connect_factory() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT 1 FROM linked_preview_queue_pg WHERE media_id=%s", (media_id,))
+            assert cursor.fetchone() is None
+
+
+@pytest.mark.integration
 def test_leased_preview_store_requires_worker_and_round_trips_bytes() -> None:
     repository, leases, source, media_id = _seed_preview()
     connect = _connect()
@@ -215,3 +242,11 @@ def test_leased_preview_store_requires_worker_and_round_trips_bytes() -> None:
     assert media is not None
     assert media.thumbnail_state is PreviewState.READY
     assert media.thumbnail_etag == digest
+
+    with repository.connect_factory() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "UPDATE linked_storage_sources_pg SET enabled=FALSE WHERE storage_id=%s",
+                (source.storage_id,),
+            )
+    assert store.preview(media_id) is None

@@ -9,6 +9,7 @@ on:
       - "src/natureai_next/server/offline_first_api.py"
       - "tests/test_model_bundle_cli.py"
       - "tests/test_model_bundle_limits.py"
+      - "tests/test_model_bundle_signatures.py"
       - "tests/test_offline_model_store_api.py"
       - "tests/test_platform_ai_administration_bootstrap.py"
       - "Install-Fieldora-Offline-Model.ps1"
@@ -40,13 +41,15 @@ jobs:
           src/natureai_next/server/offline_first_api.py
           tests/test_model_bundle_cli.py
           tests/test_model_bundle_limits.py
+          tests/test_model_bundle_signatures.py
           tests/test_offline_model_store_api.py
           tests/test_platform_ai_administration_bootstrap.py
-      - name: Offline model security discovery installation and PBAC bootstrap tests
+      - name: Offline model security discovery installation signature and PBAC bootstrap tests
         run: >-
           python -m pytest -q
           tests/test_model_bundle_cli.py
           tests/test_model_bundle_limits.py
+          tests/test_model_bundle_signatures.py
           tests/test_offline_model_store_api.py
           tests/test_platform_ai_administration_bootstrap.py
       - name: Certify installed CLI contract
@@ -54,6 +57,8 @@ jobs:
           fieldora-model-bundle --help >/dev/null
           fieldora-model-bundle verify --help >/dev/null
           fieldora-model-bundle install --help >/dev/null
+          fieldora-model-bundle verify --help | grep -- '--trusted-signing-key' >/dev/null
+          fieldora-model-bundle install --help | grep -- '--require-signature' >/dev/null
       - name: Certify no executable model formats are accepted
         run: |
           python - <<'PY'
@@ -74,11 +79,13 @@ jobs:
           [void][scriptblock]::Create($text)
           foreach ($needle in @(
             'Get-Command docker',
-            '--network none',
-            '--read-only',
-            '--cap-drop ALL',
-            '--security-opt no-new-privileges:true',
-            'fieldora-model-bundle install',
+            '"--network", "none"',
+            '"--read-only"',
+            '"--cap-drop", "ALL"',
+            '"--security-opt", "no-new-privileges:true"',
+            'fieldora-model-bundle',
+            '--trusted-signing-key',
+            '--require-signature',
             './fieldora-models:/var/lib/fieldora-models:ro',
             'FIELDORA_MODEL_STORE: /var/lib/fieldora-models',
             'compose.models.yaml'
@@ -99,9 +106,13 @@ jobs:
           text = Path('src/natureai_next/server/offline_model_store_api.py').read_text()
           if 'artifact_store_path' in text:
               raise SystemExit('filesystem-path field must not be exposed by model discovery')
-          for required in ('artifact_storage_id', 'resource_type="ai_model"', 'FIELDORA_MODEL_STORE'):
+          for required in ('artifact_storage_id', 'resource_type="ai_model"', 'FIELDORA_MODEL_STORE', 'manifest_signature', 'signing_key_id'):
               if required not in text:
                   raise SystemExit(f'missing governed discovery marker: {required}')
+          verifier = Path('src/natureai_next/bootstrap/model_bundle_cli.py').read_text()
+          for required in ('Ed25519PublicKey', 'manifest.sig', 'require_signature', 'signing_key_id'):
+              if required not in verifier:
+                  raise SystemExit(f'missing signed manifest verifier marker: {required}')
           bootstrap = Path('src/natureai_next/bootstrap/platform_server_cli.py').read_text()
           for required in ('Initial AI and integration administrator', 'purposes=("administration",)'):
               if required not in bootstrap:

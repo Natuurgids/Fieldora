@@ -75,7 +75,7 @@ jobs:
             '[ValidateRange(1,90)][int]$CredentialHandoffRetentionDays = 7',
             'Install-Fieldora-Bootstrap-Handoff.ps1',
             '-RetentionDays $CredentialHandoffRetentionDays',
-            'bootstrap-handoff\\ADMIN-CREDENTIALS.txt',
+            'bootstrap-handoff\ADMIN-CREDENTIALS.txt',
             'Credential handoff retention:'
           )) {
             if (-not $text.Contains($needle)) {

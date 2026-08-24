@@ -355,6 +355,22 @@ def _bootstrap_initial_operator(administration_type: Any) -> None:
         purposes=("administration",),
     )
     administration.create_policy(
+        name="Initial AI and integration administrator",
+        effect=PolicyEffect.ALLOW,
+        source=PolicySource.ROLE,
+        role_id="platform-operator",
+        actions=("view", "edit"),
+        resource_types=(
+            "ai_provider",
+            "ai_model",
+            "mcp_server",
+            "connector",
+            "reference_value",
+        ),
+        organization_id=organization_id,
+        purposes=("administration",),
+    )
+    administration.create_policy(
         name="Initial facilities planning and relocation access",
         effect=PolicyEffect.ALLOW,
         source=PolicySource.ROLE,

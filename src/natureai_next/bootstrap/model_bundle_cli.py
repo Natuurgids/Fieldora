@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
 import json
 import os
@@ -10,6 +11,10 @@ import shutil
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
+
+from cryptography.exceptions import InvalidSignature
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
 _MODEL_EXTENSIONS = {".safetensors", ".onnx", ".gguf"}
 _SUPPORT_EXTENSIONS = {
@@ -42,6 +47,7 @@ _FORBIDDEN_EXTENSIONS = {
 }
 _DEFAULT_MAX_BYTES = 64 * 1024 * 1024 * 1024
 _MAX_MANIFEST_BYTES = 4 * 1024 * 1024
+_MAX_SIGNATURE_BYTES = 16 * 1024
 _MAX_MANIFEST_FILES = 10_000
 _MAX_METADATA_TEXT = 2_048
 
@@ -58,6 +64,8 @@ class VerifiedModelBundle:
     license_id: str
     files: tuple[dict[str, object], ...]
     total_bytes: int
+    signature_verified: bool = False
+    signing_key_id: str = ""
 
     @property
     def artifact_storage_id(self) -> str:
@@ -85,6 +93,8 @@ class VerifiedModelBundle:
             "source": self.source,
             "license_id": self.license_id,
             "verification": "sha256-per-file",
+            "manifest_signature": "ed25519" if self.signature_verified else "unsigned",
+            "signing_key_id": self.signing_key_id,
         }
 
 
@@ -122,10 +132,57 @@ def _file_sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def _verify_manifest_signature(
+    bundle_dir: Path,
+    manifest_bytes: bytes,
+    trusted_signing_key: Path | None,
+    require_signature: bool,
+) -> tuple[bool, str]:
+    signature_path = bundle_dir / "manifest.sig"
+    has_signature = signature_path.is_file() and not signature_path.is_symlink()
+    if not has_signature:
+        if require_signature:
+            raise ModelBundleError("signed manifest is required but manifest.sig is missing")
+        return False, ""
+    if trusted_signing_key is None:
+        raise ModelBundleError("manifest.sig is present but no trusted signing key was provided")
+    if trusted_signing_key.is_symlink() or not trusted_signing_key.is_file():
+        raise ModelBundleError("trusted signing key must be a regular non-symlink file")
+    try:
+        if signature_path.stat().st_size > _MAX_SIGNATURE_BYTES:
+            raise ModelBundleError("manifest.sig exceeds the configured size limit")
+        envelope = json.loads(signature_path.read_text(encoding="utf-8"))
+        if not isinstance(envelope, dict) or envelope.get("algorithm") != "ed25519":
+            raise ModelBundleError("manifest.sig must use the ed25519 algorithm")
+        signature = base64.b64decode(str(envelope.get("signature") or ""), validate=True)
+        public_key = serialization.load_pem_public_key(trusted_signing_key.read_bytes())
+    except ModelBundleError:
+        raise
+    except (OSError, ValueError, TypeError) as exc:
+        raise ModelBundleError("manifest signature or trusted signing key is invalid") from exc
+    if not isinstance(public_key, Ed25519PublicKey):
+        raise ModelBundleError("trusted signing key must be an Ed25519 public key")
+    public_der = public_key.public_bytes(
+        serialization.Encoding.DER,
+        serialization.PublicFormat.SubjectPublicKeyInfo,
+    )
+    key_id = hashlib.sha256(public_der).hexdigest()[:32]
+    envelope_key_id = str(envelope.get("key_id") or "").strip()
+    if envelope_key_id and envelope_key_id != key_id:
+        raise ModelBundleError("manifest signature key_id does not match trusted signing key")
+    try:
+        public_key.verify(signature, manifest_bytes)
+    except InvalidSignature as exc:
+        raise ModelBundleError("manifest signature verification failed") from exc
+    return True, key_id
+
+
 def verify_model_bundle(
     bundle_dir: Path,
     *,
     max_total_bytes: int = _DEFAULT_MAX_BYTES,
+    trusted_signing_key: Path | None = None,
+    require_signature: bool = False,
 ) -> VerifiedModelBundle:
     if bundle_dir.is_symlink():
         raise ModelBundleError("bundle root must not be a symlink")
@@ -138,13 +195,20 @@ def verify_model_bundle(
     try:
         if manifest_path.stat().st_size > _MAX_MANIFEST_BYTES:
             raise ModelBundleError("manifest.json exceeds the configured size limit")
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest_bytes = manifest_path.read_bytes()
+        manifest = json.loads(manifest_bytes)
     except ModelBundleError:
         raise
-    except (OSError, json.JSONDecodeError) as exc:
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError) as exc:
         raise ModelBundleError("manifest.json is unreadable or invalid JSON") from exc
     if not isinstance(manifest, dict):
         raise ModelBundleError("manifest.json must contain an object")
+    signature_verified, signing_key_id = _verify_manifest_signature(
+        bundle_dir,
+        manifest_bytes,
+        trusted_signing_key,
+        require_signature,
+    )
 
     model_id = _require_token(manifest.get("model_id"), "model_id")
     version = _require_token(manifest.get("version"), "version")
@@ -214,6 +278,8 @@ def verify_model_bundle(
         license_id=license_id,
         files=tuple(verified),
         total_bytes=total,
+        signature_verified=signature_verified,
+        signing_key_id=signing_key_id,
     )
 
 
@@ -222,8 +288,15 @@ def install_model_bundle(
     model_store: Path,
     *,
     max_total_bytes: int = _DEFAULT_MAX_BYTES,
+    trusted_signing_key: Path | None = None,
+    require_signature: bool = False,
 ) -> tuple[VerifiedModelBundle, Path]:
-    verified = verify_model_bundle(bundle_dir, max_total_bytes=max_total_bytes)
+    verified = verify_model_bundle(
+        bundle_dir,
+        max_total_bytes=max_total_bytes,
+        trusted_signing_key=trusted_signing_key,
+        require_signature=require_signature,
+    )
     model_store.mkdir(parents=True, exist_ok=True)
     destination = model_store / verified.model_id / verified.version
     if destination.exists():
@@ -260,6 +333,8 @@ def _parser() -> argparse.ArgumentParser:
         command = sub.add_parser(name)
         command.add_argument("bundle", type=Path)
         command.add_argument("--max-bytes", type=int, default=_DEFAULT_MAX_BYTES)
+        command.add_argument("--trusted-signing-key", type=Path)
+        command.add_argument("--require-signature", action="store_true")
         if name == "install":
             command.add_argument("--store", type=Path, required=True)
     return parser
@@ -268,19 +343,28 @@ def _parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
+        kwargs = {
+            "max_total_bytes": args.max_bytes,
+            "trusted_signing_key": args.trusted_signing_key,
+            "require_signature": args.require_signature,
+        }
         if args.command == "verify":
-            verified = verify_model_bundle(args.bundle, max_total_bytes=args.max_bytes)
+            verified = verify_model_bundle(args.bundle, **kwargs)
             output = {
                 "model_id": verified.model_id,
                 "version": verified.version,
                 "total_bytes": verified.total_bytes,
                 "verification": "sha256-per-file",
+                "manifest_signature": (
+                    "ed25519" if verified.signature_verified else "unsigned"
+                ),
+                "signing_key_id": verified.signing_key_id,
             }
         else:
             verified, _destination = install_model_bundle(
                 args.bundle,
                 args.store,
-                max_total_bytes=args.max_bytes,
+                **kwargs,
             )
             output = verified.registry_record()
     except ModelBundleError as exc:

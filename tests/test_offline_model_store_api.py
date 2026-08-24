@@ -79,6 +79,7 @@ def test_installed_model_store_preserves_only_sanitized_signed_scan_provenance(
         "definitions": "daily-12345",
         "scanned_at": "2026-08-24T17:00:00Z",
         "file_count": 2,
+        "payload_sha256": "cd" * 32,
         "raw_log": "must not be disclosed",
     }
     path.write_text(json.dumps(payload), encoding="utf-8")
@@ -92,11 +93,12 @@ def test_installed_model_store_preserves_only_sanitized_signed_scan_provenance(
         "definitions": "daily-12345",
         "scanned_at": "2026-08-24T17:00:00Z",
         "file_count": 2,
+        "payload_sha256": "cd" * 32,
     }
     assert "raw_log" not in json.dumps(record)
 
 
-def test_installed_model_store_rejects_unsigned_scan_claim(tmp_path: Path) -> None:
+def test_installed_model_store_rejects_unsigned_or_invalid_scan_claim(tmp_path: Path) -> None:
     version_root = _receipt(tmp_path / "models")
     path = version_root / "FIELDORA-INSTALL.json"
     payload = json.loads(path.read_text(encoding="utf-8"))
@@ -107,9 +109,15 @@ def test_installed_model_store_rejects_unsigned_scan_claim(tmp_path: Path) -> No
         "definitions": "daily-12345",
         "scanned_at": "2026-08-24T17:00:00Z",
         "file_count": 2,
+        "payload_sha256": "cd" * 32,
     }
     path.write_text(json.dumps(payload), encoding="utf-8")
+    assert InstalledModelStore(tmp_path / "models").records() == ()
 
+    payload["manifest_signature"] = "ed25519"
+    payload["signing_key_id"] = "ab" * 16
+    payload["malware_scan"]["payload_sha256"] = "not-a-digest"
+    path.write_text(json.dumps(payload), encoding="utf-8")
     assert InstalledModelStore(tmp_path / "models").records() == ()
 
 

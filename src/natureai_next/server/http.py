@@ -27,6 +27,7 @@ from natureai_next.server.linked_storage_operator_web import (
 )
 from natureai_next.server.linked_storage_web import patch_linked_storage_web_response
 from natureai_next.server.navigation_web_compatibility import patch_navigation_web_response
+from natureai_next.server.science_workflow_web import patch_science_workflow_web_response
 from natureai_next.server.web_compatibility import (
     patch_web_response,
     public_response,
@@ -107,6 +108,7 @@ def patch_managed_web_response(target: str, response):
         patch_linked_storage_operator_web_response,
         patch_desktop_alignment_web_response,
         patch_library_collections_web_response,
+        patch_science_workflow_web_response,
     ):
         response = patch(target, response)
     return response

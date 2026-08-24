@@ -8,6 +8,7 @@ on:
       - "src/natureai_next/server/storage_exchange.py"
       - "src/natureai_next/server/storage_service_agent.py"
       - "tests/test_storage_exchange.py"
+      - "tests/test_storage_source_read_only_api.py"
       - ".github/workflows/storage-node-certification.yml"
   workflow_dispatch:
 
@@ -77,4 +78,6 @@ jobs:
 
       - name: Certify read-only linked storage exchange contract
         run: >-
-          python -m pytest -q tests/test_storage_exchange.py
+          python -m pytest -q
+          tests/test_storage_exchange.py
+          tests/test_storage_source_read_only_api.py

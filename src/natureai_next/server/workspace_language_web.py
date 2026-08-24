@@ -11,6 +11,12 @@ _WORKSPACE_LANGUAGE_PATCH = bytes(
 (()=>{
  if(window.__fieldoraWorkspaceLanguageWired)return;
  window.__fieldoraWorkspaceLanguageWired=true;
+ const style=document.createElement("style");
+ style.textContent=`
+  #research-domain-list .row[hidden]{display:none!important}
+  #research-search-empty[hidden]{display:none!important}
+ `;
+ document.head.appendChild(style);
  const setSearch=(page,placeholder,label)=>{
   const host=document.getElementById(`page-${page}`);
   const input=host?.querySelector("input.search");

@@ -49,6 +49,7 @@ def test_offline_model_artifact_registers_through_governed_ai_models(
     browser_name: str,
 ) -> None:
     registered: list[dict[str, object]] = []
+    administration_requests: list[tuple[str, str]] = []
     artifact = {
         "id": "bio-model@1.2.3",
         "model_id": "bio-model",
@@ -69,6 +70,10 @@ def test_offline_model_artifact_registers_through_governed_ai_models(
     def mock_api(route: Route) -> None:
         request = route.request
         path = request.url.split("/api/v1/", 1)[-1].split("?", 1)[0]
+        if path in {"ai-providers", "ai-models", "ai-models/installed", "mcp-servers"}:
+            administration_requests.append(
+                (path, request.headers.get("x-fieldora-purpose", ""))
+            )
         if path == "me":
             payload: object = {
                 "identity_id": "admin-1",
@@ -109,6 +114,8 @@ def test_offline_model_artifact_registers_through_governed_ai_models(
         assert "Biodiversity model" in section.inner_text()
         assert "1.2.3" in section.inner_text()
         assert "/var/lib/fieldora-models" not in section.inner_text()
+        assert administration_requests
+        assert all(purpose == "administration" for _path, purpose in administration_requests)
 
         section.get_by_role("button", name="Register & enable", exact=True).click()
         page.wait_for_function(
@@ -122,4 +129,5 @@ def test_offline_model_artifact_registers_through_governed_ai_models(
         assert record["enabled"] is True
         assert "artifact_store_path" not in record
         assert "/var/lib/fieldora-models" not in json.dumps(record)
+        assert all(purpose == "administration" for _path, purpose in administration_requests)
         browser.close()

@@ -12,6 +12,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from natureai_next.server.api import FieldoraApi
+from natureai_next.server.desktop_alignment_web import patch_desktop_alignment_web_response
 from natureai_next.server.facility_web_compatibility import patch_facility_web_response
 from natureai_next.server.lifecycle import ShutdownCoordinator
 from natureai_next.server.navigation_web_compatibility import patch_navigation_web_response
@@ -119,6 +120,7 @@ def handler_for(
                 response = patch_web_response(target, response)
                 response = patch_facility_web_response(target, response)
                 response = patch_navigation_web_response(target, response)
+                response = patch_desktop_alignment_web_response(target, response)
             self.send_response(response.status)
             self.send_header("Content-Type", response.content_type)
             if not any(

@@ -41,6 +41,9 @@ _FORBIDDEN_EXTENSIONS = {
     ".sh",
 }
 _DEFAULT_MAX_BYTES = 64 * 1024 * 1024 * 1024
+_MAX_MANIFEST_BYTES = 4 * 1024 * 1024
+_MAX_MANIFEST_FILES = 10_000
+_MAX_METADATA_TEXT = 2_048
 
 
 class ModelBundleError(ValueError):
@@ -94,6 +97,15 @@ def _require_token(value: object, field: str) -> str:
     return token
 
 
+def _bounded_text(value: object, field: str, default: str) -> str:
+    text = str(value or default).strip()
+    if not text:
+        text = default
+    if len(text) > _MAX_METADATA_TEXT:
+        raise ModelBundleError(f"manifest {field} is too long")
+    return text
+
+
 def _safe_relative_path(value: object) -> PurePosixPath:
     raw = str(value or "").strip().replace("\\", "/")
     path = PurePosixPath(raw)
@@ -115,12 +127,20 @@ def verify_model_bundle(
     *,
     max_total_bytes: int = _DEFAULT_MAX_BYTES,
 ) -> VerifiedModelBundle:
+    if bundle_dir.is_symlink():
+        raise ModelBundleError("bundle root must not be a symlink")
     bundle_dir = bundle_dir.resolve()
+    if not bundle_dir.is_dir():
+        raise ModelBundleError("bundle root must be a directory")
     manifest_path = bundle_dir / "manifest.json"
     if not manifest_path.is_file() or manifest_path.is_symlink():
         raise ModelBundleError("bundle must contain a regular manifest.json")
     try:
+        if manifest_path.stat().st_size > _MAX_MANIFEST_BYTES:
+            raise ModelBundleError("manifest.json exceeds the configured size limit")
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except ModelBundleError:
+        raise
     except (OSError, json.JSONDecodeError) as exc:
         raise ModelBundleError("manifest.json is unreadable or invalid JSON") from exc
     if not isinstance(manifest, dict):
@@ -128,11 +148,13 @@ def verify_model_bundle(
 
     model_id = _require_token(manifest.get("model_id"), "model_id")
     version = _require_token(manifest.get("version"), "version")
-    source = str(manifest.get("source") or "offline-bundle").strip()
-    license_id = str(manifest.get("license_id") or "unspecified").strip()
+    source = _bounded_text(manifest.get("source"), "source", "offline-bundle")
+    license_id = _bounded_text(manifest.get("license_id"), "license_id", "unspecified")
     entries = manifest.get("files")
     if not isinstance(entries, list) or not entries:
         raise ModelBundleError("manifest files must be a non-empty list")
+    if len(entries) > _MAX_MANIFEST_FILES:
+        raise ModelBundleError("manifest contains too many files")
 
     verified: list[dict[str, object]] = []
     seen: set[str] = set()

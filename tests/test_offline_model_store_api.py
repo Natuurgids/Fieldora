@@ -64,6 +64,55 @@ def test_installed_model_store_preserves_signature_provenance(tmp_path: Path) ->
     assert record["signing_key_id"] == "ab" * 16
 
 
+def test_installed_model_store_preserves_only_sanitized_signed_scan_provenance(
+    tmp_path: Path,
+) -> None:
+    version_root = _receipt(tmp_path / "models")
+    path = version_root / "FIELDORA-INSTALL.json"
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["manifest_signature"] = "ed25519"
+    payload["signing_key_id"] = "ab" * 16
+    payload["malware_scan"] = {
+        "result": "clean",
+        "scanner": "clamav",
+        "scanner_version": "1.4.0",
+        "definitions": "daily-12345",
+        "scanned_at": "2026-08-24T17:00:00Z",
+        "file_count": 2,
+        "raw_log": "must not be disclosed",
+    }
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    record = InstalledModelStore(tmp_path / "models").records()[0]
+
+    assert record["malware_scan"] == {
+        "result": "clean",
+        "scanner": "clamav",
+        "scanner_version": "1.4.0",
+        "definitions": "daily-12345",
+        "scanned_at": "2026-08-24T17:00:00Z",
+        "file_count": 2,
+    }
+    assert "raw_log" not in json.dumps(record)
+
+
+def test_installed_model_store_rejects_unsigned_scan_claim(tmp_path: Path) -> None:
+    version_root = _receipt(tmp_path / "models")
+    path = version_root / "FIELDORA-INSTALL.json"
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["malware_scan"] = {
+        "result": "clean",
+        "scanner": "clamav",
+        "scanner_version": "1.4.0",
+        "definitions": "daily-12345",
+        "scanned_at": "2026-08-24T17:00:00Z",
+        "file_count": 2,
+    }
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    assert InstalledModelStore(tmp_path / "models").records() == ()
+
+
 def test_installed_model_store_rejects_receipt_identity_mismatch(tmp_path: Path) -> None:
     version_root = _receipt(tmp_path / "models")
     path = version_root / "FIELDORA-INSTALL.json"

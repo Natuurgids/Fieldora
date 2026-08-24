@@ -5,6 +5,7 @@ on:
     paths:
       - "src/natureai_next/bootstrap/model_bundle_cli.py"
       - "tests/test_model_bundle_cli.py"
+      - "Install-Fieldora-Offline-Model.ps1"
       - "pyproject.toml"
       - ".github/workflows/offline-model-bundle-certification.yml"
   workflow_dispatch:
@@ -47,3 +48,28 @@ jobs:
           if not {'.safetensors', '.onnx', '.gguf'} <= m._MODEL_EXTENSIONS:
               raise SystemExit('safe model artifact allowlist is incomplete')
           PY
+      - name: Parse portable offline model installer
+        shell: pwsh
+        run: |
+          $text = Get-Content -LiteralPath ./Install-Fieldora-Offline-Model.ps1 -Raw
+          [void][scriptblock]::Create($text)
+          foreach ($needle in @(
+            'Get-Command docker',
+            '--network none',
+            '--read-only',
+            '--cap-drop ALL',
+            '--security-opt no-new-privileges:true',
+            'fieldora-model-bundle install',
+            './fieldora-models:/var/lib/fieldora-models:ro',
+            'FIELDORA_MODEL_STORE: /var/lib/fieldora-models',
+            'compose.models.yaml'
+          )) {
+            if (-not $text.Contains($needle)) {
+              throw "Portable offline model installer is missing: $needle"
+            }
+          }
+          foreach ($forbidden in @('docker.exe','--network host','artifact_store_path')) {
+            if ($text.Contains($forbidden)) {
+              throw "Offline model installer violates portability or opacity contract: $forbidden"
+            }
+          }

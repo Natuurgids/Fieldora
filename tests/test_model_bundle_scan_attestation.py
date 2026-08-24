@@ -12,15 +12,21 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from natureai_next.bootstrap.model_bundle_cli import ModelBundleError, verify_model_bundle
 
 
+def _payload_digest(path: str, content: bytes) -> str:
+    file_sha = hashlib.sha256(content).hexdigest()
+    return hashlib.sha256(f"{path}\0{len(content)}\0{file_sha}\n".encode()).hexdigest()
+
+
 def _bundle(
     tmp_path: Path,
     *,
     result: str = "clean",
     file_count: int = 1,
     signed: bool = True,
+    payload_sha256: str | None = None,
 ) -> tuple[Path, Path]:
     bundle = tmp_path / "bundle"
-    bundle.mkdir()
+    bundle.mkdir(parents=True)
     payload = b"model-bytes"
     (bundle / "model.gguf").write_bytes(payload)
     manifest = {
@@ -43,6 +49,7 @@ def _bundle(
                 "definitions": "daily-12345",
                 "scanned_at": "2026-08-24T17:00:00Z",
                 "file_count": file_count,
+                "payload_sha256": payload_sha256 or _payload_digest("model.gguf", payload),
             }
         },
     }
@@ -93,6 +100,7 @@ def test_requires_and_preserves_signed_clean_scan(tmp_path: Path) -> None:
         "definitions": "daily-12345",
         "scanned_at": "2026-08-24T17:00:00Z",
         "file_count": 1,
+        "payload_sha256": _payload_digest("model.gguf", b"model-bytes"),
     }
     assert verified.registry_record()["malware_scan"] == verified.malware_scan
 
@@ -104,7 +112,7 @@ def test_rejects_unsigned_scan_claim_even_when_clean(tmp_path: Path) -> None:
         verify_model_bundle(bundle, require_clean_scan=True)
 
 
-def test_rejects_non_clean_or_wrong_count_scan_attestation(tmp_path: Path) -> None:
+def test_rejects_non_clean_wrong_count_or_wrong_payload_scan_attestation(tmp_path: Path) -> None:
     infected, infected_key = _bundle(tmp_path / "infected", result="infected")
     with pytest.raises(ModelBundleError, match="not clean"):
         verify_model_bundle(
@@ -118,5 +126,13 @@ def test_rejects_non_clean_or_wrong_count_scan_attestation(tmp_path: Path) -> No
         verify_model_bundle(
             wrong_count,
             trusted_signing_key=wrong_count_key,
+            require_clean_scan=True,
+        )
+
+    wrong_digest, wrong_digest_key = _bundle(tmp_path / "digest", payload_sha256="0" * 64)
+    with pytest.raises(ModelBundleError, match="payload digest does not match"):
+        verify_model_bundle(
+            wrong_digest,
+            trusted_signing_key=wrong_digest_key,
             require_clean_scan=True,
         )

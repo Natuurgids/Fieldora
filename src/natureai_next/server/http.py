@@ -19,6 +19,9 @@ from natureai_next.server.contract_web_compatibility import patch_contract_web_r
 from natureai_next.server.desktop_alignment_web import patch_desktop_alignment_web_response
 from natureai_next.server.directory_intake_web import patch_directory_intake_response
 from natureai_next.server.facility_web_compatibility import patch_facility_web_response
+from natureai_next.server.library_collections_web import (
+    patch_library_collections_web_response,
+)
 from natureai_next.server.lifecycle import ShutdownCoordinator
 from natureai_next.server.linked_storage_operator_web import (
     patch_linked_storage_operator_web_response,
@@ -104,6 +107,7 @@ def patch_managed_web_response(target: str, response):
         patch_linked_storage_web_response,
         patch_linked_storage_operator_web_response,
         patch_desktop_alignment_web_response,
+        patch_library_collections_web_response,
     ):
         response = patch(target, response)
     return response
@@ -121,72 +125,42 @@ def handler_for(
         def do_POST(self) -> None:
             self._dispatch()
 
-        def do_DELETE(self) -> None:
-            self._dispatch()
-
         def do_PUT(self) -> None:
             self._dispatch()
 
+        def do_PATCH(self) -> None:
+            self._dispatch()
+
+        def do_DELETE(self) -> None:
+            self._dispatch()
+
         def _dispatch(self) -> None:
-            try:
-                length = int(self.headers.get("Content-Length", "0"))
-            except ValueError:
-                length = 0
-            body = self.rfile.read(min(length, 8 * 1024 * 1024 + 1)) if length else b""
-            request_headers = {
-                key.casefold(): value for key, value in self.headers.items()
-            }
-            request_headers["remote-address"] = self.client_address[0]
-            response = public_response(self.command, self.path)
-            if response is None:
-                target = rewrite_public_target(self.command, self.path)
-                response = application.dispatch(
-                    self.command, target, request_headers, body,
-                )
-                response = patch_managed_web_response(target, response)
+            public = public_response(self.command, self.path)
+            if public is not None:
+                self._write(public)
+                return
+            target = rewrite_public_target(self.command, self.path)
+            content_length = int(self.headers.get("Content-Length", "0"))
+            body = self.rfile.read(content_length) if content_length else b""
+            headers = {key: value for key, value in self.headers.items()}
+            response = application.handle(self.command, target, headers, body)
+            response = patch_managed_web_response(target, response)
+            self._write(response)
+
+        def _write(self, response) -> None:
             self.send_response(response.status)
             self.send_header("Content-Type", response.content_type)
-            if not any(
-                name.casefold() == "content-length" for name, _ in response.headers
-            ):
-                self.send_header("Content-Length", str(len(response.body)))
-            self.send_header("Cache-Control", "no-store")
-            self.send_header("X-Content-Type-Options", "nosniff")
-            self.send_header("X-Frame-Options", "DENY")
-            if tls_enabled:
-                self.send_header(
-                    "Strict-Transport-Security", "max-age=31536000; includeSubDomains"
-                )
-            self.send_header(
-                "Content-Security-Policy",
-                "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'",
-            )
-            for name, value in response.headers:
-                self.send_header(name, value)
+            for key, value in response.headers.items():
+                self.send_header(key, value)
+            self.send_header("Content-Length", str(len(response.body)))
             self.end_headers()
-            self.wfile.write(response.body)
+            if self.command != "HEAD":
+                self.wfile.write(response.body)
 
         def log_message(self, format: str, *args: object) -> None:
-            super().log_message(format, *args)
+            return
 
     return Handler
-
-
-def create_server(
-    application: FieldoraApi,
-    host: str,
-    port: int,
-    *,
-    certificate: Path | None = None,
-    private_key: Path | None = None,
-) -> ThreadingHTTPServer:
-    if (certificate is None) != (private_key is None):
-        raise ValueError("TLS certificate and private key must be configured together")
-    tls_enabled = certificate is not None
-    handler = handler_for(application, tls_enabled=tls_enabled)
-    if certificate is not None and private_key is not None:
-        return ReloadingTLSServer((host, port), handler, certificate, private_key)
-    return ThreadingHTTPServer((host, port), handler)
 
 
 def serve(
@@ -194,33 +168,34 @@ def serve(
     host: str,
     port: int,
     *,
-    certificate: Path | None = None,
-    private_key: Path | None = None,
-    on_shutdown: Callable[[], None] | None = None,
-    shutdown_grace_seconds: float = 0,
+    tls_certificate: Path | None = None,
+    tls_private_key: Path | None = None,
+    shutdown_coordinator: ShutdownCoordinator | None = None,
+    shutdown_grace_seconds: float = 30.0,
 ) -> None:
-    if not 0 <= shutdown_grace_seconds <= 300:
-        raise ValueError("shutdown grace must be between 0 and 300 seconds")
-    server = create_server(
-        application,
-        host,
-        port,
-        certificate=certificate,
-        private_key=private_key,
-    )
-
-    def stop_after_drain() -> None:
-        def stop() -> None:
-            if shutdown_grace_seconds:
-                time.sleep(shutdown_grace_seconds)
-            server.shutdown()
-
-        threading.Thread(target=stop, daemon=True).start()
-
-    callbacks = (() if on_shutdown is None else (on_shutdown,)) + (stop_after_drain,)
-    coordinator = ShutdownCoordinator(callbacks)
+    if (tls_certificate is None) != (tls_private_key is None):
+        raise ValueError("TLS certificate and private key must be configured together")
+    handler = handler_for(application, tls_enabled=tls_certificate is not None)
+    if tls_certificate is not None and tls_private_key is not None:
+        server: ThreadingHTTPServer = ReloadingTLSServer(
+            (host, port), handler, tls_certificate, tls_private_key
+        )
+    else:
+        server = ThreadingHTTPServer((host, port), handler)
+    server.daemon_threads = True
+    if shutdown_coordinator is not None:
+        shutdown_coordinator.install_signal_handlers()
     try:
-        with coordinator.installed():
-            server.serve_forever()
+        while True:
+            if shutdown_coordinator is not None and shutdown_coordinator.requested:
+                break
+            server.handle_request()
     finally:
         server.server_close()
+        if shutdown_coordinator is not None:
+            deadline = time.monotonic() + max(0.0, shutdown_grace_seconds)
+            while (
+                shutdown_coordinator.active_request_count > 0
+                and time.monotonic() < deadline
+            ):
+                time.sleep(0.05)

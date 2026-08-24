@@ -89,6 +89,7 @@ try {
 
     $state = (@(& docker inspect --format "{{.State.Status}}" fieldora-bootstrap-handoff-cleaner 2>$null) -join "").Trim()
     if ($state -ne "running") { throw "Bootstrap handoff cleaner is not running (state: $state)." }
+}
 finally {
     Pop-Location
 }

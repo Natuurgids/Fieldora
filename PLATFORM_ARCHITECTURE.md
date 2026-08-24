@@ -125,6 +125,16 @@ Logical database ownership is independent from physical topology. A small instal
 
 Likewise, the contained filesystem object adapter is suitable for a small installation, while larger installations may use shared S3-compatible object storage. The Library contract, checksums, provenance, and authorization boundary remain stable.
 
+## Organisation-controlled linked archives
+
+Fieldora may catalogue scientific originals that remain on organisation-controlled external storage. The storage node owns the actual mount, path, and credentials and presents the archive to its Fieldora worker read-only. That worker is outbound-only: it authenticates to the server with its enrolled mTLS service identity and does not expose an inbound storage protocol to browsers or API nodes.
+
+The server persists opaque storage/object identities, relative catalogue metadata, governed derivatives, and short-lived transfer state. Browser clients never receive storage-node filesystem paths, root aliases, mount credentials, or service trust material. Managed previews are bounded derivatives; original access is a PBAC-authorized bounded byte range that the owning storage service reads from its read-only archive and uploads against a short-lived lease. PostgreSQL row locking and leases keep the same contract correct with multiple API and storage-worker nodes.
+
+Linked archive lifecycle is separate from transient service health. An archive may be online, stale, or temporarily unavailable without rewriting its Library evidence. Explicit archive disablement is instead a PBAC-authorized Operator action scoped to the owning organization. Disablement immediately prevents Library discovery, preview work, original-range creation/claim/upload, and cached derivative delivery while preserving catalogue/provenance records. Disabled archives remain visible only to the protected Operator surface so an authorized operator can explicitly re-enable them.
+
+Storage-service registration cannot silently override an operator disablement. Initial registration, material registration-metadata changes, disablement, and re-enablement are durably actor-attributed in PostgreSQL. Repeated no-op registration or lifecycle requests do not manufacture audit history. This preserves single-node convenience without making source availability or authority depend on one process or host.
+
 ## Bulk ingest
 
 Human browser upload is not the architecture for institutional-scale migration. Large imports use durable manifests/jobs, resumable processing, checksums, deduplication, backpressure, exception reporting, and parallel workers. A 200-million or billion-asset import must be restartable and idempotent rather than tied to one HTTP request or process lifetime.

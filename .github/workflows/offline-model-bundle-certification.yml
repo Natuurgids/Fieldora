@@ -113,7 +113,7 @@ jobs:
               raise SystemExit('filesystem paths or raw scanner logs must not be exposed by model discovery')
           for required in (
               'artifact_storage_id', 'resource_type="ai_model"', 'FIELDORA_MODEL_STORE',
-              'manifest_signature', 'signing_key_id', 'malware_scan',
+              'manifest_signature', 'signing_key_id', 'malware_scan', 'payload_sha256',
           ):
               if required not in text:
                   raise SystemExit(f'missing governed discovery marker: {required}')
@@ -121,6 +121,7 @@ jobs:
           for required in (
               'Ed25519PublicKey', 'manifest.sig', 'require_signature', 'signing_key_id',
               'require_clean_scan', 'malware scan attestation requires a verified signed manifest',
+              '_payload_tree_sha256', 'malware scan payload digest does not match manifest payload',
           ):
               if required not in verifier:
                   raise SystemExit(f'missing trusted model verifier marker: {required}')

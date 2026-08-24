@@ -180,14 +180,43 @@ def _mock_api(route: Route) -> None:
                             "storage_id": "archive-1",
                             "display_name": "Primary research archive",
                             "read_only": True,
+                            "enabled": True,
                             "service_id": "storage-service-1",
                             "service_name": "Archive service",
                             "node_name": "storage-node-1",
                             "service_state": "active",
                             "heartbeat_age_seconds": 18,
                             "stale": False,
-                        }
+                        },
+                        {
+                            "storage_id": "archive-disabled",
+                            "display_name": "Disabled archive",
+                            "read_only": True,
+                            "enabled": False,
+                            "service_id": "storage-service-2",
+                            "service_name": "Disabled archive service",
+                            "node_name": "storage-node-2",
+                            "service_state": "active",
+                            "heartbeat_age_seconds": 24,
+                            "stale": False,
+                        },
                     ],
+                }
+            ),
+        )
+        return
+    if path.startswith("operator/linked-archives/") and method == "POST":
+        parts = path.split("/")
+        storage_id, operation = parts[2], parts[3]
+        route.fulfill(
+            status=200,
+            content_type="application/json",
+            body=json.dumps(
+                {
+                    "linked_archive": {
+                        "storage_id": storage_id,
+                        "enabled": operation == "enable",
+                    }
                 }
             ),
         )
@@ -208,6 +237,7 @@ def test_patch_is_app_only_and_idempotent() -> None:
     operator = patch_linked_storage_operator_web_response("/app.js", base)
     assert b"linked archive ownership" in operator.body
     assert b"operator-linked-archives" in operator.body
+    assert b"/api/v1/operator/linked-archives/" in operator.body
     assert patch_linked_storage_operator_web_response("/app.js", operator).body == operator.body
 
 
@@ -256,5 +286,31 @@ def test_linked_archive_library_browse_preview_original_and_operator_health(
         assert "Archive service" in operator_text
         assert "active · Healthy" in operator_text
         assert "18s heartbeat age" in operator_text
+        assert "Disabled archive" in operator_text
+        assert "active · Disabled" in operator_text
         assert "/mnt/" not in operator_text
+
+        enabled_row = page.locator('[data-linked-archive="archive-1"]')
+        with page.expect_request(
+            lambda request: request.method == "POST"
+            and request.url.endswith("/api/v1/operator/linked-archives/archive-1/disable")
+        ):
+            enabled_row.locator('[data-linked-archive-action="disable"]').click()
+        page.wait_for_timeout(50)
+        assert "Linked archive disabled." in page.locator(
+            "#operator-linked-archives-status"
+        ).inner_text()
+
+        disabled_row = page.locator('[data-linked-archive="archive-disabled"]')
+        with page.expect_request(
+            lambda request: request.method == "POST"
+            and request.url.endswith(
+                "/api/v1/operator/linked-archives/archive-disabled/enable"
+            )
+        ):
+            disabled_row.locator('[data-linked-archive-action="enable"]').click()
+        page.wait_for_timeout(50)
+        assert "Linked archive enabled." in page.locator(
+            "#operator-linked-archives-status"
+        ).inner_text()
         browser.close()

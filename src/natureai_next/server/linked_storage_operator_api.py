@@ -117,9 +117,9 @@ def _linked_archive_health(
     with connect_factory() as connection:
         with connection.cursor() as cursor:
             cursor.execute(
-                "SELECT storage_id,service_id,display_name,read_only "
+                "SELECT storage_id,service_id,display_name,read_only,enabled "
                 "FROM linked_storage_sources_pg "
-                "WHERE organization_id=%s AND enabled=TRUE "
+                "WHERE organization_id=%s "
                 "ORDER BY display_name,storage_id LIMIT 500",
                 (organization_id,),
             )
@@ -139,6 +139,7 @@ def _linked_archive_health(
                 "storage_id": str(row[0]),
                 "display_name": str(row[2]),
                 "read_only": bool(row[3]),
+                "enabled": bool(row[4]),
                 "service_id": service_id,
                 "service_name": "" if service is None else service.name,
                 "node_name": "" if service is None else service.node_name,

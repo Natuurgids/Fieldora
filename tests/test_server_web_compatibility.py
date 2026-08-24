@@ -100,7 +100,7 @@ def test_production_web_composition_includes_certified_browser_surfaces() -> Non
     original = ApiResponse(200, b"console.log('fieldora');", "text/javascript")
     patched = patch_managed_web_response("/app.js", original)
 
-    assert b"fieldoraBrowserFunctionalityWired" in patched.body
+    assert b"Fieldora browser functionality: recursive intake" in patched.body
     assert b"Data Access &amp; Contracts" in patched.body
     assert b"Folder validation" in patched.body
     assert b"Fieldora linked archives" in patched.body

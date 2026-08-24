@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from dataclasses import replace
 from uuid import uuid4
 
 import pytest
@@ -17,6 +18,20 @@ def _repository() -> PostgresLinkedStorageRepository:
     return PostgresLinkedStorageRepository(lambda: psycopg.connect(dsn))
 
 
+def _events(
+    repository: PostgresLinkedStorageRepository,
+    source: StorageSourceRegistration,
+) -> list[tuple[str, str]]:
+    with repository.connect_factory() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT actor_id,event_type FROM linked_storage_source_events_pg "
+                "WHERE storage_id=%s AND organization_id=%s ORDER BY sequence",
+                (source.storage_id, source.organization_id),
+            )
+            return list(cursor.fetchall())
+
+
 @pytest.mark.integration
 def test_linked_archive_lifecycle_is_actor_audited_and_idempotent() -> None:
     repository = _repository()
@@ -30,6 +45,7 @@ def test_linked_archive_lifecycle_is_actor_audited_and_idempotent() -> None:
         read_only=True,
     )
     repository.register_source(source)
+    repository.register_source(source)
 
     assert repository.set_source_enabled(
         source.storage_id,
@@ -38,6 +54,10 @@ def test_linked_archive_lifecycle_is_actor_audited_and_idempotent() -> None:
         actor_id="operator-1",
     )
     assert repository.source(source.storage_id) is None
+
+    repository.register_source(source)
+    assert repository.source(source.storage_id) is None
+
     assert repository.set_source_enabled(
         source.storage_id,
         source.organization_id,
@@ -52,18 +72,15 @@ def test_linked_archive_lifecycle_is_actor_audited_and_idempotent() -> None:
     )
     assert repository.source(source.storage_id) is not None
 
-    with repository.connect_factory() as connection:
-        with connection.cursor() as cursor:
-            cursor.execute(
-                "SELECT actor_id,event_type FROM linked_storage_source_events_pg "
-                "WHERE storage_id=%s AND organization_id=%s ORDER BY sequence",
-                (source.storage_id, source.organization_id),
-            )
-            events = cursor.fetchall()
+    updated = replace(source, display_name="Renamed lifecycle archive")
+    repository.register_source(updated)
+    repository.register_source(updated)
 
-    assert events == [
+    assert _events(repository, source) == [
+        (source.service_id, "source_registered"),
         ("operator-1", "source_disabled"),
         ("operator-2", "source_enabled"),
+        (source.service_id, "source_registration_updated"),
     ]
 
 
@@ -88,11 +105,4 @@ def test_linked_archive_lifecycle_cannot_cross_organization_boundary() -> None:
         actor_id="operator-foreign",
     )
     assert repository.source(source.storage_id) is not None
-
-    with repository.connect_factory() as connection:
-        with connection.cursor() as cursor:
-            cursor.execute(
-                "SELECT COUNT(*) FROM linked_storage_source_events_pg WHERE storage_id=%s",
-                (source.storage_id,),
-            )
-            assert int(cursor.fetchone()[0]) == 0
+    assert _events(repository, source) == [(source.service_id, "source_registered")]

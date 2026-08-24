@@ -107,47 +107,24 @@ class _ForbiddenApi(LinkedStorageOperatorApiMixin, _ForbiddenBaseApi):
         self._operator = _Operator()
 
 
-class _ManageCursor:
-    def __init__(self, state: dict[str, bool]) -> None:
-        self._state = state
-        self.rowcount = 0
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *_args):
-        return None
-
-    def execute(self, sql: str, parameters: tuple[object, ...]) -> None:
-        assert "UPDATE linked_storage_sources_pg SET enabled=%s" in sql
-        enabled, storage_id, organization_id = parameters
-        if storage_id in self._state and organization_id == "org-1":
-            self._state[str(storage_id)] = bool(enabled)
-            self.rowcount = 1
-        else:
-            self.rowcount = 0
-
-
-class _ManageConnection:
-    def __init__(self, state: dict[str, bool]) -> None:
-        self._state = state
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, *_args):
-        return None
-
-    def cursor(self):
-        return _ManageCursor(self._state)
-
-
 class _ManagedLinkedStorage:
     def __init__(self) -> None:
         self.state = {"archive-1": True}
+        self.lifecycle_calls: list[tuple[str, str, bool, str]] = []
 
-    def connect_factory(self):
-        return _ManageConnection(self.state)
+    def set_source_enabled(
+        self,
+        storage_id: str,
+        organization_id: str,
+        enabled: bool,
+        *,
+        actor_id: str,
+    ) -> bool:
+        self.lifecycle_calls.append((storage_id, organization_id, enabled, actor_id))
+        if storage_id not in self.state or organization_id != "org-1":
+            return False
+        self.state[storage_id] = enabled
+        return True
 
 
 class _ManageApi(LinkedStorageOperatorApiMixin, _BaseApi):
@@ -219,6 +196,12 @@ def test_operator_can_disable_and_explicitly_reenable_linked_archive() -> None:
         "linked_archive": {"storage_id": "archive-1", "enabled": False}
     }
     assert api._linked_storage.state["archive-1"] is False
+    assert api._linked_storage.lifecycle_calls[-1] == (
+        "archive-1",
+        "org-1",
+        False,
+        "operator-1",
+    )
     assert api.operator_checks[-1] == ("storage.disable", "archive-1")
 
     enabled = api.dispatch(
@@ -229,6 +212,12 @@ def test_operator_can_disable_and_explicitly_reenable_linked_archive() -> None:
         "linked_archive": {"storage_id": "archive-1", "enabled": True}
     }
     assert api._linked_storage.state["archive-1"] is True
+    assert api._linked_storage.lifecycle_calls[-1] == (
+        "archive-1",
+        "org-1",
+        True,
+        "operator-1",
+    )
     assert api.operator_checks[-1] == ("storage.enable", "archive-1")
     assert "root_alias" not in enabled.body.decode()
     assert "service_id" not in enabled.body.decode()
@@ -242,6 +231,7 @@ def test_linked_archive_lifecycle_is_pbac_and_organization_scoped() -> None:
     )
     assert denied.status == 403
     assert denied_api._linked_storage.state["archive-1"] is True
+    assert denied_api._linked_storage.lifecycle_calls == []
 
     api = _ManageApi()
     missing = api.dispatch(

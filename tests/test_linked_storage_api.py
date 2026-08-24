@@ -27,6 +27,12 @@ class _Repository:
         self.records = records
         self.preview_requests: list[dict] = []
         self.previews: dict[str, LinkedPreviewObject] = {}
+        self.disabled_storage_ids: set[str] = set()
+
+    def source(self, storage_id: str):
+        if storage_id in self.disabled_storage_ids:
+            return None
+        return next((record.storage_id for record in self.records if record.storage_id == storage_id), None)
 
     def browse(self, organization_id: str, storage_id: str, prefix: str = "", limit: int = 200):
         return tuple(
@@ -171,6 +177,44 @@ def test_thumbnail_returns_only_managed_derivative_after_pbac() -> None:
     assert denied.status == 404
 
 
+def test_disabled_source_revokes_browse_preview_thumbnail_and_original_access() -> None:
+    api = _Api((_record("media-1"),))
+    api._linked_storage.previews["media-1"] = LinkedPreviewObject(
+        "media-1", "image/jpeg", "b" * 64, b"managed-thumbnail"
+    )
+    api._linked_storage.disabled_storage_ids.add("storage-1")
+
+    browse = api.dispatch(
+        "GET", "/api/v1/linked-storage/browse?storage_id=storage-1", _headers(), b""
+    )
+    assert browse.status == 200
+    assert json.loads(browse.body)["items"] == []
+
+    preview = api.dispatch(
+        "POST",
+        "/api/v1/linked-storage/previews",
+        _headers(),
+        json.dumps({"media_ids": ["media-1"]}).encode(),
+    )
+    assert preview.status == 202
+    assert json.loads(preview.body)["unavailable_media_ids"] == ["media-1"]
+    assert api._linked_storage.preview_requests == []
+
+    thumbnail = api.dispatch(
+        "GET", "/api/v1/linked-storage/thumbnail?media_id=media-1", _headers(), b""
+    )
+    assert thumbnail.status == 404
+
+    original = api.dispatch(
+        "POST",
+        "/api/v1/linked-storage/ranges",
+        _headers(),
+        json.dumps({"media_id": "media-1", "start_byte": 0, "end_byte": 9}).encode(),
+    )
+    assert original.status == 404
+    assert api._linked_range_transfers.requests == []
+
+
 def test_original_range_is_queued_and_ready_result_rechecks_pbac() -> None:
     api = _Api((_record("media-1"), _record("media-denied")), denied_media_id="media-denied")
     queued = api.dispatch(
@@ -224,6 +268,29 @@ def test_original_range_is_queued_and_ready_result_rechecks_pbac() -> None:
         "GET", "/api/v1/linked-storage/ranges?request_id=request-denied", _headers(), b""
     )
     assert denied.status == 404
+
+
+def test_ready_range_is_revoked_if_source_is_disabled_after_request() -> None:
+    api = _Api((_record("media-1"),))
+    api._linked_range_transfers.results["request-1"] = LinkedRangeResult(
+        "request-1",
+        "media-1",
+        "org-1",
+        "researcher-1",
+        0,
+        3,
+        1234,
+        "image/jpeg",
+        "ready",
+        "d" * 64,
+        b"abcd",
+        int(time.time()) + 300,
+    )
+    api._linked_storage.disabled_storage_ids.add("storage-1")
+    response = api.dispatch(
+        "GET", "/api/v1/linked-storage/ranges?request_id=request-1", _headers(), b""
+    )
+    assert response.status == 404
 
 
 def test_linked_storage_requires_authentication() -> None:

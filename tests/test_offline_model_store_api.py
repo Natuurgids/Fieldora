@@ -27,6 +27,8 @@ def _receipt(root: Path, model_id: str = "bio-model", version: str = "1.2.3") ->
         "source": "fieldora-bastion",
         "license_id": "test-license",
         "verification": "sha256-per-file",
+        "manifest_signature": "unsigned",
+        "signing_key_id": "",
     }
     (version_root / "FIELDORA-INSTALL.json").write_text(json.dumps(receipt), encoding="utf-8")
     return version_root
@@ -46,6 +48,20 @@ def test_installed_model_store_exposes_only_opaque_metadata(tmp_path: Path) -> N
     assert str(tmp_path) not in encoded
     assert str(version_root) not in encoded
     assert "artifact_files" not in record
+
+
+def test_installed_model_store_preserves_signature_provenance(tmp_path: Path) -> None:
+    version_root = _receipt(tmp_path / "models")
+    path = version_root / "FIELDORA-INSTALL.json"
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["manifest_signature"] = "ed25519"
+    payload["signing_key_id"] = "ab" * 16
+    path.write_text(json.dumps(payload), encoding="utf-8")
+
+    record = InstalledModelStore(tmp_path / "models").records()[0]
+
+    assert record["manifest_signature"] == "ed25519"
+    assert record["signing_key_id"] == "ab" * 16
 
 
 def test_installed_model_store_rejects_receipt_identity_mismatch(tmp_path: Path) -> None:

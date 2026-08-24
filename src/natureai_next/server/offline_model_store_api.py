@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -116,7 +117,10 @@ class InstalledModelApiMixin:
     def _installed_models(self, headers: dict[str, str]) -> ApiResponse:
         store = type(self)._installed_model_store
         if store is None:
-            return ApiResponse.json(503, {"error": "offline_model_store_unavailable"})
+            root = os.environ.get("FIELDORA_MODEL_STORE", "").strip()
+            if not root:
+                return ApiResponse.json(503, {"error": "offline_model_store_unavailable"})
+            store = InstalledModelStore(Path(root))
         try:
             _token, identity = self._identity(headers)  # type: ignore[attr-defined]
         except AuthenticationFailed as exc:

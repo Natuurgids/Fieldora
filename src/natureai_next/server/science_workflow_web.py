@@ -52,7 +52,7 @@ _SCIENCE_WORKFLOW_PATCH = bytes(
   );
   observationNav?.after(intro);
   const newObservation=q("new-observation");
-  if(newObservation){newObservation.textContent="＋ New observation";newObservation.onclick=()=>setObservationView("create")}
+  if(newObservation)newObservation.hidden=true;
   if(editor){
    new MutationObserver(()=>{
     if(observationView==="create"&&editor.hidden)setObservationView("review");

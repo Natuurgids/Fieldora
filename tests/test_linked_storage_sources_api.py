@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import json
+import time
 from dataclasses import dataclass
 
 from natureai_next.server.api import ApiResponse
-from natureai_next.server.linked_storage_sources_api import LinkedStorageSourcesApiMixin
+from natureai_next.server.linked_storage_sources_api import (
+    LinkedStorageSourcesApiMixin,
+    _availability,
+)
 
 
 class _Cursor:
@@ -21,7 +25,7 @@ class _Cursor:
         self.parameters = parameters
 
     def fetchall(self):
-        return [("archive-1", "Primary research archive", True)]
+        return [("archive-1", "Primary research archive", True, "storage-service-1")]
 
 
 class _Connection:
@@ -51,6 +55,21 @@ class _Identity:
     organization_id: str
 
 
+@dataclass(frozen=True)
+class _Service:
+    state: str
+    last_heartbeat_epoch: int
+
+
+class _Operator:
+    def __init__(self, service: _Service | None) -> None:
+        self._service = service
+
+    def service(self, service_id: str):
+        assert service_id == "storage-service-1"
+        return self._service
+
+
 class _BaseApi:
     def dispatch(self, method: str, target: str, headers: dict[str, str], body: bytes):
         return ApiResponse.json(404, {"error": "not_found"})
@@ -64,8 +83,10 @@ class _IdentityApi(_BaseApi):
 
 
 class _Api(LinkedStorageSourcesApiMixin, _IdentityApi):
-    def __init__(self) -> None:
+    def __init__(self, operator=None) -> None:
         self._linked_storage = _Repository()
+        if operator is not None:
+            self._operator = operator
 
 
 def test_source_discovery_is_organization_scoped_and_discloses_only_safe_fields() -> None:
@@ -84,6 +105,7 @@ def test_source_discovery_is_organization_scoped_and_discloses_only_safe_fields(
                 "storage_id": "archive-1",
                 "display_name": "Primary research archive",
                 "read_only": True,
+                "availability": "unknown",
             }
         ],
         "count": 1,
@@ -91,9 +113,32 @@ def test_source_discovery_is_organization_scoped_and_discloses_only_safe_fields(
     assert api._linked_storage.cursor.parameters == ("org-1",)
     serialized = response.body.decode()
     assert "service_id" not in serialized
+    assert "storage-service-1" not in serialized
+    assert "heartbeat" not in serialized
     assert "root_alias" not in serialized
     assert "root_path" not in serialized
     assert "certificate" not in serialized
+
+
+def test_source_availability_is_coarse_and_never_discloses_service_health_details() -> None:
+    now = int(time.time())
+    assert _availability(_Operator(_Service("active", now - 10)), "storage-service-1", now) == "online"
+    assert _availability(_Operator(_Service("active", now - 121)), "storage-service-1", now) == "stale"
+    assert _availability(_Operator(_Service("stopped", now - 10)), "storage-service-1", now) == "unavailable"
+    assert _availability(_Operator(None), "storage-service-1", now) == "unavailable"
+    assert _availability(None, "storage-service-1", now) == "unknown"
+
+    response = _Api(_Operator(_Service("active", now - 10))).dispatch(
+        "GET",
+        "/api/v1/linked-storage/sources",
+        {"authorization": "Bearer good-token"},
+        b"",
+    )
+    payload = json.loads(response.body)
+    assert payload["items"][0]["availability"] == "online"
+    serialized = response.body.decode()
+    assert "storage-service-1" not in serialized
+    assert "heartbeat" not in serialized
 
 
 def test_source_discovery_requires_authentication() -> None:

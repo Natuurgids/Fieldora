@@ -21,9 +21,10 @@ class _Cursor:
 
     def fetchall(self):
         return [
-            ("archive-healthy", "service-healthy", "Healthy archive", True),
-            ("archive-stale", "service-stale", "Stale archive", True),
-            ("archive-missing", "service-missing", "Missing service archive", True),
+            ("archive-healthy", "service-healthy", "Healthy archive", True, True),
+            ("archive-stale", "service-stale", "Stale archive", True, True),
+            ("archive-missing", "service-missing", "Missing service archive", True, True),
+            ("archive-disabled", "service-healthy", "Disabled archive", True, False),
         ]
 
 
@@ -173,6 +174,7 @@ def test_operator_overview_correlates_linked_archives_without_storage_paths() ->
     archives = {item["storage_id"]: item for item in payload["linked_archives"]}
 
     healthy = archives["archive-healthy"]
+    assert healthy["enabled"] is True
     assert healthy["service_state"] == "active"
     assert healthy["heartbeat_age_seconds"] == 50
     assert healthy["stale"] is False
@@ -185,6 +187,10 @@ def test_operator_overview_correlates_linked_archives_without_storage_paths() ->
     assert missing["service_state"] == "missing"
     assert missing["heartbeat_age_seconds"] is None
     assert missing["stale"] is True
+
+    disabled = archives["archive-disabled"]
+    assert disabled["enabled"] is False
+    assert disabled["service_state"] == "active"
 
     serialized = response.body.decode()
     assert "root_alias" not in serialized

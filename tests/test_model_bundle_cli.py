@@ -165,6 +165,9 @@ def test_install_is_versioned_atomic_and_writes_registry_receipt(tmp_path: Path)
     assert receipt["network"] == "offline"
     assert receipt["verification"] == "sha256-per-file"
     assert receipt["artifact_total_bytes"] == verified.total_bytes
+    assert receipt["artifact_storage_id"] == "model:fieldora-test-model:1.0.0"
+    assert "artifact_store_path" not in receipt
+    assert str(store) not in json.dumps(receipt)
 
     with pytest.raises(ModelBundleError, match="already installed"):
         install_model_bundle(bundle, store)

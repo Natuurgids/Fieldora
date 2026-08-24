@@ -128,7 +128,19 @@ def test_server_web_matches_desktop_workspace_model_and_single_import_action(
             "?Help&Guides",
         ]
 
-        page.locator('.sidebar .nav[data-page="research"]').click()
+        assert page.locator("#home-science-focus").is_visible()
+        assert page.locator("#home-primary-actions").is_visible()
+        assert page.locator("#home-primary-actions button").all_inner_texts() == [
+            "Browse Library",
+            "Review observations",
+            "Research records",
+            "Knowledge & AI",
+        ]
+        assert page.locator("#page-home .home-system-context").count() == 1
+        assert page.locator("#page-home .home-system-context").get_attribute("open") is None
+        page.get_by_role("button", name="Research records", exact=True).click()
+        assert page.locator("#page-research").is_visible()
+
         research_targets = page.locator(
             "#page-research .workspace-subnav button"
         ).all_inner_texts()
@@ -138,6 +150,13 @@ def test_server_web_matches_desktop_workspace_model_and_single_import_action(
             "Dossiers",
             "Capacity",
         ]
+        assert page.locator("#research-workspace-intro").is_visible()
+        assert page.locator("#research-legacy-projects").is_hidden()
+        assert page.locator("#research-legacy-related").is_hidden()
+        assert page.locator("#page-research .research-records-card").is_visible()
+        assert page.locator("#page-research .research-records-card h2").inner_text() == (
+            "Research records"
+        )
         page.get_by_role("button", name="Projects & Portfolio").click()
         assert page.locator("#page-projects").is_visible()
         assert (

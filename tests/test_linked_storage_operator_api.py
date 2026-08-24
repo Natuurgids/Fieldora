@@ -93,6 +93,17 @@ class _Api(LinkedStorageOperatorApiMixin, _BaseApi):
         self._operator = _Operator()
 
 
+class _ForbiddenBaseApi:
+    def dispatch(self, method: str, target: str, headers: dict[str, str], body: bytes):
+        return ApiResponse.json(403, {"error": "forbidden"})
+
+
+class _ForbiddenApi(LinkedStorageOperatorApiMixin, _ForbiddenBaseApi):
+    def __init__(self) -> None:
+        self._linked_storage = _LinkedStorage()
+        self._operator = _Operator()
+
+
 def test_operator_overview_correlates_linked_archives_without_storage_paths() -> None:
     response = _Api().dispatch("GET", "/api/v1/operator/overview", {}, b"")
     assert response.status == 200
@@ -123,6 +134,6 @@ def test_operator_enrichment_does_not_change_other_routes_or_errors() -> None:
     api = _Api()
     assert api.dispatch("GET", "/api/v1/other", {}, b"").status == 404
 
-    class _Denied(_Api):
-        def dispatch_base(self):
-            return ApiResponse.json(403, {"error": "forbidden"})
+    forbidden = _ForbiddenApi().dispatch("GET", "/api/v1/operator/overview", {}, b"")
+    assert forbidden.status == 403
+    assert json.loads(forbidden.body) == {"error": "forbidden"}

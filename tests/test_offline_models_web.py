@@ -73,6 +73,7 @@ def test_offline_model_artifact_registers_through_governed_ai_models(
             "definitions": "daily-12345",
             "scanned_at": "2026-08-24T17:00:00Z",
             "file_count": 2,
+            "payload_sha256": "cd" * 32,
         },
         "formats": ["safetensors"],
     }
@@ -137,9 +138,10 @@ def test_offline_model_artifact_registers_through_governed_ai_models(
         assert record["id"] == "bio-model@1.2.3"
         assert record["project_id"] == "platform"
         assert record["artifact_storage_id"] == "model:bio-model:1.2.3"
+        assert record["enabled"] is True
         assert record["manifest_signature"] == "ed25519"
         assert record["malware_scan"]["result"] == "clean"
-        assert record["enabled"] is True
+        assert record["malware_scan"]["payload_sha256"] == "cd" * 32
         assert "artifact_store_path" not in record
         assert "/var/lib/fieldora-models" not in json.dumps(record)
         assert all(purpose == "administration" for _path, purpose in administration_requests)

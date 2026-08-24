@@ -12,7 +12,8 @@ param(
     [Parameter(Mandatory)][string]$BundlePath,
     [ValidateRange(1,1099511627776)][Int64]$MaxBytes = 68719476736,
     [string]$TrustedSigningKey = "",
-    [switch]$RequireSignature
+    [switch]$RequireSignature,
+    [switch]$RequireCleanScan
 )
 
 $ErrorActionPreference = "Stop"
@@ -44,8 +45,8 @@ if (-not (Test-Path -LiteralPath $bundleFull -PathType Container)) {
 if (-not (Test-Path -LiteralPath (Join-Path $bundleFull "manifest.json") -PathType Leaf)) {
     throw "Offline model bundle must contain manifest.json."
 }
-if ($RequireSignature -and [string]::IsNullOrWhiteSpace($TrustedSigningKey)) {
-    throw "-RequireSignature requires -TrustedSigningKey."
+if (($RequireSignature -or $RequireCleanScan) -and [string]::IsNullOrWhiteSpace($TrustedSigningKey)) {
+    throw "-RequireSignature and -RequireCleanScan require -TrustedSigningKey."
 }
 $signingKeyFull = ""
 if (-not [string]::IsNullOrWhiteSpace($TrustedSigningKey)) {
@@ -87,6 +88,9 @@ if ($signingKeyFull) {
 if ($RequireSignature) {
     $dockerArgs += "--require-signature"
 }
+if ($RequireCleanScan) {
+    $dockerArgs += "--require-clean-scan"
+}
 & docker @dockerArgs
 if ($LASTEXITCODE -ne 0) {
     throw "Offline model verification or installation failed."
@@ -115,8 +119,11 @@ if ($LASTEXITCODE -ne 0) {
 
 Write-Host ""
 Write-Host "Offline model installed and model store mounted read-only." -ForegroundColor Green
-if ($RequireSignature) {
+if ($RequireSignature -or $RequireCleanScan) {
     Write-Host "Manifest signature: required and verified against the supplied Ed25519 public key." -ForegroundColor Green
+}
+if ($RequireCleanScan) {
+    Write-Host "Malware scan: signed clean attestation required and verified." -ForegroundColor Green
 }
 Write-Host "Model registry metadata uses opaque artifact storage IDs; host paths are not browser metadata."
 Write-Host "For future docker compose operations, include compose.models.yaml so the model mount remains part of the desired state."

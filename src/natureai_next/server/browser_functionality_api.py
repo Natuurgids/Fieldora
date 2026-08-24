@@ -3,9 +3,7 @@
 from __future__ import annotations
 
 import json
-import os
 from http.cookies import SimpleCookie
-from pathlib import Path
 from urllib.parse import quote, unquote, urlsplit
 
 from natureai_next.application.access_control import AccessAdministrationService
@@ -20,7 +18,6 @@ from natureai_next.server.browser_functionality_web import (
     patch_browser_functionality_response,
 )
 from natureai_next.server.directory_intake_web import patch_directory_intake_response
-from natureai_next.server.offline_model_registry import discover_offline_models
 from natureai_next.server.project_owner_contract_api import ProjectOwnerContractFieldoraApi
 
 _COOKIE_NAME = "fieldora_session"
@@ -58,9 +55,7 @@ class BrowserFunctionalityFieldoraApi(ProjectOwnerContractFieldoraApi):
             routed_headers["authorization"] = f"Bearer {cookie_token}"
 
         route = urlsplit(target)
-        if route.path == "/api/v1/ai-models/installed" and method == "GET":
-            response = self._installed_offline_models(routed_headers)
-        elif route.path == "/api/v1/projects" and method == "POST":
+        if route.path == "/api/v1/projects" and method == "POST":
             response = self._create_project(routed_headers, body)
         else:
             response = super().dispatch(method, target, routed_headers, body)
@@ -70,32 +65,6 @@ class BrowserFunctionalityFieldoraApi(ProjectOwnerContractFieldoraApi):
         )
         response = patch_browser_functionality_response(target, response)
         return patch_directory_intake_response(target, response)
-
-    def _installed_offline_models(self, headers: dict[str, str]) -> ApiResponse:
-        try:
-            _token, identity = self._identity(headers)
-        except AuthenticationFailed as exc:
-            return ApiResponse.json(
-                401, {"error": "unauthorized", "detail": str(exc)}
-            )
-        decision = self._decisions.decide(
-            AccessRequest(
-                identity.identity_id,
-                "view",
-                "ai_model",
-                "installed-offline-models",
-                identity.organization_id,
-                "",
-                headers.get("x-fieldora-purpose", "administration"),
-            )
-        )
-        if not decision.allowed:
-            return ApiResponse.json(403, {"error": "forbidden"})
-        configured = os.environ.get("FIELDORA_MODEL_STORE", "").strip()
-        if not configured:
-            return ApiResponse.json(404, {"error": "offline_model_store_unavailable"})
-        items = discover_offline_models(Path(configured))
-        return ApiResponse.json(200, {"items": items, "count": len(items)})
 
     def _browser_session_response(
         self,

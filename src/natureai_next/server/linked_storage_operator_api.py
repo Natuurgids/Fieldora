@@ -61,8 +61,8 @@ class LinkedStorageOperatorApiMixin:
             return response
 
         repository = getattr(self, "_linked_storage", None)
-        connect_factory = getattr(repository, "connect_factory", None)
-        if repository is None or connect_factory is None:
+        set_source_enabled = getattr(repository, "set_source_enabled", None)
+        if repository is None or set_source_enabled is None:
             return ApiResponse.json(503, {"error": "linked_storage_unavailable"})
         try:
             _token, identity = self._identity(headers)  # type: ignore[attr-defined]
@@ -74,12 +74,16 @@ class LinkedStorageOperatorApiMixin:
         ):
             return ApiResponse.json(403, {"error": "forbidden"})
         enabled = enabled_by_operation[operation]
-        if not _set_linked_archive_enabled(
-            connect_factory,
-            identity.organization_id,
-            storage_id,
-            enabled,
-        ):
+        try:
+            changed = set_source_enabled(
+                storage_id,
+                identity.organization_id,
+                enabled,
+                actor_id=identity.identity_id,
+            )
+        except ValueError:
+            return ApiResponse.json(400, {"error": "invalid_linked_archive_lifecycle"})
+        if not changed:
             return ApiResponse.json(404, {"error": "linked_archive_not_found"})
         return ApiResponse.json(
             200,
@@ -90,22 +94,6 @@ class LinkedStorageOperatorApiMixin:
                 }
             },
         )
-
-
-def _set_linked_archive_enabled(
-    connect_factory: Any,
-    organization_id: str,
-    storage_id: str,
-    enabled: bool,
-) -> bool:
-    with connect_factory() as connection:
-        with connection.cursor() as cursor:
-            cursor.execute(
-                "UPDATE linked_storage_sources_pg SET enabled=%s "
-                "WHERE storage_id=%s AND organization_id=%s",
-                (enabled, storage_id, organization_id),
-            )
-            return cursor.rowcount == 1
 
 
 def _linked_archive_health(

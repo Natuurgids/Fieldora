@@ -336,8 +336,9 @@ class PostgresLinkedStorageRepository:
         with self._connect() as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
-                    "SELECT storage_id,thumbnail_state FROM linked_storage_media_pg "
-                    "WHERE media_id=%s AND organization_id=%s",
+                    "SELECT m.storage_id,m.thumbnail_state FROM linked_storage_media_pg m "
+                    "JOIN linked_storage_sources_pg s ON s.storage_id=m.storage_id "
+                    "WHERE m.media_id=%s AND m.organization_id=%s AND s.enabled=TRUE",
                     (media_id, organization_id),
                 )
                 row = cursor.fetchone()
@@ -377,7 +378,8 @@ class PostgresLinkedStorageRepository:
                     "SELECT p.media_id,p.mime_type,p.sha256,p.payload "
                     "FROM linked_preview_objects_pg p "
                     "JOIN linked_storage_media_pg m ON m.media_id=p.media_id "
-                    "WHERE p.media_id=%s AND m.thumbnail_state=%s",
+                    "JOIN linked_storage_sources_pg s ON s.storage_id=m.storage_id "
+                    "WHERE p.media_id=%s AND m.thumbnail_state=%s AND s.enabled=TRUE",
                     (media_id, PreviewState.READY.value),
                 )
                 row = cursor.fetchone()

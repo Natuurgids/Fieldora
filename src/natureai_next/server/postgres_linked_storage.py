@@ -160,11 +160,7 @@ class PostgresLinkedStorageRepository:
                     "INSERT INTO linked_storage_sources_pg("
                     "storage_id,organization_id,service_id,display_name,root_alias,read_only"
                     ") VALUES(%s,%s,%s,%s,%s,%s) "
-                    "ON CONFLICT(storage_id) DO UPDATE SET "
-                    "display_name=excluded.display_name,root_alias=excluded.root_alias,"
-                    "read_only=excluded.read_only "
-                    "WHERE linked_storage_sources_pg.organization_id=excluded.organization_id "
-                    "AND linked_storage_sources_pg.service_id=excluded.service_id",
+                    "ON CONFLICT(storage_id) DO NOTHING RETURNING storage_id",
                     (
                         source.storage_id,
                         source.organization_id,
@@ -174,8 +170,52 @@ class PostgresLinkedStorageRepository:
                         source.read_only,
                     ),
                 )
-                if cursor.rowcount != 1:
+                if cursor.fetchone() is not None:
+                    self._source_event(
+                        cursor,
+                        source.storage_id,
+                        source.organization_id,
+                        source.service_id,
+                        "source_registered",
+                    )
+                    return
+                cursor.execute(
+                    "SELECT organization_id,service_id,display_name,root_alias,read_only "
+                    "FROM linked_storage_sources_pg WHERE storage_id=%s FOR UPDATE",
+                    (source.storage_id,),
+                )
+                existing = cursor.fetchone()
+                if existing is None:
+                    raise ValueError("storage source registration conflict")
+                if (
+                    str(existing[0]) != source.organization_id
+                    or str(existing[1]) != source.service_id
+                ):
                     raise ValueError("storage source ownership cannot be changed")
+                changed = (
+                    str(existing[2]) != source.display_name
+                    or str(existing[3]) != source.root_alias
+                    or bool(existing[4]) != source.read_only
+                )
+                if not changed:
+                    return
+                cursor.execute(
+                    "UPDATE linked_storage_sources_pg SET "
+                    "display_name=%s,root_alias=%s,read_only=%s WHERE storage_id=%s",
+                    (
+                        source.display_name,
+                        source.root_alias,
+                        source.read_only,
+                        source.storage_id,
+                    ),
+                )
+                self._source_event(
+                    cursor,
+                    source.storage_id,
+                    source.organization_id,
+                    source.service_id,
+                    "source_registration_updated",
+                )
 
     def set_source_enabled(
         self,
@@ -208,18 +248,29 @@ class PostgresLinkedStorageRepository:
                     "WHERE storage_id=%s AND organization_id=%s",
                     (target, storage_id, organization_id),
                 )
-                cursor.execute(
-                    "INSERT INTO linked_storage_source_events_pg("
-                    "storage_id,organization_id,actor_id,event_type"
-                    ") VALUES(%s,%s,%s,%s)",
-                    (
-                        storage_id,
-                        organization_id,
-                        actor_id,
-                        "source_enabled" if target else "source_disabled",
-                    ),
+                self._source_event(
+                    cursor,
+                    storage_id,
+                    organization_id,
+                    actor_id,
+                    "source_enabled" if target else "source_disabled",
                 )
         return True
+
+    @staticmethod
+    def _source_event(
+        cursor: Any,
+        storage_id: str,
+        organization_id: str,
+        actor_id: str,
+        event_type: str,
+    ) -> None:
+        cursor.execute(
+            "INSERT INTO linked_storage_source_events_pg("
+            "storage_id,organization_id,actor_id,event_type"
+            ") VALUES(%s,%s,%s,%s)",
+            (storage_id, organization_id, actor_id, event_type),
+        )
 
     def source(self, storage_id: str) -> StorageSourceRegistration | None:
         with self._connect() as connection:

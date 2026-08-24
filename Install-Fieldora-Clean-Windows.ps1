@@ -1,9 +1,9 @@
 <#
 Windows entry point for the Fieldora clean Docker installer.
-Runs the repository clean installer, enables the internal mTLS storage-service listener,
-installs the Fieldora root CA into the current user root store through .NET X509Store
-(no certificate-store UI), verifies the exact thumbprint, then proves HTTPS using the
-Windows trust store.
+Runs the repository clean installer, configures temporary bootstrap credential handoff cleanup,
+enables the internal mTLS storage-service listener, installs the Fieldora root CA into the
+current user root store through .NET X509Store (no certificate-store UI), verifies the exact
+thumbprint, then proves HTTPS using the Windows trust store.
 #>
 
 [CmdletBinding()]
@@ -13,7 +13,8 @@ param(
     [string]$AdminUsername = "admin",
     [string]$AdminName = "Administrator",
     [string]$Organization = "local",
-    [string]$AdminPassword = ""
+    [string]$AdminPassword = "",
+    [ValidateRange(1,90)][int]$CredentialHandoffRetentionDays = 7
 )
 
 $ErrorActionPreference = "Stop"
@@ -26,10 +27,13 @@ if (-not $IsWindows) { throw "This entry point is for Windows 11." }
 
 $encodedRef = [Uri]::EscapeDataString($FieldoraRef)
 $url = "https://raw.githubusercontent.com/Natuurgids/Fieldora/$encodedRef/Install-Fieldora-Clean.ps1"
+$handoffUrl = "https://raw.githubusercontent.com/Natuurgids/Fieldora/$encodedRef/Install-Fieldora-Bootstrap-Handoff.ps1"
 if ($FieldoraRef -match '^[0-9a-fA-F]{40}$') {
     $url = "https://raw.githubusercontent.com/Natuurgids/Fieldora/$FieldoraRef/Install-Fieldora-Clean.ps1"
+    $handoffUrl = "https://raw.githubusercontent.com/Natuurgids/Fieldora/$FieldoraRef/Install-Fieldora-Bootstrap-Handoff.ps1"
 }
 $tempInstaller = Join-Path $env:TEMP "Install-Fieldora-Clean-$([Guid]::NewGuid().ToString('N')).ps1"
+$tempHandoffInstaller = Join-Path $env:TEMP "Install-Fieldora-Bootstrap-Handoff-$([Guid]::NewGuid().ToString('N')).ps1"
 try {
     Invoke-WebRequest -Uri $url -OutFile $tempInstaller -UseBasicParsing
     $invoke = @{
@@ -45,6 +49,16 @@ try {
     & $tempInstaller @invoke
     if ($LASTEXITCODE -ne 0) {
         throw "Fieldora clean installer failed with exit code $LASTEXITCODE."
+    }
+
+    Write-Host ""
+    Write-Host "============================================================" -ForegroundColor DarkCyan
+    Write-Host "==> Configuring temporary administrator credential handoff" -ForegroundColor Cyan
+    Write-Host "============================================================" -ForegroundColor DarkCyan
+    Invoke-WebRequest -Uri $handoffUrl -OutFile $tempHandoffInstaller -UseBasicParsing
+    & $tempHandoffInstaller -InstallRoot $InstallRoot -RetentionDays $CredentialHandoffRetentionDays
+    if ($LASTEXITCODE -ne 0) {
+        throw "Bootstrap credential handoff configuration failed with exit code $LASTEXITCODE."
     }
 
     Write-Host ""
@@ -196,7 +210,10 @@ else:
 
     Write-Host "Windows CurrentUser Fieldora CA trust: VERIFIED" -ForegroundColor Green
     Write-Host "Browser URL: https://127.0.0.1:8765" -ForegroundColor Green
+    Write-Host "Temporary administrator credentials: $InstallRoot\bootstrap-handoff\ADMIN-CREDENTIALS.txt" -ForegroundColor Green
+    Write-Host "Credential handoff retention: $CredentialHandoffRetentionDays day(s)" -ForegroundColor Green
 }
 finally {
     Remove-Item -LiteralPath $tempInstaller -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $tempHandoffInstaller -Force -ErrorAction SilentlyContinue
 }

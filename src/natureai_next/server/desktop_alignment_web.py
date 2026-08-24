@@ -20,6 +20,14 @@ _DESKTOP_ALIGNMENT_PATCH = bytes(
   .import-source-summary{color:var(--muted);font-size:13px;margin-top:8px}
   .library-workspace-intro{margin:-6px 0 14px;color:var(--muted);max-width:880px}
   #library-browse-panel[hidden],#linked-storage-card[hidden],#import-card[hidden]{display:none!important}
+  .home-science-focus,.research-workspace-intro{margin:-6px 0 14px;color:var(--muted);max-width:920px}
+  .home-primary-actions{grid-template-columns:repeat(auto-fit,minmax(180px,1fr));margin-top:0}
+  .home-primary-actions .card{display:grid;gap:8px;align-content:start}.home-primary-actions .card p{margin:0;color:var(--muted)}
+  .home-primary-actions button{text-align:left;font-weight:600}
+  .home-overview-label{margin:18px 0 8px;font-size:15px;color:var(--muted);font-weight:600}
+  .home-system-context summary{cursor:pointer;font-weight:600}.home-system-context[open] summary{margin-bottom:12px}
+  #research-legacy-projects[hidden],#research-legacy-related[hidden]{display:none!important}
+  .research-records-card>h2{font-size:20px}.research-context-note{margin:0 0 12px;color:var(--muted)}
  `;
  document.head.appendChild(style);
 
@@ -152,6 +160,40 @@ _DESKTOP_ALIGNMENT_PATCH = bytes(
  menu.querySelector('[data-import-source="files"]').onclick=()=>{closeImportMenu();showPage("library");setLibraryView("import");q("import-card")?.scrollIntoView({behavior:"smooth",block:"start"});uploadInput?.click()};
  menu.querySelector('[data-import-source="folder"]').onclick=()=>{closeImportMenu();showPage("library");setLibraryView("import");q("import-card")?.scrollIntoView({behavior:"smooth",block:"start"});folderInput?.click()};
  const uploadButton=q("upload-start");if(uploadButton)uploadButton.textContent="Import selected files";
+
+ /* Home is a scientist's launch surface, not a server dashboard. Keep status
+    available as secondary context while putting evidence and research work first. */
+ const home=q("page-home");
+ if(home&&!q("home-science-focus")){
+  const top=home.querySelector(".top"),intro=document.createElement("p");
+  intro.id="home-science-focus";intro.className="home-science-focus";intro.textContent="Continue evidence, observations, research records, and review work from one scientific workspace.";
+  const actions=document.createElement("div");actions.id="home-primary-actions";actions.className="grid home-primary-actions";
+  actions.innerHTML='<section class="card"><button type="button" data-home-target="library">Browse Library</button><p>Find governed evidence and linked archives.</p></section><section class="card"><button type="button" data-home-target="observations">Review observations</button><p>Work through field records and decisions.</p></section><section class="card"><button type="button" data-home-target="research">Research records</button><p>Continue specimens, protocols, surveys, samples, and laboratory records.</p></section><section class="card"><button type="button" data-home-target="knowledge">Knowledge &amp; AI</button><p>Review analyses and accepted knowledge.</p></section>';
+  if(top){top.after(intro);intro.after(actions)}else{home.prepend(actions);home.prepend(intro)}
+  actions.querySelectorAll("[data-home-target]").forEach(b=>b.onclick=()=>showPage(b.dataset.homeTarget));
+  const projectCard=q("home-projects")?.closest(".card");if(projectCard?.querySelector("h2"))projectCard.querySelector("h2").textContent="Continue scientific work";
+  const metrics=q("home-metrics");if(metrics){const label=document.createElement("h2");label.className="home-overview-label";label.textContent="Workspace overview";metrics.before(label)}
+  const runtime=q("home-runtime"),runtimeCard=runtime?.closest(".card");
+  if(runtime&&runtimeCard){
+   const details=document.createElement("details");details.className="card home-system-context";const summary=document.createElement("summary");summary.textContent="System context";details.appendChild(summary);details.appendChild(runtime);runtimeCard.replaceWith(details);
+  }
+ }
+
+ /* Research owns scientific records. Project portfolio, dossiers, and capacity
+    already have dedicated tabs, so do not duplicate them on this page. */
+ const research=q("page-research");
+ if(research&&!q("research-workspace-intro")){
+  const top=research.querySelector(".top"),intro=document.createElement("p");
+  intro.id="research-workspace-intro";intro.className="research-workspace-intro";intro.textContent="Create and inspect scientific records here. Use Projects & Portfolio for project structure, Dossiers for assembled cases, and Capacity for planning.";
+  const subnav=research.querySelector(".workspace-subnav");if(subnav)subnav.after(intro);else if(top)top.after(intro);else research.prepend(intro);
+  const projectSplit=q("project-list")?.closest(".split");if(projectSplit){projectSplit.id="research-legacy-projects";projectSplit.hidden=true}
+  const related=q("dossier-list")?.closest(".grid.section");if(related){related.id="research-legacy-related";related.hidden=true}
+  const records=q("research-domain-list")?.closest(".card");
+  if(records){records.classList.add("research-records-card");const heading=records.querySelector("h2");if(heading)heading.textContent="Research records";const note=document.createElement("p");note.className="research-context-note";note.textContent="Choose a record domain, then inspect or create records within the appropriate project context.";heading?.after(note)}
+  const createDetails=records?.querySelector("details");if(createDetails){const summary=createDetails.querySelector("summary");if(summary)summary.textContent="Create research record"}
+  const newProject=q("new-project");if(newProject){newProject.textContent="＋ New research record";newProject.onclick=()=>{if(!createDetails)return;createDetails.open=true;createDetails.scrollIntoView({behavior:"smooth",block:"center"});q("science-name")?.focus()}}
+  const recordEditor=q("record-editor");if(recordEditor)recordEditor.hidden=true;
+ }
 
  const active=(location.hash||"#home").slice(1);if(q(`page-${active}`))showPage(active);else showPage("home");
 })();

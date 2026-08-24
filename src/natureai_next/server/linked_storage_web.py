@@ -49,9 +49,11 @@ _LINKED_STORAGE_WEB_PATCH = bytes(
     const counts=items.reduce((result,source)=>{const state=String(source.availability||"unknown");result[state]=(result[state]||0)+1;return result},{});
     const health=[counts.online?`${counts.online} online`:"",counts.stale?`${counts.stale} stale`:"",counts.unavailable?`${counts.unavailable} unavailable`:"",counts.unknown?`${counts.unknown} status unknown`:""].filter(Boolean).join(" · ");
     setLinkedStatus(`${items.length} linked archive${items.length===1?"":"s"} discovered${health?` · ${health}`:""}.`);
+   }else{
+    setLinkedStatus("No linked archives are configured. Local file and folder import remains available.");
    }
   }catch(_error){
-   setLinkedStatus("Linked archive discovery is unavailable; enter a known opaque storage ID to continue.");
+   setLinkedStatus("Linked archive discovery is not configured or currently unavailable. This does not affect local file or folder import. Enter a known opaque storage ID only when using linked external storage.");
   }
  }
  function clearThumbUrls(){for(const url of thumbUrls.values())URL.revokeObjectURL(url);thumbUrls.clear()}

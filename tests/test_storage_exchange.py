@@ -39,6 +39,16 @@ def test_storage_source_uses_opaque_alias_not_filesystem_path() -> None:
         )
 
 
+def test_storage_source_registration_is_always_read_only() -> None:
+    source = StorageSourceRegistration(
+        "archive-1", "org-1", "storage-service-1", "Scientific archive", "primary-archive"
+    )
+    assert source.read_only is True
+
+    with pytest.raises(ValueError, match="read only"):
+        replace(source, read_only=False)
+
+
 def test_catalogue_item_requires_normalized_relative_path() -> None:
     with pytest.raises(ValueError):
         replace(_item(), relative_path="../secret.jpg")
@@ -76,6 +86,7 @@ def test_catalogue_batch_digest_detects_tampering_and_supports_chain() -> None:
         items=(),
         previous_batch_sha256=signed.batch_sha256,
     )
+    second = replace(second, batch_sha256=batch.calculated_sha256())
     second = replace(second, batch_sha256=second.calculated_sha256())
     assert second.verify()
     assert second.previous_batch_sha256 == signed.batch_sha256

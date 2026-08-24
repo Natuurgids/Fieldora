@@ -9,6 +9,18 @@ _OFFLINE_MODELS_WEB_PATCH = bytes(
 (()=>{
  if(window.__fieldoraOfflineModelsWired)return;
  window.__fieldoraOfflineModelsWired=true;
+ const administrationCollections=new Set([
+  "ai-providers","ai-models","mcp-servers","connectors","reference-values"
+ ]);
+ const baseApi=api;
+ api=async function(path,options={}){
+  const route=String(path||"").split("?",1)[0].replace(/^\/api\/v1\//,"");
+  const collection=route.split("/",1)[0];
+  if(administrationCollections.has(collection)&&!options.purpose){
+   options={...options,purpose:"administration"};
+  }
+  return baseApi(path,options);
+ };
  const page=document.getElementById("page-aiadmin");
  if(!page)return;
  const section=document.createElement("section");

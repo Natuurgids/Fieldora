@@ -14,6 +14,7 @@ from natureai_next.server.api import ApiResponse
 _RECEIPT_NAME = "FIELDORA-INSTALL.json"
 _MAX_RECEIPT_BYTES = 1_048_576
 _MAX_MODELS = 200
+_MAX_SCAN_TEXT = 2_048
 _ALLOWED_FORMATS = {".safetensors", ".onnx", ".gguf"}
 
 
@@ -42,6 +43,24 @@ class InstalledModelStore:
                 if record is not None:
                     records.append(record)
         return tuple(records)
+
+
+def _safe_scan_metadata(value: object) -> dict[str, object] | None:
+    if value is None:
+        return None
+    if not isinstance(value, dict) or value.get("result") != "clean":
+        return None
+    try:
+        file_count = max(0, int(value.get("file_count", 0)))
+    except (TypeError, ValueError):
+        return None
+    result: dict[str, object] = {"result": "clean", "file_count": file_count}
+    for key in ("scanner", "scanner_version", "definitions", "scanned_at"):
+        text = str(value.get(key) or "").strip()
+        if not text or len(text) > _MAX_SCAN_TEXT:
+            return None
+        result[key] = text
+    return result
 
 
 def _read_receipt(path: Path, model_id: str, version: str) -> dict[str, object] | None:
@@ -88,7 +107,12 @@ def _read_receipt(path: Path, model_id: str, version: str) -> dict[str, object] 
         return None
     if manifest_signature == "ed25519" and not signing_key_id:
         return None
-    return {
+    malware_scan = _safe_scan_metadata(value.get("malware_scan"))
+    if value.get("malware_scan") is not None and malware_scan is None:
+        return None
+    if malware_scan is not None and manifest_signature != "ed25519":
+        return None
+    record: dict[str, object] = {
         "id": registry_id,
         "model_id": model_id,
         "name": str(value.get("name") or model_id),
@@ -106,6 +130,9 @@ def _read_receipt(path: Path, model_id: str, version: str) -> dict[str, object] 
         "signing_key_id": signing_key_id,
         "formats": sorted(formats),
     }
+    if malware_scan is not None:
+        record["malware_scan"] = malware_scan
+    return record
 
 
 class InstalledModelApiMixin:

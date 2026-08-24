@@ -151,15 +151,20 @@ def test_server_web_matches_desktop_workspace_model_and_single_import_action(
             "Review observations",
             "New observation",
         ]
+        assert page.locator("#new-observation").is_hidden()
         assert page.locator("#page-observations .split").is_visible()
         assert page.locator("#observation-editor").is_hidden()
-        page.get_by_role("button", name="New observation", exact=True).click()
+        page.locator(
+            '#observation-workspace-nav [data-task-view="create"]'
+        ).click()
         assert page.locator("#page-observations .split").is_hidden()
         assert page.locator("#observation-editor").is_visible()
         assert "Create a field observation" in page.locator(
             "#observation-workspace-intro"
         ).inner_text()
-        page.get_by_role("button", name="Review observations", exact=True).click()
+        page.locator(
+            '#observation-workspace-nav [data-task-view="review"]'
+        ).click()
         assert page.locator("#page-observations .split").is_visible()
         assert page.locator("#observation-editor").is_hidden()
 

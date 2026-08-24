@@ -31,7 +31,7 @@ _LINKED_STORAGE_WEB_PATCH = bytes(
  document.head.appendChild(style);
 
  const panel=document.createElement("section");panel.id="linked-storage-card";panel.className="card section";
- panel.innerHTML=`<h2>Linked archives</h2><p class="muted">Browse organization-controlled storage without copying originals into Fieldora. Only opaque storage identity and relative catalogue paths are shown.</p><div class="linked-toolbar"><label>Storage ID<input id="linked-storage-id" autocomplete="off" placeholder="Opaque storage ID"></label><label>Folder prefix<input id="linked-storage-prefix" autocomplete="off" placeholder="Optional relative folder, e.g. Amazon/day-01"></label><button id="linked-storage-browse" class="primary">Browse linked archive</button></div><p id="linked-storage-status" class="status"></p><div class="split section"><section><div id="linked-storage-grid" class="linked-gallery"><div class="empty">Choose a linked archive to browse.</div></div></section><aside class="card details"><h3>Linked evidence</h3><div id="linked-storage-detail" class="muted">Select linked evidence to inspect it.</div></aside></div>`;
+ panel.innerHTML=`<h2>Linked archives</h2><p class="muted">Browse organization-controlled storage without copying originals into Fieldora. Only opaque storage identity and relative catalogue paths are shown.</p><div class="linked-toolbar"><label>Linked archive<input id="linked-storage-id" list="linked-storage-sources" autocomplete="off" placeholder="Choose an archive or enter its opaque ID"><datalist id="linked-storage-sources"></datalist></label><label>Folder prefix<input id="linked-storage-prefix" autocomplete="off" placeholder="Optional relative folder, e.g. Amazon/day-01"></label><button id="linked-storage-browse" class="primary">Browse linked archive</button></div><p id="linked-storage-status" class="status"></p><div class="split section"><section><div id="linked-storage-grid" class="linked-gallery"><div class="empty">Choose a linked archive to browse.</div></div></section><aside class="card details"><h3>Linked evidence</h3><div id="linked-storage-detail" class="muted">Select linked evidence to inspect it.</div></aside></div>`;
  importCard.before(panel);
 
  let linkedItems=[];
@@ -39,6 +39,16 @@ _LINKED_STORAGE_WEB_PATCH = bytes(
  const setLinkedStatus=(text,error=false)=>{const node=byId("linked-storage-status");node.textContent=text;node.style.color=error?"var(--danger)":"var(--green)";};
  const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 
+ async function loadSources(){
+  try{
+   const result=await api("/api/v1/linked-storage/sources",{purpose:"research"}),items=result.items||[],list=byId("linked-storage-sources");
+   list.innerHTML=items.map(source=>`<option value="${html(source.storage_id)}">${html(source.display_name||source.storage_id)}${source.read_only?" · read only":""}</option>`).join("");
+   if(items.length===1&&!byId("linked-storage-id").value)byId("linked-storage-id").value=items[0].storage_id;
+   if(items.length)setLinkedStatus(`${items.length} linked archive${items.length===1?"":"s"} available for this organization.`);
+  }catch(_error){
+   setLinkedStatus("Linked archive discovery is unavailable; enter a known opaque storage ID to continue.");
+  }
+ }
  function clearThumbUrls(){for(const url of thumbUrls.values())URL.revokeObjectURL(url);thumbUrls.clear()}
  function iconFor(item){const type=String(item.mime_type||"");return type.startsWith("image/")?"▧":type.startsWith("audio/")?"≋":type.startsWith("video/")?"▷":"▤"}
  function renderLinked(){
@@ -74,7 +84,7 @@ _LINKED_STORAGE_WEB_PATCH = bytes(
 
  async function browseLinked(){
   const storageId=byId("linked-storage-id").value.trim(),prefix=byId("linked-storage-prefix").value.trim();
-  if(!storageId)return setLinkedStatus("Enter the opaque storage ID supplied by your Fieldora administrator.",true);
+  if(!storageId)return setLinkedStatus("Choose a linked archive or enter its opaque storage ID.",true);
   setLinkedStatus("Loading linked catalogue…");
   try{
    const result=await api(`/api/v1/linked-storage/browse?storage_id=${encodeURIComponent(storageId)}&prefix=${encodeURIComponent(prefix)}&limit=500`,{purpose:"research"});
@@ -118,6 +128,7 @@ _LINKED_STORAGE_WEB_PATCH = bytes(
  byId("linked-storage-browse").onclick=browseLinked;
  byId("linked-storage-prefix").addEventListener("keydown",event=>{if(event.key==="Enter")browseLinked()});
  window.addEventListener("beforeunload",clearThumbUrls,{once:true});
+ loadSources();
 })();
 """,
     "utf-8",

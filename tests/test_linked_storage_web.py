@@ -245,6 +245,8 @@ def test_patch_is_app_only_and_idempotent() -> None:
     assert b"/api/v1/linked-storage/sources" in patched.body
     assert b"/api/v1/linked-storage/browse" in patched.body
     assert b"/api/v1/linked-storage/ranges" in patched.body
+    assert b"This does not affect local file or folder import" in patched.body
+    assert b"No linked archives are configured. Local file and folder import remains available." in patched.body
     assert patch_linked_storage_web_response("/app.js", patched).body == patched.body
     assert patch_linked_storage_web_response("/other.js", base).body == base.body
 

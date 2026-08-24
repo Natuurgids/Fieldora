@@ -1,8 +1,9 @@
-"""Operator-only linked archive health projection.
+"""Operator-only linked archive health projection and lifecycle controls.
 
-The existing Operator overview has already passed infrastructure PBAC before this mixin
-enriches it.  Archive routing is deliberately limited to service identity and health;
-root aliases, filesystem paths and trust material are never included.
+The existing Operator routes have already passed the normal authentication boundary before
+this mixin enriches or extends them. Archive routing is deliberately limited to opaque
+storage/service identity and health; root aliases, filesystem paths and trust material are
+never included.
 """
 
 from __future__ import annotations
@@ -11,41 +12,100 @@ import json
 from typing import Any
 from urllib.parse import urlsplit
 
+from natureai_next.application.authentication import AuthenticationFailed
 from natureai_next.server.api import ApiResponse
 
 _HEARTBEAT_STALE_SECONDS = 120
 
 
 class LinkedStorageOperatorApiMixin:
-    """Append linked archive ownership/health to the protected Operator overview."""
+    """Append linked archive health and expose PBAC-gated archive enable/disable actions."""
 
     def dispatch(
         self, method: str, target: str, headers: dict[str, str], body: bytes
     ) -> ApiResponse:
         response = super().dispatch(method, target, headers, body)  # type: ignore[misc]
+        route = urlsplit(target)
         if (
-            method != "GET"
-            or urlsplit(target).path != "/api/v1/operator/overview"
-            or response.status != 200
+            method == "GET"
+            and route.path == "/api/v1/operator/overview"
+            and response.status == 200
         ):
+            repository = getattr(self, "_linked_storage", None)
+            operator = getattr(self, "_operator", None)
+            connect_factory = getattr(repository, "connect_factory", None)
+            if repository is None or operator is None or connect_factory is None:
+                return response
+            payload = json.loads(response.body)
+            organization_id = str(payload.get("organization_id", "")).strip()
+            checked_at = int(payload.get("checked_at_epoch", 0))
+            if not organization_id or checked_at < 1:
+                return response
+            payload["linked_archives"] = _linked_archive_health(
+                connect_factory,
+                operator,
+                organization_id,
+                checked_at,
+            )
+            return ApiResponse.json(200, payload)
+
+        if method != "POST" or response.status != 404:
             return response
+        suffix = route.path.removeprefix("/api/v1/operator/linked-archives/")
+        parts = [part for part in suffix.split("/") if part]
+        if len(parts) != 2 or route.path == suffix:
+            return response
+        storage_id, operation = parts
+        enabled_by_operation = {"enable": True, "disable": False}
+        if operation not in enabled_by_operation or not storage_id or len(storage_id) > 512:
+            return response
+
         repository = getattr(self, "_linked_storage", None)
-        operator = getattr(self, "_operator", None)
         connect_factory = getattr(repository, "connect_factory", None)
-        if repository is None or operator is None or connect_factory is None:
-            return response
-        payload = json.loads(response.body)
-        organization_id = str(payload.get("organization_id", "")).strip()
-        checked_at = int(payload.get("checked_at_epoch", 0))
-        if not organization_id or checked_at < 1:
-            return response
-        payload["linked_archives"] = _linked_archive_health(
+        if repository is None or connect_factory is None:
+            return ApiResponse.json(503, {"error": "linked_storage_unavailable"})
+        try:
+            _token, identity = self._identity(headers)  # type: ignore[attr-defined]
+        except AuthenticationFailed as exc:
+            return ApiResponse.json(401, {"error": "unauthorized", "detail": str(exc)})
+        action = f"storage.{operation}"
+        if not self._allow_operator(  # type: ignore[attr-defined]
+            identity, headers, action, storage_id
+        ):
+            return ApiResponse.json(403, {"error": "forbidden"})
+        enabled = enabled_by_operation[operation]
+        if not _set_linked_archive_enabled(
             connect_factory,
-            operator,
-            organization_id,
-            checked_at,
+            identity.organization_id,
+            storage_id,
+            enabled,
+        ):
+            return ApiResponse.json(404, {"error": "linked_archive_not_found"})
+        return ApiResponse.json(
+            200,
+            {
+                "linked_archive": {
+                    "storage_id": storage_id,
+                    "enabled": enabled,
+                }
+            },
         )
-        return ApiResponse.json(200, payload)
+
+
+def _set_linked_archive_enabled(
+    connect_factory: Any,
+    organization_id: str,
+    storage_id: str,
+    enabled: bool,
+) -> bool:
+    with connect_factory() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "UPDATE linked_storage_sources_pg SET enabled=%s "
+                "WHERE storage_id=%s AND organization_id=%s",
+                (enabled, storage_id, organization_id),
+            )
+            return cursor.rowcount == 1
 
 
 def _linked_archive_health(

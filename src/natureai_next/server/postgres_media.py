@@ -7,6 +7,7 @@ from collections.abc import Callable
 from typing import Any
 
 from natureai_next.server.media import MediaRecord, UploadSession
+from natureai_next.server.media_links import PostgresMediaAssociationRepository
 
 
 class PostgresMediaMetadataRepository:
@@ -59,6 +60,7 @@ class PostgresMediaMetadataRepository:
                     "CREATE INDEX IF NOT EXISTS ix_governed_media_content_pg "
                     "ON governed_media(organization_id,sha256,size_bytes)"
                 )
+        self.associations = PostgresMediaAssociationRepository(connect)
 
     def insert_media(self, record: MediaRecord) -> MediaRecord:
         with self._connect() as connection:
@@ -124,11 +126,12 @@ class PostgresMediaMetadataRepository:
                 )
 
     def complete_upload(self, upload_id: str, record: MediaRecord) -> MediaRecord:
-        """Commit one verified upload, returning the organization canonical record.
+        """Commit one verified upload, returning the canonical content record.
 
-        Completion is idempotent for byte-identical content across project contexts in
-        one organization. Project participation is represented separately through
-        governed media associations in the managed web layer.
+        Completion is idempotent for byte-identical content in the same organization.
+        The transaction-scoped advisory lock closes the race where two web requests
+        finish the same content concurrently without requiring a destructive uniqueness
+        migration over pre-existing deployments.
         """
         with self._connect() as connection:
             with connection.cursor() as cursor:

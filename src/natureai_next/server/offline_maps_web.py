@@ -4,7 +4,8 @@ from urllib.parse import urlsplit
 
 from natureai_next.server.api import ApiResponse
 
-_OFFLINE_MAPS_WEB_PATCH = br"""
+_OFFLINE_MAPS_WEB_PATCH = bytes(
+    r"""
 
 /* Fieldora offline maps: verified package metadata only, never host paths. */
 (()=>{
@@ -19,7 +20,9 @@ _OFFLINE_MAPS_WEB_PATCH = br"""
  document.getElementById("operations-refresh")?.addEventListener("click",loadOfflineMaps);
  document.querySelectorAll('.nav[data-page="operations"]').forEach(button=>button.addEventListener("click",loadOfflineMaps));
 })();
-"""
+""",
+    "utf-8",
+)
 
 
 def patch_offline_maps_web_response(target: str, response: ApiResponse) -> ApiResponse:
@@ -29,4 +32,9 @@ def patch_offline_maps_web_response(target: str, response: ApiResponse) -> ApiRe
         or _OFFLINE_MAPS_WEB_PATCH in response.body
     ):
         return response
-    return ApiResponse(response.status, response.body + _OFFLINE_MAPS_WEB_PATCH, response.content_type, response.headers)
+    return ApiResponse(
+        response.status,
+        response.body + _OFFLINE_MAPS_WEB_PATCH,
+        response.content_type,
+        response.headers,
+    )

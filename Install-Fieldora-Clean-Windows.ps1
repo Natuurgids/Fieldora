@@ -1,9 +1,10 @@
 <#
 Windows entry point for the Fieldora clean Docker installer.
 Runs the repository clean installer, configures temporary bootstrap credential handoff cleanup,
-enables the internal mTLS storage-service listener, installs the Fieldora root CA into the
-current user root store through .NET X509Store (no certificate-store UI), verifies the exact
-thumbprint, then proves HTTPS using the Windows trust store.
+enables the internal mTLS storage-service listener, optionally installs a locally supplied
+verified offline model bundle, installs the Fieldora root CA into the current user root store
+through .NET X509Store (no certificate-store UI), verifies the exact thumbprint, then proves
+HTTPS using the Windows trust store.
 #>
 
 [CmdletBinding()]
@@ -14,7 +15,11 @@ param(
     [string]$AdminName = "Administrator",
     [string]$Organization = "local",
     [string]$AdminPassword = "",
-    [ValidateRange(1,90)][int]$CredentialHandoffRetentionDays = 7
+    [ValidateRange(1,90)][int]$CredentialHandoffRetentionDays = 7,
+    [string]$OfflineModelBundle = "",
+    [string]$OfflineModelTrustedSigningKey = "",
+    [switch]$RequireOfflineModelSignature,
+    [switch]$RequireOfflineModelCleanScan
 )
 
 $ErrorActionPreference = "Stop"
@@ -24,16 +29,22 @@ if ($PSVersionTable.PSVersion.Major -lt 7) {
     throw "PowerShell 7 is required. Start pwsh and run this installer again."
 }
 if (-not $IsWindows) { throw "This entry point is for Windows 11." }
+if (($RequireOfflineModelSignature -or $RequireOfflineModelCleanScan) -and [string]::IsNullOrWhiteSpace($OfflineModelBundle)) {
+    throw "Offline model verification switches require -OfflineModelBundle."
+}
 
 $encodedRef = [Uri]::EscapeDataString($FieldoraRef)
 $url = "https://raw.githubusercontent.com/Natuurgids/Fieldora/$encodedRef/Install-Fieldora-Clean.ps1"
 $handoffUrl = "https://raw.githubusercontent.com/Natuurgids/Fieldora/$encodedRef/Install-Fieldora-Bootstrap-Handoff.ps1"
+$modelInstallerUrl = "https://raw.githubusercontent.com/Natuurgids/Fieldora/$encodedRef/Install-Fieldora-Offline-Model.ps1"
 if ($FieldoraRef -match '^[0-9a-fA-F]{40}$') {
     $url = "https://raw.githubusercontent.com/Natuurgids/Fieldora/$FieldoraRef/Install-Fieldora-Clean.ps1"
     $handoffUrl = "https://raw.githubusercontent.com/Natuurgids/Fieldora/$FieldoraRef/Install-Fieldora-Bootstrap-Handoff.ps1"
+    $modelInstallerUrl = "https://raw.githubusercontent.com/Natuurgids/Fieldora/$FieldoraRef/Install-Fieldora-Offline-Model.ps1"
 }
 $tempInstaller = Join-Path $env:TEMP "Install-Fieldora-Clean-$([Guid]::NewGuid().ToString('N')).ps1"
 $tempHandoffInstaller = Join-Path $env:TEMP "Install-Fieldora-Bootstrap-Handoff-$([Guid]::NewGuid().ToString('N')).ps1"
+$tempModelInstaller = Join-Path $env:TEMP "Install-Fieldora-Offline-Model-$([Guid]::NewGuid().ToString('N')).ps1"
 try {
     Invoke-WebRequest -Uri $url -OutFile $tempInstaller -UseBasicParsing
     $invoke = @{
@@ -209,11 +220,86 @@ else:
     }
 
     Write-Host "Windows CurrentUser Fieldora CA trust: VERIFIED" -ForegroundColor Green
+
+    if (-not [string]::IsNullOrWhiteSpace($OfflineModelBundle)) {
+        Write-Host ""
+        Write-Host "============================================================" -ForegroundColor DarkCyan
+        Write-Host "==> Installing optional verified offline model bundle" -ForegroundColor Cyan
+        Write-Host "============================================================" -ForegroundColor DarkCyan
+        Invoke-WebRequest -Uri $modelInstallerUrl -OutFile $tempModelInstaller -UseBasicParsing
+        $modelInvoke = @{
+            InstallRoot = $InstallRoot
+            BundlePath = $OfflineModelBundle
+        }
+        if (-not [string]::IsNullOrWhiteSpace($OfflineModelTrustedSigningKey)) {
+            $modelInvoke.TrustedSigningKey = $OfflineModelTrustedSigningKey
+        }
+        if ($RequireOfflineModelSignature) {
+            $modelInvoke.RequireSignature = $true
+        }
+        if ($RequireOfflineModelCleanScan) {
+            $modelInvoke.RequireCleanScan = $true
+        }
+        & $tempModelInstaller @modelInvoke
+        if ($LASTEXITCODE -ne 0) {
+            throw "Optional offline model installation failed with exit code $LASTEXITCODE."
+        }
+
+        # Make both optional features part of the standard desired state. The portable
+        # model helper keeps compose.models.yaml for standalone Linux/Windows use, but
+        # a clean Windows deployment should remain correct with ordinary `docker compose`.
+        $combinedOverride = @'
+services:
+  fieldora-server:
+    environment:
+      FIELDORA_STORAGE_SERVICE_ENABLED: "true"
+      FIELDORA_STORAGE_SERVICE_HOST: "0.0.0.0"
+      FIELDORA_STORAGE_SERVICE_PORT: "8766"
+      FIELDORA_STORAGE_SERVICE_CERTIFICATE: "/run/fieldora-trust/service.crt"
+      FIELDORA_STORAGE_SERVICE_PRIVATE_KEY: "/run/fieldora-trust/service.key"
+      FIELDORA_STORAGE_SERVICE_CLIENT_CA: "/run/fieldora-trust/ca-certificate.pem"
+      FIELDORA_MODEL_STORE: "/var/lib/fieldora-models"
+    expose:
+      - "8766"
+    volumes:
+      - ./fieldora-models:/var/lib/fieldora-models:ro
+  fieldora-worker:
+    environment:
+      FIELDORA_MODEL_STORE: "/var/lib/fieldora-models"
+    volumes:
+      - ./fieldora-models:/var/lib/fieldora-models:ro
+'@
+        Set-Content -LiteralPath $overridePath -Encoding utf8NoBOM -Value $combinedOverride
+        Remove-Item -LiteralPath (Join-Path $InstallRoot "compose.models.yaml") -Force -ErrorAction SilentlyContinue
+        Push-Location $InstallRoot
+        try {
+            & docker compose config -q
+            if ($LASTEXITCODE -ne 0) {
+                throw "Combined storage-service and model-store Compose override is invalid."
+            }
+            & docker compose up -d --no-deps fieldora-server fieldora-worker
+            if ($LASTEXITCODE -ne 0) {
+                throw "Unable to apply the combined storage-service and offline-model desired state."
+            }
+        }
+        finally {
+            Pop-Location
+        }
+        Write-Host "Offline model desired state: VERIFIED and preserved in compose.override.yaml" -ForegroundColor Green
+    }
+
     Write-Host "Browser URL: https://127.0.0.1:8765" -ForegroundColor Green
     Write-Host "Temporary administrator credentials: $InstallRoot\bootstrap-handoff\ADMIN-CREDENTIALS.txt" -ForegroundColor Green
     Write-Host "Credential handoff retention: $CredentialHandoffRetentionDays day(s)" -ForegroundColor Green
+    if ([string]::IsNullOrWhiteSpace($OfflineModelBundle)) {
+        Write-Host "Offline models: optional; use Install-Fieldora-Offline-Model.ps1 when a verified local bundle is available." -ForegroundColor Green
+    }
+    else {
+        Write-Host "Offline models: verified local bundle installed and mounted read-only." -ForegroundColor Green
+    }
 }
 finally {
     Remove-Item -LiteralPath $tempInstaller -Force -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $tempHandoffInstaller -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $tempModelInstaller -Force -ErrorAction SilentlyContinue
 }

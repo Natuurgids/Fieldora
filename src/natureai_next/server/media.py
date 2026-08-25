@@ -10,6 +10,10 @@ from pathlib import Path
 from typing import Protocol
 from uuid import uuid4
 
+from natureai_next.server.media_links import (
+    MediaAssociationRepository,
+    SqliteMediaAssociationRepository,
+)
 from natureai_next.server.object_storage import FileObjectStore, ObjectStore
 
 
@@ -68,6 +72,12 @@ class GovernedMediaStore:
         self._objects = object_store or FileObjectStore(self._storage_root)
         self._metadata = metadata
         database_path.parent.mkdir(parents=True, exist_ok=True)
+        metadata_associations = None if metadata is None else getattr(metadata, "associations", None)
+        self._associations: MediaAssociationRepository = (
+            SqliteMediaAssociationRepository(database_path)
+            if metadata_associations is None
+            else metadata_associations
+        )
         if metadata is not None:
             return
         connection = sqlite3.connect(database_path)
@@ -93,6 +103,10 @@ class GovernedMediaStore:
             connection.commit()
         finally:
             connection.close()
+
+    @property
+    def associations(self) -> MediaAssociationRepository:
+        return self._associations
 
     def register(
         self, source: Path, organization_id: str, project_id: str

@@ -43,7 +43,7 @@ def _web_fixture(tmp_path: Path):
         thread.join(timeout=5)
 
 
-def _mock_api(route: Route) -> None:
+def _mock_api(route: Route, *, audit_allowed: bool = True) -> None:
     path = route.request.url.split("/api/v1/", 1)[-1].split("?", 1)[0]
     if path == "web/capabilities":
         payload: object = {
@@ -52,6 +52,7 @@ def _mock_api(route: Route) -> None:
                 "home": True,
                 "administration": True,
                 "governance": True,
+                "audit": audit_allowed,
                 "operations": True,
                 "intake-review": True,
                 "reference": True,
@@ -97,14 +98,23 @@ def _mock_api(route: Route) -> None:
 
 
 @pytest.mark.parametrize("browser_name", ("chromium", "firefox", "webkit"))
-def test_administration_navigation_is_grouped_without_losing_destinations(
+def test_administration_navigation_projects_authorized_audit_without_eager_fetch(
     tmp_path: Path,
     browser_name: str,
 ) -> None:
+    audit_requests = 0
+
+    def mock(route: Route) -> None:
+        nonlocal audit_requests
+        path = route.request.url.split("/api/v1/", 1)[-1].split("?", 1)[0]
+        if path == "audit":
+            audit_requests += 1
+        _mock_api(route, audit_allowed=True)
+
     with _web_fixture(tmp_path) as url, sync_playwright() as playwright:
         browser = getattr(playwright, browser_name).launch(headless=True)
         page = browser.new_page()
-        page.route("**/api/v1/**", _mock_api)
+        page.route("**/api/v1/**", mock)
         page.add_init_script(
             "sessionStorage.setItem('fieldora-session','administration-grouping-certification')"
         )
@@ -116,8 +126,6 @@ def test_administration_navigation_is_grouped_without_losing_destinations(
         assert nav.is_visible()
         groups = nav.locator(".administration-nav-group")
         assert groups.count() == 3
-        # innerText reflects the intentional CSS text-transform used for section labels.
-        # Assert the semantic DOM labels instead of coupling the test to presentation case.
         assert groups.locator(".administration-nav-group-label").all_text_contents() == [
             "Governance & review",
             "Operations",
@@ -125,6 +133,7 @@ def test_administration_navigation_is_grouped_without_losing_destinations(
         ]
         assert groups.nth(0).locator("button").all_inner_texts() == [
             "Governance",
+            "Audit",
             "Intake & Review",
             "Reference Data",
         ]
@@ -137,24 +146,63 @@ def test_administration_navigation_is_grouped_without_losing_destinations(
             "Operator",
             "Platform",
         ]
-        assert nav.locator("button").count() == 8
+        assert nav.locator("button").count() == 9
+        assert audit_requests == 0
 
-        nav.get_by_role("button", name="Assets & Facilities", exact=True).click()
-        assert page.locator("#page-operations").is_visible()
+        nav.get_by_role("button", name="Audit", exact=True).click()
+        assert page.locator("#page-audit").is_visible()
+        assert page.locator("#page-audit #audit-list").is_visible()
+        assert audit_requests == 1
         assert (
             page.locator('.sidebar .nav[data-page="administration"]').get_attribute(
                 "aria-selected"
             )
             == "true"
         )
-        operations_nav = page.locator(
-            "#page-operations .administration-workspace-nav"
-        )
-        assert operations_nav.locator("button").count() == 8
+        audit_nav = page.locator("#page-audit .administration-workspace-nav")
+        assert audit_nav.locator("button").count() == 9
         assert (
-            operations_nav.get_by_role(
-                "button", name="Assets & Facilities", exact=True
-            ).get_attribute("aria-selected")
+            audit_nav.get_by_role("button", name="Audit", exact=True).get_attribute(
+                "aria-selected"
+            )
             == "true"
         )
+        browser.close()
+
+
+def test_administration_navigation_hides_and_blocks_unauthorized_audit(
+    tmp_path: Path,
+) -> None:
+    audit_requests = 0
+
+    def mock(route: Route) -> None:
+        nonlocal audit_requests
+        path = route.request.url.split("/api/v1/", 1)[-1].split("?", 1)[0]
+        if path == "audit":
+            audit_requests += 1
+        _mock_api(route, audit_allowed=False)
+
+    with _web_fixture(tmp_path) as url, sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page()
+        page.route("**/api/v1/**", mock)
+        page.add_init_script(
+            "sessionStorage.setItem('fieldora-session','audit-denied-certification')"
+        )
+        page.goto(url)
+        page.wait_for_selector("#workspace:not([hidden])")
+        page.locator('.sidebar .nav[data-page="administration"]').click()
+
+        audit_button = page.locator(
+            '#page-administration [data-workspace-target="audit"]'
+        )
+        assert audit_button.count() == 1
+        assert not audit_button.is_visible()
+        assert audit_button.get_attribute("data-fieldora-authorization-hidden") == "true"
+        assert audit_requests == 0
+
+        page.evaluate("showPage('audit')")
+        assert page.locator("#page-home").is_visible()
+        assert not page.locator("#page-audit").is_visible()
+        assert audit_requests == 0
         browser.close()

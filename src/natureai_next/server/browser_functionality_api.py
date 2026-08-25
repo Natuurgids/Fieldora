@@ -19,6 +19,7 @@ from natureai_next.server.browser_functionality_web import (
 )
 from natureai_next.server.directory_intake_web import patch_directory_intake_response
 from natureai_next.server.project_owner_contract_api import ProjectOwnerContractFieldoraApi
+from natureai_next.server.web_capabilities import web_capabilities_response
 
 _COOKIE_NAME = "fieldora_session"
 _COOKIE_PATH = "/api/v1/"
@@ -55,7 +56,9 @@ class BrowserFunctionalityFieldoraApi(ProjectOwnerContractFieldoraApi):
             routed_headers["authorization"] = f"Bearer {cookie_token}"
 
         route = urlsplit(target)
-        if route.path == "/api/v1/projects" and method == "POST":
+        if route.path == "/api/v1/web/capabilities" and method == "GET":
+            response = web_capabilities_response(self, routed_headers)
+        elif route.path == "/api/v1/projects" and method == "POST":
             response = self._create_project(routed_headers, body)
         else:
             response = super().dispatch(method, target, routed_headers, body)

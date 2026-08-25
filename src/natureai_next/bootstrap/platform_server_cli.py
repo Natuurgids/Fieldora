@@ -305,6 +305,15 @@ def _bootstrap_initial_operator(administration_type: Any) -> None:
     organization_id = identity.organization_id
     administration.grant_role(identity.identity_id, "platform-operator", organization_id)
     administration.create_policy(
+        name="Initial bootstrap administrator full platform authority",
+        effect=PolicyEffect.ALLOW,
+        source=PolicySource.DIRECT,
+        subject_id=identity.identity_id,
+        actions=("*",),
+        resource_types=("*",),
+        organization_id=organization_id,
+    )
+    administration.create_policy(
         name="Initial governed evidence and scientific collaboration",
         effect=PolicyEffect.ALLOW,
         source=PolicySource.ROLE,

@@ -114,7 +114,7 @@ def test_multi_file_import_over_real_http_has_no_failed_fetch(tmp_path: Path) ->
         )
         page.goto(url)
         page.locator("#workspace").wait_for(state="visible")
-        page.locator('[data-page="library"]').click()
+        page.evaluate("showPage('library')")
         page.locator("#page-library").wait_for(state="visible")
         page.locator("#upload-project").select_option("project-1")
         page.locator("#upload-file").set_input_files(

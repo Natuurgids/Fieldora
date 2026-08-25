@@ -218,6 +218,24 @@ def test_canonical_media_is_project_scoped_by_association(tmp_path: Path) -> Non
     )
 
 
+def test_browser_upload_context_uses_public_upload_route(tmp_path: Path) -> None:
+    api, _decisions, _science = _api()
+    store = GovernedMediaStore(tmp_path / "media.sqlite3", tmp_path / "objects")
+    api._media = store
+    payload = b"project linked browser evidence"
+    upload = store.begin_upload(
+        "admin-1",
+        "local",
+        "project-a",
+        "evidence.bin",
+        "application/octet-stream",
+        len(payload),
+        hashlib.sha256(payload).hexdigest(),
+    )
+
+    assert api._upload_context("PUT", f"/api/v1/uploads/{upload.upload_id}") == upload
+
+
 def test_browser_functionality_does_not_put_session_tokens_in_media_urls() -> None:
     source = Path("src/natureai_next/server/browser_functionality_web.py").read_text(
         encoding="utf-8"

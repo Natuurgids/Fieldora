@@ -32,8 +32,8 @@ _OFFLINE_MODELS_WEB_PATCH = bytes(
   <div id="offline-model-list" class="list"></div>
   <p id="offline-model-status" class="status"></p>`;
  const modelList=document.getElementById("model-list");
- const modelCard=modelList?.closest(".card");
- if(modelCard)modelCard.insertAdjacentElement("afterend",section);
+ const modelGrid=modelList?.closest(".grid");
+ if(modelGrid)modelGrid.insertAdjacentElement("afterend",section);
  else page.appendChild(section);
  let installedModels=new Map();
  const trustLabel=item=>{

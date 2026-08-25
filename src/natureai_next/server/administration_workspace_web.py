@@ -57,6 +57,9 @@ _ADMINISTRATION_WORKSPACE_PATCH = bytes(
  const existingAdminNav=governance?.querySelector(".workspace-subnav");
  if(auditPage&&existingAdminNav&&!auditPage.querySelector(".workspace-subnav")){
   const cloned=existingAdminNav.cloneNode(true);
+  cloned.querySelectorAll("[data-workspace-target]").forEach(button=>{
+   button.onclick=()=>showPage(button.dataset.workspaceTarget);
+  });
   auditPage.querySelector(".top")?.after(cloned);
  }
  adminPages.forEach(page=>{

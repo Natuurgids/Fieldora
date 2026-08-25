@@ -111,7 +111,9 @@ def test_unauthorized_workspaces_and_actions_are_absent_and_deep_links_fail_clos
         assert page.locator('.nav[data-page="library"]').is_visible()
         assert page.locator('.nav[data-page="projects"]').is_hidden()
         assert page.locator('.nav[data-page="administration"]').is_hidden()
-        assert page.locator('[data-workspace-target="operator"]').is_hidden()
+        operator_tabs = page.locator('[data-workspace-target="operator"]')
+        assert operator_tabs.count() > 0
+        assert all(operator_tabs.nth(index).is_hidden() for index in range(operator_tabs.count()))
         assert page.locator(".go-import").first.is_hidden()
         assert page.locator("#portfolio-new-project").is_hidden()
 

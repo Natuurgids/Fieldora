@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 from collections.abc import Callable
 from typing import Any
 
@@ -186,10 +187,15 @@ class PostgresMediaMetadataRepository:
 
     @staticmethod
     def _lock_content_identity(cursor: Any, record: MediaRecord) -> None:
-        key = (
-            f"{record.organization_id}\0{record.project_id}\0"
-            f"{record.sha256}\0{record.size_bytes}"
-        )
+        raw_key = "\x1f".join(
+            (
+                record.organization_id,
+                record.project_id,
+                record.sha256,
+                str(record.size_bytes),
+            )
+        ).encode("utf-8")
+        key = hashlib.sha256(raw_key).hexdigest()
         cursor.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (key,))
 
     @staticmethod

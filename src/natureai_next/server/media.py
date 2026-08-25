@@ -38,16 +38,20 @@ class UploadSession:
 
 
 class MediaMetadataRepository(Protocol):
-    def insert_media(self, record: MediaRecord) -> None: ...
+    def insert_media(self, record: MediaRecord) -> MediaRecord | None: ...
     def insert_upload(self, upload: UploadSession) -> None: ...
     def upload(self, upload_id: str) -> UploadSession | None: ...
     def update_upload_offset(
         self, upload_id: str, expected_offset: int, offset: int
     ) -> None: ...
     def delete_upload(self, upload_id: str) -> None: ...
-    def complete_upload(self, upload_id: str, record: MediaRecord) -> None: ...
+    def complete_upload(
+        self, upload_id: str, record: MediaRecord
+    ) -> MediaRecord | None: ...
     def record(self, media_id: str) -> MediaRecord | None: ...
-    def records(self, organization_id: str, project_id: str = "", limit: int = 200) -> tuple[MediaRecord, ...]: ...
+    def records(
+        self, organization_id: str, project_id: str = "", limit: int = 200
+    ) -> tuple[MediaRecord, ...]: ...
 
 
 class GovernedMediaStore:
@@ -82,6 +86,10 @@ class GovernedMediaStore:
                 "expected_size INTEGER NOT NULL,expected_sha256 TEXT NOT NULL,"
                 "received_bytes INTEGER NOT NULL)"
             )
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS ix_governed_media_content "
+                "ON governed_media(organization_id,project_id,sha256,size_bytes)"
+            )
             connection.commit()
         finally:
             connection.close()
@@ -90,49 +98,69 @@ class GovernedMediaStore:
         self, source: Path, organization_id: str, project_id: str
     ) -> MediaRecord:
         source = source.resolve(strict=True)
-        media_id = str(uuid4())
         suffix = source.suffix.lower()[:16]
-        relative = f"{media_id[:2]}/{media_id}{suffix}"
         digest = hashlib.sha256()
         with source.open("rb") as stream:
             for chunk in iter(lambda: stream.read(1024 * 1024), b""):
                 digest.update(chunk)
         sha256 = digest.hexdigest()
-        self._objects.put(
-            relative, source,
-            mimetypes.guess_type(source.name)[0] or "application/octet-stream",
-            sha256,
-        )
+        size_bytes = source.stat().st_size
+        if self._metadata is None:
+            existing = self._sqlite_content_record(
+                organization_id, project_id, sha256, size_bytes
+            )
+            if existing is not None:
+                return existing
+        media_id = str(uuid4())
+        relative = f"{media_id[:2]}/{media_id}{suffix}"
+        mime_type = mimetypes.guess_type(source.name)[0] or "application/octet-stream"
+        self._objects.put(relative, source, mime_type, sha256)
         record = MediaRecord(
-            media_id, relative, organization_id, project_id,
-            mimetypes.guess_type(source.name)[0] or "application/octet-stream",
-            source.stat().st_size, sha256,
+            media_id,
+            relative,
+            organization_id,
+            project_id,
+            mime_type,
+            size_bytes,
+            sha256,
         )
         try:
             if self._metadata is not None:
-                self._metadata.insert_media(record)
-            else:
-                connection = sqlite3.connect(self._database_path)
-                try:
-                    connection.execute(
-                        "INSERT INTO governed_media VALUES(?,?,?,?,?,?,?)",
-                        (
-                            record.media_id, record.relative_path,
-                            record.organization_id, record.project_id,
-                            record.mime_type, record.size_bytes, record.sha256,
-                        ),
-                    )
-                    connection.commit()
-                finally:
-                    connection.close()
+                canonical = self._metadata.insert_media(record) or record
+                if canonical.media_id != record.media_id:
+                    self._objects.delete(relative)
+                return canonical
+            connection = sqlite3.connect(self._database_path)
+            try:
+                connection.execute(
+                    "INSERT INTO governed_media VALUES(?,?,?,?,?,?,?)",
+                    (
+                        record.media_id,
+                        record.relative_path,
+                        record.organization_id,
+                        record.project_id,
+                        record.mime_type,
+                        record.size_bytes,
+                        record.sha256,
+                    ),
+                )
+                connection.commit()
+            finally:
+                connection.close()
         except BaseException:
             self._objects.delete(relative)
             raise
         return record
 
     def begin_upload(
-        self, subject_id: str, organization_id: str, project_id: str,
-        filename: str, mime_type: str, expected_size: int, expected_sha256: str,
+        self,
+        subject_id: str,
+        organization_id: str,
+        project_id: str,
+        filename: str,
+        mime_type: str,
+        expected_size: int,
+        expected_sha256: str,
     ) -> UploadSession:
         if expected_size <= 0 or expected_size > 100 * 1024**3:
             raise ValueError("invalid upload size")
@@ -140,9 +168,15 @@ class GovernedMediaStore:
         if len(digest) != 64 or any(char not in "0123456789abcdef" for char in digest):
             raise ValueError("invalid sha256")
         upload = UploadSession(
-            str(uuid4()), subject_id, organization_id, project_id,
-            Path(filename).name[:255], mime_type[:200] or "application/octet-stream",
-            expected_size, digest, 0,
+            str(uuid4()),
+            subject_id,
+            organization_id,
+            project_id,
+            Path(filename).name[:255],
+            mime_type[:200] or "application/octet-stream",
+            expected_size,
+            digest,
+            0,
         )
         if self._metadata is not None:
             self._metadata.insert_upload(upload)
@@ -152,9 +186,15 @@ class GovernedMediaStore:
                 connection.execute(
                     "INSERT INTO governed_uploads VALUES(?,?,?,?,?,?,?,?,?)",
                     (
-                        upload.upload_id, upload.subject_id, upload.organization_id,
-                        upload.project_id, upload.filename, upload.mime_type,
-                        upload.expected_size, upload.expected_sha256, 0,
+                        upload.upload_id,
+                        upload.subject_id,
+                        upload.organization_id,
+                        upload.project_id,
+                        upload.filename,
+                        upload.mime_type,
+                        upload.expected_size,
+                        upload.expected_sha256,
+                        0,
                     ),
                 )
                 connection.commit()
@@ -210,9 +250,15 @@ class GovernedMediaStore:
                 connection.close()
         if next_offset < current.expected_size:
             return UploadSession(
-                current.upload_id, current.subject_id, current.organization_id,
-                current.project_id, current.filename, current.mime_type,
-                current.expected_size, current.expected_sha256, next_offset,
+                current.upload_id,
+                current.subject_id,
+                current.organization_id,
+                current.project_id,
+                current.filename,
+                current.mime_type,
+                current.expected_size,
+                current.expected_sha256,
+                next_offset,
             )
         hasher = hashlib.sha256()
         with part.open("rb") as stream:
@@ -234,17 +280,44 @@ class GovernedMediaStore:
                     connection.close()
             part.unlink(missing_ok=True)
             raise ValueError("sha256 mismatch")
+        if self._metadata is None:
+            existing = self._sqlite_content_record(
+                current.organization_id,
+                current.project_id,
+                digest,
+                current.expected_size,
+            )
+            if existing is not None:
+                connection = sqlite3.connect(self._database_path)
+                try:
+                    connection.execute(
+                        "DELETE FROM governed_uploads WHERE upload_id=?",
+                        (current.upload_id,),
+                    )
+                    connection.commit()
+                finally:
+                    connection.close()
+                part.unlink(missing_ok=True)
+                return existing
         media_id = str(uuid4())
         suffix = Path(current.filename).suffix.lower()[:16]
         relative = f"{media_id[:2]}/{media_id}{suffix}"
         record = MediaRecord(
-            media_id, relative, current.organization_id, current.project_id,
-            current.mime_type, current.expected_size, digest,
+            media_id,
+            relative,
+            current.organization_id,
+            current.project_id,
+            current.mime_type,
+            current.expected_size,
+            digest,
         )
         self._objects.put(relative, part, record.mime_type, record.sha256)
         try:
             if self._metadata is not None:
-                self._metadata.complete_upload(current.upload_id, record)
+                canonical = self._metadata.complete_upload(current.upload_id, record) or record
+                if canonical.media_id != record.media_id:
+                    self._objects.delete(relative)
+                record = canonical
             else:
                 connection = sqlite3.connect(self._database_path)
                 try:
@@ -252,9 +325,13 @@ class GovernedMediaStore:
                     connection.execute(
                         "INSERT INTO governed_media VALUES(?,?,?,?,?,?,?)",
                         (
-                            record.media_id, record.relative_path,
-                            record.organization_id, record.project_id,
-                            record.mime_type, record.size_bytes, record.sha256,
+                            record.media_id,
+                            record.relative_path,
+                            record.organization_id,
+                            record.project_id,
+                            record.mime_type,
+                            record.size_bytes,
+                            record.sha256,
                         ),
                     )
                     connection.execute(
@@ -285,7 +362,9 @@ class GovernedMediaStore:
             connection.close()
         return None if row is None else MediaRecord(*row)
 
-    def records(self, organization_id: str, project_id: str = "", limit: int = 200) -> tuple[MediaRecord, ...]:
+    def records(
+        self, organization_id: str, project_id: str = "", limit: int = 200
+    ) -> tuple[MediaRecord, ...]:
         limit = max(1, min(int(limit), 500))
         if self._metadata is not None:
             return self._metadata.records(organization_id, project_id, limit)
@@ -293,12 +372,14 @@ class GovernedMediaStore:
         try:
             if project_id:
                 rows = connection.execute(
-                    "SELECT * FROM governed_media WHERE organization_id=? AND project_id=? ORDER BY media_id DESC LIMIT ?",
+                    "SELECT * FROM governed_media WHERE organization_id=? AND project_id=? "
+                    "ORDER BY media_id DESC LIMIT ?",
                     (organization_id, project_id, limit),
                 ).fetchall()
             else:
                 rows = connection.execute(
-                    "SELECT * FROM governed_media WHERE organization_id=? ORDER BY media_id DESC LIMIT ?",
+                    "SELECT * FROM governed_media WHERE organization_id=? "
+                    "ORDER BY media_id DESC LIMIT ?",
                     (organization_id, limit),
                 ).fetchall()
         finally:
@@ -309,6 +390,20 @@ class GovernedMediaStore:
         if start < 0 or end < start or end >= record.size_bytes:
             raise ValueError("invalid range")
         return self._objects.read_range(record.relative_path, start, end)
+
+    def _sqlite_content_record(
+        self, organization_id: str, project_id: str, sha256: str, size_bytes: int
+    ) -> MediaRecord | None:
+        connection = sqlite3.connect(self._database_path)
+        try:
+            row = connection.execute(
+                "SELECT * FROM governed_media WHERE organization_id=? AND project_id=? "
+                "AND sha256=? AND size_bytes=? ORDER BY media_id LIMIT 1",
+                (organization_id, project_id, sha256, size_bytes),
+            ).fetchone()
+        finally:
+            connection.close()
+        return None if row is None else MediaRecord(*row)
 
     def _contained(self, relative: str) -> Path:
         candidate = (self._storage_root / relative).resolve()

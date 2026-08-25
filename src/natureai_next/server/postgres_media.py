@@ -54,11 +54,20 @@ class PostgresMediaMetadataRepository:
                     "CREATE INDEX IF NOT EXISTS ix_governed_media_scope_pg "
                     "ON governed_media(organization_id,project_id,media_id)"
                 )
+                cursor.execute(
+                    "CREATE INDEX IF NOT EXISTS ix_governed_media_content_pg "
+                    "ON governed_media(organization_id,project_id,sha256,size_bytes)"
+                )
 
-    def insert_media(self, record: MediaRecord) -> None:
+    def insert_media(self, record: MediaRecord) -> MediaRecord:
         with self._connect() as connection:
             with connection.cursor() as cursor:
+                self._lock_content_identity(cursor, record)
+                existing = self._find_content(cursor, record)
+                if existing is not None:
+                    return existing
                 self._insert_media(cursor, record)
+        return record
 
     def insert_upload(self, upload: UploadSession) -> None:
         with self._connect() as connection:
@@ -113,7 +122,14 @@ class PostgresMediaMetadataRepository:
                     "DELETE FROM governed_uploads WHERE upload_id=%s", (upload_id,)
                 )
 
-    def complete_upload(self, upload_id: str, record: MediaRecord) -> None:
+    def complete_upload(self, upload_id: str, record: MediaRecord) -> MediaRecord:
+        """Commit one verified upload, returning the canonical content record.
+
+        Completion is idempotent for byte-identical content in the same organization
+        and project context. The transaction-scoped advisory lock closes the race where
+        two web requests finish the same content concurrently without requiring a
+        destructive uniqueness migration over pre-existing deployments.
+        """
         with self._connect() as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
@@ -124,10 +140,15 @@ class PostgresMediaMetadataRepository:
                 row = cursor.fetchone()
                 if row is None or int(row[0]) != int(row[1]):
                     raise RuntimeError("resumable upload is not complete")
-                self._insert_media(cursor, record)
+                self._lock_content_identity(cursor, record)
+                canonical = self._find_content(cursor, record)
+                if canonical is None:
+                    self._insert_media(cursor, record)
+                    canonical = record
                 cursor.execute(
                     "DELETE FROM governed_uploads WHERE upload_id=%s", (upload_id,)
                 )
+        return canonical
 
     def record(self, media_id: str) -> MediaRecord | None:
         with self._connect() as connection:
@@ -162,6 +183,31 @@ class PostgresMediaMetadataRepository:
                     )
                 rows = cursor.fetchall()
         return tuple(MediaRecord(*row) for row in rows)
+
+    @staticmethod
+    def _lock_content_identity(cursor: Any, record: MediaRecord) -> None:
+        key = (
+            f"{record.organization_id}\0{record.project_id}\0"
+            f"{record.sha256}\0{record.size_bytes}"
+        )
+        cursor.execute("SELECT pg_advisory_xact_lock(hashtext(%s))", (key,))
+
+    @staticmethod
+    def _find_content(cursor: Any, record: MediaRecord) -> MediaRecord | None:
+        cursor.execute(
+            "SELECT media_id,relative_path,organization_id,project_id,mime_type,"
+            "size_bytes,sha256 FROM governed_media "
+            "WHERE organization_id=%s AND project_id=%s AND sha256=%s AND size_bytes=%s "
+            "ORDER BY media_id LIMIT 1",
+            (
+                record.organization_id,
+                record.project_id,
+                record.sha256,
+                record.size_bytes,
+            ),
+        )
+        row = cursor.fetchone()
+        return None if row is None else MediaRecord(*row)
 
     @staticmethod
     def _insert_media(cursor: Any, record: MediaRecord) -> None:

@@ -8,6 +8,7 @@ from uuid import uuid4
 import pytest
 
 from natureai_next.server.media import GovernedMediaStore, MediaRecord
+from natureai_next.server.media_links import new_association
 from natureai_next.server.postgres_media import PostgresMediaMetadataRepository
 
 
@@ -79,3 +80,75 @@ def test_postgres_repeated_upload_returns_canonical_media_identity(tmp_path: Pat
                 (organization_id, project_id, first.sha256, first.size_bytes),
             )
             assert cursor.fetchone()[0] == 1
+
+
+@pytest.mark.integration
+def test_postgres_canonical_media_has_two_project_associations(tmp_path: Path) -> None:
+    connect = _connect_factory()
+    repository = PostgresMediaMetadataRepository(connect)
+    store = GovernedMediaStore(
+        tmp_path / "unused-associations.sqlite3",
+        tmp_path / "association-objects",
+        metadata=repository,
+    )
+    organization_id = f"org-{uuid4()}"
+    project_a = f"project-a-{uuid4()}"
+    project_b = f"project-b-{uuid4()}"
+    project_c = f"project-c-{uuid4()}"
+    payload = b"postgres cross-project canonical governed evidence"
+
+    first = _upload(
+        store,
+        payload,
+        organization_id=organization_id,
+        project_id=project_a,
+    )
+    second = _upload(
+        store,
+        payload,
+        organization_id=organization_id,
+        project_id=project_b,
+    )
+
+    assert second.media_id == first.media_id
+    assert len(store.records(organization_id)) == 1
+
+    for project_id in (project_a, project_b):
+        repository.associations.link(
+            new_association(
+                media_id=first.media_id,
+                organization_id=organization_id,
+                association_type="project",
+                target_id=project_id,
+                purpose="research",
+                linked_by="subject-1",
+            )
+        )
+
+    links = repository.associations.links(first.media_id, organization_id)
+    assert [link.target_id for link in links] == sorted((project_a, project_b))
+    assert repository.associations.linked_media_ids(
+        organization_id, "project", project_a
+    ) == (first.media_id,)
+    assert repository.associations.linked_media_ids(
+        organization_id, "project", project_b
+    ) == (first.media_id,)
+    assert repository.associations.linked_media_ids(
+        organization_id, "project", project_c
+    ) == ()
+
+    with connect() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT count(*) FROM governed_media WHERE organization_id=%s "
+                "AND sha256=%s AND size_bytes=%s",
+                (organization_id, first.sha256, first.size_bytes),
+            )
+            assert cursor.fetchone()[0] == 1
+            cursor.execute(
+                "SELECT count(*), count(DISTINCT target_id) "
+                "FROM governed_media_associations WHERE media_id=%s "
+                "AND organization_id=%s AND association_type='project'",
+                (first.media_id, organization_id),
+            )
+            assert cursor.fetchone() == (2, 2)

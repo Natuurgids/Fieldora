@@ -19,7 +19,7 @@ from natureai_next.server.browser_functionality_web import (
 )
 from natureai_next.server.directory_intake_web import patch_directory_intake_response
 from natureai_next.server.project_owner_contract_api import ProjectOwnerContractFieldoraApi
-from natureai_next.server.web_capabilities import web_capabilities_response
+from natureai_next.server.web_capabilities import capability_payload
 
 _COOKIE_NAME = "fieldora_session"
 _COOKIE_PATH = "/api/v1/"
@@ -57,7 +57,7 @@ class BrowserFunctionalityFieldoraApi(ProjectOwnerContractFieldoraApi):
 
         route = urlsplit(target)
         if route.path == "/api/v1/web/capabilities" and method == "GET":
-            response = web_capabilities_response(self, routed_headers)
+            response = self._web_capabilities(routed_headers)
         elif route.path == "/api/v1/projects" and method == "POST":
             response = self._create_project(routed_headers, body)
         else:
@@ -68,6 +68,30 @@ class BrowserFunctionalityFieldoraApi(ProjectOwnerContractFieldoraApi):
         )
         response = patch_browser_functionality_response(target, response)
         return patch_directory_intake_response(target, response)
+
+    def _web_capabilities(self, headers: dict[str, str]) -> ApiResponse:
+        """Project browser destinations from the same PBAC tuples as their APIs."""
+        try:
+            _token, identity = self._identity(headers)
+        except AuthenticationFailed:
+            return ApiResponse.json(401, {"error": "unauthorized"})
+        payload = capability_payload(self, identity)
+        audit = self._decisions.decide(
+            AccessRequest(
+                identity.identity_id,
+                "view_audit",
+                "security_audit",
+                "",
+                identity.organization_id,
+                "",
+                "administration",
+            )
+        ).allowed
+        pages = payload["pages"]
+        assert isinstance(pages, dict)
+        pages["audit"] = audit
+        pages["administration"] = pages.get("administration") is True or audit
+        return ApiResponse.json(200, payload)
 
     def _browser_session_response(
         self,

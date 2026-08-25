@@ -72,7 +72,9 @@ class GovernedMediaStore:
         self._objects = object_store or FileObjectStore(self._storage_root)
         self._metadata = metadata
         database_path.parent.mkdir(parents=True, exist_ok=True)
-        metadata_associations = None if metadata is None else getattr(metadata, "associations", None)
+        metadata_associations = (
+            None if metadata is None else getattr(metadata, "associations", None)
+        )
         self._associations: MediaAssociationRepository = (
             SqliteMediaAssociationRepository(database_path)
             if metadata_associations is None
@@ -144,27 +146,13 @@ class GovernedMediaStore:
                 if canonical.media_id != record.media_id:
                     self._objects.delete(relative)
                 return canonical
-            connection = sqlite3.connect(self._database_path)
-            try:
-                connection.execute(
-                    "INSERT INTO governed_media VALUES(?,?,?,?,?,?,?)",
-                    (
-                        record.media_id,
-                        record.relative_path,
-                        record.organization_id,
-                        record.project_id,
-                        record.mime_type,
-                        record.size_bytes,
-                        record.sha256,
-                    ),
-                )
-                connection.commit()
-            finally:
-                connection.close()
+            canonical = self._sqlite_claim_content(record)
+            if canonical.media_id != record.media_id:
+                self._objects.delete(relative)
+            return canonical
         except BaseException:
             self._objects.delete(relative)
             raise
-        return record
 
     def begin_upload(
         self,
@@ -179,7 +167,9 @@ class GovernedMediaStore:
         if expected_size <= 0 or expected_size > 100 * 1024**3:
             raise ValueError("invalid upload size")
         digest = expected_sha256.casefold()
-        if len(digest) != 64 or any(char not in "0123456789abcdef" for char in digest):
+        if len(digest) != 64 or any(
+            char not in "0123456789abcdef" for char in digest
+        ):
             raise ValueError("invalid sha256")
         upload = UploadSession(
             str(uuid4()),
@@ -327,36 +317,17 @@ class GovernedMediaStore:
         self._objects.put(relative, part, record.mime_type, record.sha256)
         try:
             if self._metadata is not None:
-                canonical = self._metadata.complete_upload(current.upload_id, record) or record
+                canonical = (
+                    self._metadata.complete_upload(current.upload_id, record) or record
+                )
                 if canonical.media_id != record.media_id:
                     self._objects.delete(relative)
                 record = canonical
             else:
-                connection = sqlite3.connect(self._database_path)
-                try:
-                    connection.execute("BEGIN")
-                    connection.execute(
-                        "INSERT INTO governed_media VALUES(?,?,?,?,?,?,?)",
-                        (
-                            record.media_id,
-                            record.relative_path,
-                            record.organization_id,
-                            record.project_id,
-                            record.mime_type,
-                            record.size_bytes,
-                            record.sha256,
-                        ),
-                    )
-                    connection.execute(
-                        "DELETE FROM governed_uploads WHERE upload_id=?",
-                        (current.upload_id,),
-                    )
-                    connection.commit()
-                except BaseException:
-                    connection.rollback()
-                    raise
-                finally:
-                    connection.close()
+                canonical = self._sqlite_claim_content(record, current.upload_id)
+                if canonical.media_id != record.media_id:
+                    self._objects.delete(relative)
+                record = canonical
         except BaseException:
             self._objects.delete(relative)
             raise
@@ -417,6 +388,43 @@ class GovernedMediaStore:
         finally:
             connection.close()
         return None if row is None else MediaRecord(*row)
+
+    def _sqlite_claim_content(
+        self, record: MediaRecord, upload_id: str | None = None
+    ) -> MediaRecord:
+        connection = sqlite3.connect(self._database_path, timeout=30)
+        try:
+            connection.execute("BEGIN IMMEDIATE")
+            row = connection.execute(
+                "SELECT * FROM governed_media WHERE organization_id=? "
+                "AND sha256=? AND size_bytes=? ORDER BY media_id LIMIT 1",
+                (record.organization_id, record.sha256, record.size_bytes),
+            ).fetchone()
+            canonical = record if row is None else MediaRecord(*row)
+            if row is None:
+                connection.execute(
+                    "INSERT INTO governed_media VALUES(?,?,?,?,?,?,?)",
+                    (
+                        record.media_id,
+                        record.relative_path,
+                        record.organization_id,
+                        record.project_id,
+                        record.mime_type,
+                        record.size_bytes,
+                        record.sha256,
+                    ),
+                )
+            if upload_id is not None:
+                connection.execute(
+                    "DELETE FROM governed_uploads WHERE upload_id=?", (upload_id,)
+                )
+            connection.commit()
+            return canonical
+        except BaseException:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
 
     def _contained(self, relative: str) -> Path:
         candidate = (self._storage_root / relative).resolve()

@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import threading
 from types import SimpleNamespace
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 
 from natureai_next.application.access_control import PolicyDecisionService
 from natureai_next.domain.access_control import (
@@ -258,6 +258,39 @@ def test_http_handler_writes_immutable_tuple_headers() -> None:
         with urlopen(f"http://127.0.0.1:{server.server_port}/api/v1/test") as response:
             assert response.read() == b"ok"
             assert response.headers["X-Fieldora-Test"] == "tuple-header"
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)
+
+
+def test_http_handler_normalizes_browser_authentication_headers() -> None:
+    class Application:
+        def dispatch(self, method, target, headers, body):
+            assert method == "GET"
+            assert target == "/api/v1/me"
+            assert headers["authorization"] == "Bearer browser-session-token"
+            assert headers["cookie"] == "fieldora_session=cookie-token"
+            assert headers["x-fieldora-web-session"] == "1"
+            assert "Authorization" not in headers
+            return ApiResponse.json(200, {"authenticated": True})
+
+    from http.server import ThreadingHTTPServer
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), handler_for(Application()))  # type: ignore[arg-type]
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        request = Request(
+            f"http://127.0.0.1:{server.server_port}/api/v1/me",
+            headers={
+                "Authorization": "Bearer browser-session-token",
+                "Cookie": "fieldora_session=cookie-token",
+                "X-Fieldora-Web-Session": "1",
+            },
+        )
+        with urlopen(request) as response:
+            assert json.loads(response.read()) == {"authenticated": True}
     finally:
         server.shutdown()
         server.server_close()

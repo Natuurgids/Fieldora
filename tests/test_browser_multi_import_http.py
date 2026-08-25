@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import threading
+import time
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 
@@ -204,15 +205,15 @@ def test_multi_file_import_over_real_http_has_no_failed_fetch(tmp_path: Path) ->
             ]
         )
         page.evaluate("document.getElementById('upload-start').click()")
-        page.wait_for_function(
-            """
-            () => {
-              const node=document.getElementById('upload-status');
-              return node.textContent.includes('verified') || node.style.color.includes('danger');
-            }
-            """,
-            timeout=10_000,
-        )
+
+        deadline = time.monotonic() + 10
+        status_text = ""
+        while time.monotonic() < deadline:
+            status_text = page.locator("#upload-status").inner_text()
+            status_color = page.locator("#upload-status").evaluate("node => node.style.color")
+            if "verified" in status_text or "danger" in status_color:
+                break
+            page.wait_for_timeout(100)
 
         status_text = page.locator("#upload-status").inner_text()
         trace = f"status={status_text!r}, failed={failed_requests!r}, responses={upload_responses!r}"

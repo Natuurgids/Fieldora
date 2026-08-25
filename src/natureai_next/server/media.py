@@ -88,7 +88,7 @@ class GovernedMediaStore:
             )
             connection.execute(
                 "CREATE INDEX IF NOT EXISTS ix_governed_media_content "
-                "ON governed_media(organization_id,project_id,sha256,size_bytes)"
+                "ON governed_media(organization_id,sha256,size_bytes)"
             )
             connection.commit()
         finally:
@@ -107,7 +107,7 @@ class GovernedMediaStore:
         size_bytes = source.stat().st_size
         if self._metadata is None:
             existing = self._sqlite_content_record(
-                organization_id, project_id, sha256, size_bytes
+                organization_id, sha256, size_bytes
             )
             if existing is not None:
                 return existing
@@ -283,7 +283,6 @@ class GovernedMediaStore:
         if self._metadata is None:
             existing = self._sqlite_content_record(
                 current.organization_id,
-                current.project_id,
                 digest,
                 current.expected_size,
             )
@@ -392,14 +391,14 @@ class GovernedMediaStore:
         return self._objects.read_range(record.relative_path, start, end)
 
     def _sqlite_content_record(
-        self, organization_id: str, project_id: str, sha256: str, size_bytes: int
+        self, organization_id: str, sha256: str, size_bytes: int
     ) -> MediaRecord | None:
         connection = sqlite3.connect(self._database_path)
         try:
             row = connection.execute(
-                "SELECT * FROM governed_media WHERE organization_id=? AND project_id=? "
+                "SELECT * FROM governed_media WHERE organization_id=? "
                 "AND sha256=? AND size_bytes=? ORDER BY media_id LIMIT 1",
-                (organization_id, project_id, sha256, size_bytes),
+                (organization_id, sha256, size_bytes),
             ).fetchone()
         finally:
             connection.close()

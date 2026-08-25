@@ -6,7 +6,7 @@ import hashlib
 import socket
 import ssl
 import threading
-import time
+from collections.abc import Callable
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -177,34 +177,31 @@ def serve(
     host: str,
     port: int,
     *,
-    tls_certificate: Path | None = None,
-    tls_private_key: Path | None = None,
-    shutdown_coordinator: ShutdownCoordinator | None = None,
+    certificate: Path | None = None,
+    private_key: Path | None = None,
+    on_shutdown: Callable[[], None] | None = None,
     shutdown_grace_seconds: float = 30.0,
 ) -> None:
-    if (tls_certificate is None) != (tls_private_key is None):
+    """Serve Fieldora with reloadable TLS and coordinated signal-driven draining."""
+    if (certificate is None) != (private_key is None):
         raise ValueError("TLS certificate and private key must be configured together")
-    handler = handler_for(application, tls_enabled=tls_certificate is not None)
-    if tls_certificate is not None and tls_private_key is not None:
+    if not 0 <= shutdown_grace_seconds <= 300:
+        raise ValueError("shutdown grace period must be between 0 and 300 seconds")
+
+    handler = handler_for(application, tls_enabled=certificate is not None)
+    if certificate is not None and private_key is not None:
         server: ThreadingHTTPServer = ReloadingTLSServer(
-            (host, port), handler, tls_certificate, tls_private_key
+            (host, port), handler, certificate, private_key
         )
     else:
         server = ThreadingHTTPServer((host, port), handler)
     server.daemon_threads = True
-    if shutdown_coordinator is not None:
-        shutdown_coordinator.install_signal_handlers()
-    try:
-        while True:
-            if shutdown_coordinator is not None and shutdown_coordinator.requested:
-                break
-            server.handle_request()
-    finally:
-        server.server_close()
-        if shutdown_coordinator is not None:
-            deadline = time.monotonic() + max(0.0, shutdown_grace_seconds)
-            while (
-                shutdown_coordinator.active_request_count > 0
-                and time.monotonic() < deadline
-            ):
-                time.sleep(0.05)
+    server.timeout = 0.5
+
+    shutdown = ShutdownCoordinator(() if on_shutdown is None else (on_shutdown,))
+    with shutdown.installed():
+        try:
+            while not shutdown.requested:
+                server.handle_request()
+        finally:
+            server.server_close()

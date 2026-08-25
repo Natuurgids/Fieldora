@@ -1,9 +1,9 @@
 """PostgreSQL Project Management creation/listing adapter for managed Fieldora.
 
-This is intentionally the first narrow parity slice.  It mirrors the authoritative
-ProjectManagementService project-creation transaction without pulling process-local
-SQLite into the distributed server.  Later WEB-031/032 slices extend this adapter
-for the rest of the Project Management lifecycle.
+This is intentionally the first narrow parity slice. It mirrors the authoritative
+ProjectManagementService project-creation transaction while adding the organization
+boundary required by a shared managed server. Later WEB-031/032 slices extend this
+adapter for the rest of the Project Management lifecycle.
 """
 
 from __future__ import annotations
@@ -20,6 +20,7 @@ from uuid import uuid4
 @dataclass(frozen=True, slots=True)
 class ManagedProjectSummary:
     project_id: str
+    organization_id: str
     name: str
     status: str
     owner_id: str
@@ -55,12 +56,13 @@ class PostgresProjectManagementService:
             with connection.cursor() as cursor:
                 cursor.execute(
                     "SELECT pg_advisory_xact_lock(hashtext(%s))",
-                    ("fieldora_project_management_schema_v1",),
+                    ("fieldora_project_management_schema_v2",),
                 )
                 cursor.execute(
                     """
                     CREATE TABLE IF NOT EXISTS pm_projects(
                         project_id TEXT PRIMARY KEY,
+                        organization_id TEXT NOT NULL,
                         name TEXT NOT NULL,
                         description TEXT NOT NULL DEFAULT '',
                         status TEXT NOT NULL DEFAULT 'active',
@@ -75,6 +77,9 @@ class PostgresProjectManagementService:
                         updated_at_us BIGINT NOT NULL
                     )
                     """
+                )
+                cursor.execute(
+                    "ALTER TABLE pm_projects ADD COLUMN IF NOT EXISTS organization_id TEXT"
                 )
                 cursor.execute(
                     """
@@ -117,8 +122,8 @@ class PostgresProjectManagementService:
                     """
                 )
                 cursor.execute(
-                    "CREATE INDEX IF NOT EXISTS ix_pm_projects_updated_pg "
-                    "ON pm_projects(updated_at_us DESC)"
+                    "CREATE INDEX IF NOT EXISTS ix_pm_projects_org_updated_pg "
+                    "ON pm_projects(organization_id,updated_at_us DESC)"
                 )
                 cursor.execute(
                     "CREATE INDEX IF NOT EXISTS ix_pm_activity_project_pg "
@@ -129,6 +134,7 @@ class PostgresProjectManagementService:
         self,
         name: str,
         *,
+        organization_id: str,
         owner_id: str,
         actor_id: str,
         start_date: str = "",
@@ -138,6 +144,8 @@ class PostgresProjectManagementService:
         currency: str = "EUR",
         template_id: str | None = None,
     ) -> str:
+        if not organization_id.strip():
+            raise ValueError("organization is required")
         if not name.strip():
             raise ValueError("project name is required")
         _validate_date(start_date, "project start date")
@@ -163,12 +171,14 @@ class PostgresProjectManagementService:
                 cursor.execute(
                     """
                     INSERT INTO pm_projects(
-                        project_id,name,description,status,owner_id,start_date,due_date,
-                        budget,currency,template_id,client_name,created_at_us,updated_at_us
-                    ) VALUES(%s,%s,%s,'active',%s,%s,%s,%s,%s,%s,'',%s,%s)
+                        project_id,organization_id,name,description,status,owner_id,
+                        start_date,due_date,budget,currency,template_id,client_name,
+                        created_at_us,updated_at_us
+                    ) VALUES(%s,%s,%s,%s,'active',%s,%s,%s,%s,%s,%s,'',%s,%s)
                     """,
                     (
                         project_id,
+                        organization_id.strip(),
                         name.strip(),
                         description.strip(),
                         owner_id.strip(),
@@ -205,15 +215,17 @@ class PostgresProjectManagementService:
                 )
         return project_id
 
-    def projects(self) -> tuple[ManagedProjectSummary, ...]:
+    def projects(self, organization_id: str) -> tuple[ManagedProjectSummary, ...]:
         with self._connect() as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
                     """
-                    SELECT project_id,name,status,owner_id,start_date,due_date,budget,
-                           currency,description
-                    FROM pm_projects ORDER BY updated_at_us DESC,project_id
-                    """
+                    SELECT project_id,organization_id,name,status,owner_id,start_date,
+                           due_date,budget,currency,description
+                    FROM pm_projects WHERE organization_id=%s
+                    ORDER BY updated_at_us DESC,project_id
+                    """,
+                    (organization_id,),
                 )
                 rows = cursor.fetchall()
         return tuple(
@@ -224,9 +236,10 @@ class PostgresProjectManagementService:
                 str(row[3]),
                 str(row[4]),
                 str(row[5]),
-                float(row[6]),
-                str(row[7]),
+                str(row[6]),
+                float(row[7]),
                 str(row[8]),
+                str(row[9]),
             )
             for row in rows
         )

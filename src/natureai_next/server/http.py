@@ -30,6 +30,7 @@ from natureai_next.server.linked_storage_operator_web import (
 )
 from natureai_next.server.linked_storage_web import patch_linked_storage_web_response
 from natureai_next.server.navigation_web_compatibility import patch_navigation_web_response
+from natureai_next.server.offline_maps_web import patch_offline_maps_web_response
 from natureai_next.server.offline_models_web import patch_offline_models_web_response
 from natureai_next.server.project_facility_workspace_web import (
     patch_project_facility_workspace_response,
@@ -66,9 +67,7 @@ class ReloadingCertificateChain:
     def reload_if_changed(self, *, force: bool = False) -> bool:
         certificate_bytes = self.certificate.read_bytes()
         key_bytes = self.private_key.read_bytes()
-        fingerprint = hashlib.sha256(
-            certificate_bytes + b"\0" + key_bytes
-        ).digest()
+        fingerprint = hashlib.sha256(certificate_bytes + b"\0" + key_bytes).digest()
         with self._lock:
             if not force and fingerprint == self._fingerprint:
                 return False
@@ -90,17 +89,13 @@ class ReloadingTLSServer(ThreadingHTTPServer):
         super().__init__(server_address, handler)
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         context.minimum_version = ssl.TLSVersion.TLSv1_2
-        self.certificate_chain = ReloadingCertificateChain(
-            context, certificate, private_key
-        )
+        self.certificate_chain = ReloadingCertificateChain(context, certificate, private_key)
 
     def get_request(self) -> tuple[socket.socket, tuple[str, int]]:
         request, address = super().get_request()
         try:
             self.certificate_chain.reload_if_changed()
-            wrapped = self.certificate_chain.context.wrap_socket(
-                request, server_side=True
-            )
+            wrapped = self.certificate_chain.context.wrap_socket(request, server_side=True)
         except BaseException:
             request.close()
             raise
@@ -125,15 +120,14 @@ def patch_managed_web_response(target: str, response):
         patch_workspace_language_web_response,
         patch_project_facility_workspace_response,
         patch_offline_models_web_response,
+        patch_offline_maps_web_response,
         patch_zero_trust_web_response,
     ):
         response = patch(target, response)
     return response
 
 
-def handler_for(
-    application: FieldoraApi, *, tls_enabled: bool = False
-) -> type[BaseHTTPRequestHandler]:
+def handler_for(application: FieldoraApi, *, tls_enabled: bool = False) -> type[BaseHTTPRequestHandler]:
     class Handler(BaseHTTPRequestHandler):
         server_version = "Fieldora"
 

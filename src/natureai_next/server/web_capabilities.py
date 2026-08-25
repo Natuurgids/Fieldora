@@ -62,7 +62,12 @@ _PAGE_RULES: dict[str, tuple[Rule, ...]] = {
 _ACTION_RULES: dict[str, tuple[Rule, ...]] = {
     "projects.create": (("create", "project", "research"),),
     "library.import": (("upload", "asset", "research"),),
+    # Preserve the existing alias for offline-model registration while projecting
+    # the generic AI Administration editor at the actual API resource granularity.
     "aiadmin.manage": (("edit", "ai_model", "administration"),),
+    "aiadmin.models.manage": (("edit", "ai_model", "administration"),),
+    "aiadmin.providers.manage": (("edit", "ai_provider", "administration"),),
+    "aiadmin.mcp.manage": (("edit", "mcp_server", "administration"),),
     "operator.manage": (
         ("storage.enable", "infrastructure", "administration"),
         ("storage.disable", "infrastructure", "administration"),
@@ -232,6 +237,24 @@ _ZERO_TRUST_WEB_PATCH = bytes(
  document.head.appendChild(style);
  const allowed=page=>ready&&capabilities.pages?.[pageCapability[page]||page]===true;
  const mark=(node,hidden)=>{if(node)node.dataset.fieldoraAuthorizationHidden=hidden?"true":"false"};
+ const aiActionFor={
+  provider:'aiadmin.providers.manage',model:'aiadmin.models.manage',mcp:'aiadmin.mcp.manage'
+ };
+ function applyAiAdministrationActions(){
+  const select=document.getElementById('ai-record-type');if(!select)return;
+  [...select.options].forEach(option=>{
+   const key=aiActionFor[option.value];
+   const permitted=Boolean(key&&capabilities.actions?.[key]===true);
+   option.disabled=!permitted;option.hidden=!permitted;
+  });
+  const available=[...select.options].filter(option=>!option.disabled);
+  if(select.selectedOptions[0]?.disabled&&available[0])select.value=available[0].value;
+  mark(select.closest('.card'),available.length===0);
+  const selectedAction=aiActionFor[select.value];
+  mark(document.getElementById('ai-record-save'),!selectedAction||capabilities.actions?.[selectedAction]!==true);
+ }
+ const aiRecordType=document.getElementById('ai-record-type');
+ if(aiRecordType)aiRecordType.addEventListener('change',applyAiAdministrationActions);
  function apply(){
   document.querySelectorAll('[id^="page-"]').forEach(node=>{
    const page=node.id.slice(5);mark(node,!allowed(page));
@@ -243,6 +266,7 @@ _ZERO_TRUST_WEB_PATCH = bytes(
   mark(document.querySelector('[data-library-view="import"]'),capabilities.actions?.['library.import']!==true);
   for(const id of ['new-project','portfolio-new-project'])mark(document.getElementById(id),capabilities.actions?.['projects.create']!==true);
   document.querySelectorAll('[data-register-offline-model]').forEach(node=>mark(node,capabilities.actions?.['aiadmin.manage']!==true));
+  applyAiAdministrationActions();
   document.querySelectorAll('[data-linked-archive-action]').forEach(node=>mark(node,capabilities.actions?.['operator.manage']!==true));
   const projectCard=document.getElementById('home-projects')?.closest('.card');
   const runtimeCard=document.getElementById('home-runtime')?.closest('.card');

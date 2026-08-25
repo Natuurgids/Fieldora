@@ -26,11 +26,11 @@ The Windows 11 + Docker Desktop clean installation has been runtime-validated by
 | WEB-012 dedup race safety | PARTIAL | PostgreSQL completion uses transaction-scoped advisory serialization around content identity and is certified. SQLite/reference concurrency still needs an explicit race test/transaction strategy. |
 | WEB-015 reproduce multi-file browser fetch failure | ANALYSIS | Confirmed browser uses 4 MiB chunks; regular and staged APIs allow up to 8 MiB and the HTTP adapter has no smaller obvious body cap. Need a real managed-server Playwright request trace before changing behavior. |
 | WEB-011 project link on existing evidence | READY | `media_links.py` already models organization-owned media plus project/collection/etc. associations. It is not yet wired into the main media upload/list path; do not broaden hash identity across projects until visibility/link semantics are wired. |
-| WEB-026 unusable Create Project button | ANALYSIS | Browser creation is structurally divergent: it writes a lightweight Science `projects` record rather than invoking the Project Management service contract. Browser reproduction still required. |
+| WEB-026 unusable Create Project button | PARTIAL | The structural cause is fixed for managed PostgreSQL: browser creation now enters authoritative PM persistence rather than Science-only snapshots. A real managed-browser click/runtime check is still required before this item is DONE. |
 | WEB-027 desktop Project creation trace | DONE (analysis) | `WEB_PARITY_PROJECT_CONTRACT.md` records that authoritative creation validates dates, creates the canonical ID, five workflow statuses, admin PM membership, activity and optional template state. |
-| WEB-028 shared web Project creation contract | READY (architecture) | Route browser/API through the same presentation-neutral PM command semantics while retaining PBAC. Do not introduce process-local SQLite into the distributed PostgreSQL server; first establish/locate a PostgreSQL PM persistence adapter. |
+| WEB-028 shared web Project creation contract | DONE (managed creation subset) | Managed PostgreSQL creation is organization-scoped, server-ID authoritative, creates desktop-equivalent default statuses/admin PM membership/activity, and remains PBAC-gated. `Fieldora project parity certification` run #1 is green. Templates and later edit/archive/child work remain separate WEB-029–032 slices. |
 
-## Commits in the first evidence-identity slice
+## Evidence-identity slice commits
 
 - `2831150daf9b708a1d84ecb01be177bbb12a82dc` — PostgreSQL same-context canonical content completion.
 - `d810b803e74a0511798ed9f67a21e066f4875b3f` — governed media store returns canonical record and removes redundant bytes.
@@ -38,7 +38,17 @@ The Windows 11 + Docker Desktop clean installation has been runtime-validated by
 - `9193475a819d2dfd22d968e98e4815a375232d03` — PostgreSQL identity test.
 - `9512eb699728109df188402a66d5792f06bd3694` — dedicated media identity certification workflow.
 - `9789297c9645f2103d8d14fd95c7a299d020cce0` — repair PostgreSQL advisory key after run #1 exposed illegal NUL separators.
+
+## Project creation slice commits
+
 - `7758cfa3015331c30d89cc29a06ee43b178a0212` — Project creation parity contract/source trace.
+- `70b2837066d065e1e84597d55667437e7c61faf5` — initial managed PostgreSQL PM creation adapter.
+- `21eb14d78ef95a45e46b6dc0bb8b0d2b17ab54d7` — managed browser API Project Management hook.
+- `eeacf3a8` — organization-scope managed PM persistence.
+- `d4ba18f9` — organization-scope managed browser Project API.
+- `4666f594` — compose PostgreSQL PM service into managed `serve` runtime.
+- `39a1a737` — managed browser API canonical-ID/PBAC tests.
+- `dff0f36cbf99de17703b4f6bb38e11bc789cf6f3` — dedicated Project parity certification workflow.
 
 ## Certification history
 
@@ -60,6 +70,16 @@ Result: SUCCESS.
 - Filesystem/reference identity tests passed.
 - PostgreSQL governed-media identity test passed.
 - This certifies same-context exact duplicate no-op and the PostgreSQL transaction-serialized canonical completion path.
+
+### Fieldora project parity certification — run #1
+
+Result: SUCCESS (run `32882236322`, job `97914262275`).
+
+- PostgreSQL 16 service initialized successfully.
+- Ruff managed Project parity check passed.
+- PostgreSQL Project creation contract tests passed: canonical project, exact desktop default statuses, admin PM membership, `project.created` activity, date validation and organization isolation.
+- Managed API tests passed: browser-provided IDs do not become authoritative, authenticated organization is used, and PBAC denial persists nothing.
+- Broader server-web, zero-trust and Platform regression lanes from the same branch head must also remain green before runtime handoff.
 
 ## Guardrails
 

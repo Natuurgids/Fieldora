@@ -29,6 +29,7 @@ _OFFLINE_MODELS_WEB_PATCH = bytes(
  section.innerHTML=`
   <h2>Installed offline model artifacts</h2>
   <p class="muted">Verified model bundles installed on this Fieldora node. Registration is explicit and stores only an opaque artifact ID; server filesystem paths are never shown here.</p>
+  <p class="muted"><strong>Local / USB import:</strong> an organization administrator can install an approved Bastion bundle from removable media with <code>Install-Fieldora-Offline-Media.ps1</code>. Fieldora still requires the trusted signing public key, signed manifest, clean-scan attestation and payload hashes; USB transport does not bypass verification.</p>
   <div id="offline-model-list" class="list"></div>
   <p id="offline-model-status" class="status"></p>`;
  const modelList=document.getElementById("model-list");

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
@@ -10,11 +11,13 @@ from natureai_next.domain.access_control import (
     IdentityKind,
     Policy,
 )
+from natureai_next.server.api import ApiResponse
 from natureai_next.server.browser_functionality_api import (
     BrowserFunctionalityFieldoraApi,
     _session_cookie,
     _session_cookie_header,
 )
+from natureai_next.server.media import GovernedMediaStore, MediaRecord
 
 
 class _Authentication:
@@ -72,6 +75,32 @@ def _api(
     api._decisions = decisions
     api._science = science
     return api, decisions, science
+
+
+def _upload_and_link(
+    api: BrowserFunctionalityFieldoraApi,
+    store: GovernedMediaStore,
+    payload: bytes,
+    project_id: str,
+) -> MediaRecord:
+    digest = hashlib.sha256(payload).hexdigest()
+    upload = store.begin_upload(
+        "admin-1",
+        "local",
+        project_id,
+        "shared-evidence.bin",
+        "application/octet-stream",
+        len(payload),
+        digest,
+    )
+    record = store.append_upload(upload, 0, payload)
+    assert isinstance(record, MediaRecord)
+    api._link_completed_upload(
+        upload,
+        {"x-fieldora-purpose": "research"},
+        ApiResponse.json(201, {"media_id": record.media_id}),
+    )
+    return record
 
 
 def test_browser_session_cookie_is_secure_httponly_and_strict() -> None:
@@ -136,6 +165,56 @@ def test_project_creation_remains_default_denied_without_policy() -> None:
     assert response.status == 403
     assert decisions.requests[0].action == "create"
     assert science.writes == []
+
+
+def test_canonical_media_is_project_scoped_by_association(tmp_path: Path) -> None:
+    api, _decisions, _science = _api()
+    store = GovernedMediaStore(tmp_path / "media.sqlite3", tmp_path / "objects")
+    api._media = store
+    payload = b"one canonical evidence object in two projects"
+    headers = {
+        "authorization": "Bearer browser-token",
+        "x-fieldora-purpose": "research",
+    }
+
+    first = _upload_and_link(api, store, payload, "project-a")
+    second = _upload_and_link(api, store, payload, "project-b")
+
+    assert second.media_id == first.media_id
+    assert len(store.records("local")) == 1
+    links = store.associations.links(first.media_id, "local")
+    assert [(link.association_type, link.target_id) for link in links] == [
+        ("project", "project-a"),
+        ("project", "project-b"),
+    ]
+
+    for project_id in ("project-a", "project-b"):
+        listing = api._associated_media_list_response(
+            f"project_id={project_id}", headers
+        )
+        assert listing.status == 200
+        listing_payload = json.loads(listing.body)
+        assert listing_payload["count"] == 1
+        assert listing_payload["items"][0]["media_id"] == first.media_id
+        assert listing_payload["items"][0]["project_id"] == project_id
+
+        download = api._associated_media_response(
+            first.media_id, "GET", f"project_id={project_id}", headers
+        )
+        assert download.status == 200
+        assert download.body == payload
+
+    unlinked_listing = api._associated_media_list_response(
+        "project_id=project-c", headers
+    )
+    assert unlinked_listing.status == 200
+    assert json.loads(unlinked_listing.body) == {"items": [], "count": 0}
+    assert (
+        api._associated_media_response(
+            first.media_id, "GET", "project_id=project-c", headers
+        ).status
+        == 404
+    )
 
 
 def test_browser_functionality_does_not_put_session_tokens_in_media_urls() -> None:

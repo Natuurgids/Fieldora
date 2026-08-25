@@ -85,8 +85,24 @@ def test_offline_model_artifact_registers_through_governed_ai_models(
             administration_requests.append(
                 (path, request.headers.get("x-fieldora-purpose", ""))
             )
-        if path == "me":
+        if path == "web/capabilities":
             payload: object = {
+                "default_deny": True,
+                "pages": {
+                    "home": True,
+                    "aiadmin": True,
+                    "administration": True,
+                    "help": True,
+                },
+                "actions": {
+                    "projects.create": False,
+                    "library.import": False,
+                    "aiadmin.manage": True,
+                    "operator.manage": False,
+                },
+            }
+        elif path == "me":
+            payload = {
                 "identity_id": "admin-1",
                 "display_name": "Administrator",
                 "organization_id": "local",

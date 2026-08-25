@@ -6,6 +6,7 @@ on:
       - "Install-Fieldora-Clean.ps1"
       - "Install-Fieldora-Clean-Windows.ps1"
       - "Install-Fieldora-Bootstrap-Handoff.ps1"
+      - "Install-Fieldora-Offline-Model.ps1"
       - "src/natureai_next/server/service_trust.py"
       - "src/natureai_next/bootstrap/service_trust_cli.py"
       - "src/natureai_next/bootstrap/certificate_renewer_cli.py"
@@ -25,7 +26,7 @@ jobs:
       - name: Parse PowerShell installers
         shell: pwsh
         run: |
-          foreach ($path in @('./Install-Fieldora-Clean.ps1','./Install-Fieldora-Clean-Windows.ps1','./Install-Fieldora-Bootstrap-Handoff.ps1')) {
+          foreach ($path in @('./Install-Fieldora-Clean.ps1','./Install-Fieldora-Clean-Windows.ps1','./Install-Fieldora-Bootstrap-Handoff.ps1','./Install-Fieldora-Offline-Model.ps1')) {
             $text = Get-Content -LiteralPath $path -Raw
             [void][scriptblock]::Create($text)
             Write-Host "$path syntax: OK"
@@ -83,6 +84,32 @@ jobs:
             }
           }
           Write-Host "Automatic temporary administrator credential handoff: OK"
+
+      - name: Certify optional offline model provisioning
+        shell: pwsh
+        run: |
+          $text = Get-Content -LiteralPath ./Install-Fieldora-Clean-Windows.ps1 -Raw
+          foreach ($needle in @(
+            '[string]$OfflineModelBundle = ""',
+            '[string]$OfflineModelTrustedSigningKey = ""',
+            '[switch]$RequireOfflineModelSignature',
+            '[switch]$RequireOfflineModelCleanScan',
+            'Install-Fieldora-Offline-Model.ps1',
+            'FIELDORA_MODEL_STORE: "/var/lib/fieldora-models"',
+            './fieldora-models:/var/lib/fieldora-models:ro',
+            'Offline model desired state: VERIFIED and preserved in compose.override.yaml',
+            'Offline models: optional; use Install-Fieldora-Offline-Model.ps1'
+          )) {
+            if (-not $text.Contains($needle)) {
+              throw "Windows clean install is missing optional offline model provisioning: $needle"
+            }
+          }
+          foreach ($forbidden in @('huggingface.co','--network host','artifact_store_path')) {
+            if ($text.Contains($forbidden)) {
+              throw "Clean-install offline model path violates local-only or opacity contract: $forbidden"
+            }
+          }
+          Write-Host "Optional local offline model provisioning and desired-state preservation: OK"
 
       - name: Certify Windows CurrentUser root trust
         shell: pwsh

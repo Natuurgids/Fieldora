@@ -93,7 +93,10 @@ jobs:
             '--require-clean-scan',
             './fieldora-models:/var/lib/fieldora-models:ro',
             'FIELDORA_MODEL_STORE: /var/lib/fieldora-models',
-            'compose.models.yaml'
+            'compose.models.yaml',
+            'compose.override.yaml',
+            '$composeArgs',
+            'config -q'
           )) {
             if (-not $text.Contains($needle)) {
               throw "Portable offline model installer is missing: $needle"

@@ -69,6 +69,7 @@ def _api(
     api = BrowserFunctionalityFieldoraApi.__new__(BrowserFunctionalityFieldoraApi)
     api._authentication = _Authentication(identity)
     api._oidc = None
+    api._project_management = None
     api._access_repository = access_repository
     decisions = _Decisions(allowed)
     science = _Science()

@@ -114,7 +114,13 @@ def test_multi_file_import_over_real_http_has_no_failed_fetch(tmp_path: Path) ->
         )
         page.goto(url)
         page.locator("#workspace").wait_for(state="visible")
-        page.evaluate("showPage('library')")
+        page.evaluate(
+            """
+            const library=document.getElementById('page-library');
+            library.removeAttribute('data-fieldora-authorization-hidden');
+            library.hidden=false;
+            """
+        )
         page.locator("#page-library").wait_for(state="visible")
         page.locator("#upload-project").select_option("project-1")
         page.locator("#upload-file").set_input_files(

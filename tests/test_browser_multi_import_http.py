@@ -12,9 +12,13 @@ from natureai_next.domain.access_control import (
     AccessRequest,
     Identity,
     IdentityKind,
+    Organization,
     Policy,
     PolicyEffect,
     PolicySource,
+)
+from natureai_next.infrastructure.database.access_control import (
+    SqliteAccessControlRepository,
 )
 from natureai_next.server.browser_functionality_api import BrowserFunctionalityFieldoraApi
 from natureai_next.server.http import handler_for
@@ -63,51 +67,63 @@ class _Science:
         return 1
 
 
-class _AccessRepository:
-    def policies(self) -> tuple[Policy, ...]:
-        return (
-            Policy(
-                "library-view",
-                "View governed evidence",
-                PolicyEffect.ALLOW,
-                PolicySource.DIRECT,
-                "test",
-                "admin-1",
-                "",
-                ("view",),
-                ("asset",),
-                organization_id="local",
-                purposes=("research",),
-            ),
-            Policy(
-                "library-import",
-                "Import governed evidence",
-                PolicyEffect.ALLOW,
-                PolicySource.DIRECT,
-                "test",
-                "admin-1",
-                "",
-                ("upload",),
-                ("asset",),
-                organization_id="local",
-                project_id="project-1",
-                purposes=("research",),
-            ),
-            Policy(
-                "project-view",
-                "View import project",
-                PolicyEffect.ALLOW,
-                PolicySource.DIRECT,
-                "test",
-                "admin-1",
-                "",
-                ("view",),
-                ("project",),
-                organization_id="local",
-                project_id="project-1",
-                purposes=("research",),
-            ),
+def _access_repository(tmp_path: Path) -> SqliteAccessControlRepository:
+    repository = SqliteAccessControlRepository(tmp_path / "access.sqlite3")
+    repository.put_organization(Organization("local", "Local"))
+    repository.put_identity(
+        Identity(
+            "admin-1",
+            IdentityKind.USER,
+            "Administrator",
+            "local",
+            attributes={"platform_admin": "true"},
         )
+    )
+    for policy in (
+        Policy(
+            "library-view",
+            "View governed evidence",
+            PolicyEffect.ALLOW,
+            PolicySource.DIRECT,
+            "test",
+            "admin-1",
+            "",
+            ("view",),
+            ("asset",),
+            organization_id="local",
+            purposes=("research",),
+        ),
+        Policy(
+            "library-import",
+            "Import governed evidence",
+            PolicyEffect.ALLOW,
+            PolicySource.DIRECT,
+            "test",
+            "admin-1",
+            "",
+            ("upload",),
+            ("asset",),
+            organization_id="local",
+            project_id="project-1",
+            purposes=("research",),
+        ),
+        Policy(
+            "project-view",
+            "View import project",
+            PolicyEffect.ALLOW,
+            PolicySource.DIRECT,
+            "test",
+            "admin-1",
+            "",
+            ("view",),
+            ("project",),
+            organization_id="local",
+            project_id="project-1",
+            purposes=("research",),
+        ),
+    ):
+        repository.put_policy(policy)
+    return repository
 
 
 @contextlib.contextmanager
@@ -122,7 +138,7 @@ def _live_browser_server(tmp_path: Path):
         _Science(),
         Path("src/natureai_next/resources/server_web"),
         media,
-        audit_repository=_AccessRepository(),
+        audit_repository=_access_repository(tmp_path),
     )
     server = ThreadingHTTPServer(("127.0.0.1", 0), handler_for(api))
     server.daemon_threads = True

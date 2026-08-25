@@ -2,7 +2,8 @@ import inspect
 from pathlib import Path
 
 from natureai_next.bootstrap.server_cli import build_parser
-from natureai_next.server.http import ReloadingCertificateChain, serve
+from natureai_next.server.api import ApiResponse
+from natureai_next.server.http import ReloadingCertificateChain, handler_for, serve
 
 
 class RecordingContext:
@@ -11,6 +12,16 @@ class RecordingContext:
 
     def load_cert_chain(self, certificate: str, private_key: str) -> None:
         self.loaded.append((certificate, private_key))
+
+
+class DispatchOnlyApplication:
+    def dispatch(
+        self, method: str, target: str, headers: dict[str, str], body: bytes
+    ) -> ApiResponse:
+        return ApiResponse.json(
+            200,
+            {"method": method, "target": target, "body_size": len(body)},
+        )
 
 
 def test_certificate_chain_reloads_only_when_material_changes(tmp_path: Path) -> None:
@@ -45,6 +56,15 @@ def test_certificate_chain_detects_private_key_rotation(tmp_path: Path) -> None:
 
     assert chain.reload_if_changed() is True
     assert len(context.loaded) == 2
+
+
+def test_http_handler_uses_the_fieldora_dispatch_contract() -> None:
+    application = DispatchOnlyApplication()
+    handler = handler_for(application)  # type: ignore[arg-type]
+
+    assert handler is not None
+    assert not hasattr(application, "handle")
+    assert application.dispatch("GET", "/api/v1/health/live", {}, b"").status == 200
 
 
 def test_clean_installer_init_user_cli_and_http_serve_contract() -> None:

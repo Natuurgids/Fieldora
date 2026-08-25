@@ -11,6 +11,7 @@ on:
       - "src/natureai_next/server/offline_first_api.py"
       - "src/natureai_next/server/http.py"
       - "tests/test_offline_map_bundle.py"
+      - "tests/test_offline_map_store_api.py"
       - ".github/workflows/paired-bastion-certification.yml"
   workflow_dispatch:
 
@@ -38,8 +39,9 @@ jobs:
           src/natureai_next/server/offline_first_api.py
           src/natureai_next/server/http.py
           tests/test_offline_map_bundle.py
-      - name: Trusted map bundle tests
-        run: python -m pytest -q tests/test_offline_map_bundle.py
+          tests/test_offline_map_store_api.py
+      - name: Trusted map bundle and PBAC tests
+        run: python -m pytest -q tests/test_offline_map_bundle.py tests/test_offline_map_store_api.py
       - name: Parse paired and map installers
         shell: pwsh
         run: |
@@ -58,7 +60,9 @@ jobs:
             'build-map-bundle --help',
             'auto_started = $false',
             'separate-quarantine-scan-sign-import',
-            'PAIRING.json'
+            'PAIRING.json',
+            'OfflineMapBundle',
+            'Install-Fieldora-Offline-Map.ps1'
           )) {
             if (-not $text.Contains($needle)) { throw "Paired Bastion contract missing: $needle" }
           }

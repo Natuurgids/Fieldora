@@ -57,7 +57,7 @@ class PostgresMediaMetadataRepository:
                 )
                 cursor.execute(
                     "CREATE INDEX IF NOT EXISTS ix_governed_media_content_pg "
-                    "ON governed_media(organization_id,project_id,sha256,size_bytes)"
+                    "ON governed_media(organization_id,sha256,size_bytes)"
                 )
 
     def insert_media(self, record: MediaRecord) -> MediaRecord:
@@ -124,12 +124,11 @@ class PostgresMediaMetadataRepository:
                 )
 
     def complete_upload(self, upload_id: str, record: MediaRecord) -> MediaRecord:
-        """Commit one verified upload, returning the canonical content record.
+        """Commit one verified upload, returning the organization canonical record.
 
-        Completion is idempotent for byte-identical content in the same organization
-        and project context. The transaction-scoped advisory lock closes the race where
-        two web requests finish the same content concurrently without requiring a
-        destructive uniqueness migration over pre-existing deployments.
+        Completion is idempotent for byte-identical content across project contexts in
+        one organization. Project participation is represented separately through
+        governed media associations in the managed web layer.
         """
         with self._connect() as connection:
             with connection.cursor() as cursor:
@@ -190,7 +189,6 @@ class PostgresMediaMetadataRepository:
         raw_key = "\x1f".join(
             (
                 record.organization_id,
-                record.project_id,
                 record.sha256,
                 str(record.size_bytes),
             )
@@ -203,11 +201,10 @@ class PostgresMediaMetadataRepository:
         cursor.execute(
             "SELECT media_id,relative_path,organization_id,project_id,mime_type,"
             "size_bytes,sha256 FROM governed_media "
-            "WHERE organization_id=%s AND project_id=%s AND sha256=%s AND size_bytes=%s "
+            "WHERE organization_id=%s AND sha256=%s AND size_bytes=%s "
             "ORDER BY media_id LIMIT 1",
             (
                 record.organization_id,
-                record.project_id,
                 record.sha256,
                 record.size_bytes,
             ),

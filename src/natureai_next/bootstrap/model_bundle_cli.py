@@ -146,7 +146,7 @@ def _payload_tree_sha256(entries: tuple[dict[str, object], ...] | list[dict[str,
         for entry in entries
     )
     for path, size, sha256 in normalized:
-        digest.update(f"{path}\0{size}\0{sha256}\n".encode("utf-8"))
+        digest.update(f"{path}\0{size}\0{sha256}\n".encode())
     return digest.hexdigest()
 
 

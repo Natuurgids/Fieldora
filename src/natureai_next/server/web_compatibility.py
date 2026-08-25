@@ -22,18 +22,6 @@ _WEB_PLATFORM_PATCH = bytes(r"""
  projectOptions=function(){oldProjectOptions();const s=q("upload-project");if(s){const o=s.querySelector('option[value=""]');if(o)o.textContent="General Library (no project)";const l=s.closest("label");if(l&&l.firstChild)l.firstChild.textContent="Project (optional)";}};
  const sp=q("stage-project");if(sp){sp.placeholder="Leave empty for General Library";const l=sp.closest("label");if(l&&l.firstChild)l.firstChild.textContent="Project ID (optional)";}
 
- async function generalUpload(){
-  const file=q("upload-file")?.files?.[0],project=q("upload-project")?.value||"";
-  if(!file)return status("upload-status","Choose a file. Project is optional.",true);
-  status("upload-status","Calculating SHA-256…");
-  const bytes=await file.arrayBuffer(),digest=await crypto.subtle.digest("SHA-256",bytes);
-  const hash=[...new Uint8Array(digest)].map(x=>x.toString(16).padStart(2,"0")).join("");
-  try{
-   const begun=await api("/api/v1/uploads",{method:"POST",body:JSON.stringify({project_id:project,filename:file.name,mime_type:file.type,size_bytes:file.size,sha256:hash})});
-   let result=null;for(let start=0;start<file.size;start+=4*1024*1024){const end=Math.min(file.size,start+4*1024*1024);result=await api(`/api/v1/uploads/${begun.upload_id}`,{method:"PUT",headers:{"Content-Range":`bytes ${start}-${end-1}/${file.size}`},body:bytes.slice(start,end)});status("upload-status",`Uploaded ${Math.round(end/file.size*100)}%`);}
-   status("upload-status",`Verified · ${project?"project-linked":"General Library"} · ${result?.media_id||""}`);loadMedia();
-  }catch(e){status("upload-status",e.message,true)}
- }
  async function stagedUploadGeneral(){
   const files=[...(q("stage-files")?.files||[])],project=q("stage-project")?.value?.trim()||"";
   if(!files.length)return status("stage-status","Choose one or more files. Project is optional.",true);
@@ -44,7 +32,7 @@ _WEB_PLATFORM_PATCH = bytes(r"""
   }catch(e){status("stage-status",e.message,true)}
  }
  function replace(id,handler){const old=q(id);if(!old)return;const fresh=old.cloneNode(true);old.replaceWith(fresh);fresh.onclick=handler;}
- replace("upload-start",generalUpload);replace("stage-start",stagedUploadGeneral);
+ replace("stage-start",stagedUploadGeneral);
  document.querySelectorAll(".go-import").forEach(b=>b.onclick=()=>{showPage("library");q("import-card")?.scrollIntoView({behavior:"smooth",block:"start"});const picker=q("upload-file");if(picker){picker.focus();picker.click();}});
 
  function addPage(name,icon,title,html,loader){const nav=document.querySelector(".sidebar nav"),main=document.querySelector("main.main");if(!nav||!main||q(`page-${name}`))return;const b=document.createElement("button");b.className="nav";b.dataset.page=name;b.innerHTML=`<span class="nav-icon">${icon}</span>${esc(title)}`;b.onclick=()=>{showPage(name);loader()};nav.appendChild(b);const p=document.createElement("section");p.className="page";p.id=`page-${name}`;p.hidden=true;p.innerHTML=html;main.appendChild(p);}

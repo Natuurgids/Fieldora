@@ -37,6 +37,14 @@ def _upload(
     return result
 
 
+def _object_files(tmp_path: Path) -> list[Path]:
+    return [
+        path
+        for path in (tmp_path / "objects").rglob("*")
+        if path.is_file() and ".uploads" not in path.parts
+    ]
+
+
 def test_repeated_verified_upload_returns_existing_evidence_identity(tmp_path: Path) -> None:
     store = _store(tmp_path)
     payload = b"the same governed evidence bytes"
@@ -111,9 +119,29 @@ def test_concurrent_verified_uploads_converge_to_one_sqlite_evidence_identity(
 
     assert len({record.media_id for record in records}) == 1
     assert len(store.records("organization-1")) == 1
-    object_files = [
-        path
-        for path in (tmp_path / "objects").rglob("*")
-        if path.is_file() and ".uploads" not in path.parts
-    ]
-    assert len(object_files) == 1
+    assert len(_object_files(tmp_path)) == 1
+
+
+def test_concurrent_registers_converge_to_one_sqlite_evidence_identity(
+    tmp_path: Path,
+) -> None:
+    store = _store(tmp_path)
+    payload = b"concurrent direct registration bytes"
+    sources: list[Path] = []
+    for index in range(8):
+        source = tmp_path / f"source-{index}.bin"
+        source.write_bytes(payload)
+        sources.append(source)
+
+    barrier = threading.Barrier(len(sources))
+
+    def register(source: Path) -> MediaRecord:
+        barrier.wait(timeout=10)
+        return store.register(source, "organization-1", "project-1")
+
+    with ThreadPoolExecutor(max_workers=len(sources)) as executor:
+        records = list(executor.map(register, sources))
+
+    assert len({record.media_id for record in records}) == 1
+    assert len(store.records("organization-1")) == 1
+    assert len(_object_files(tmp_path)) == 1

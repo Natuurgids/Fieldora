@@ -112,7 +112,7 @@ jobs:
           if 'artifact_store_path' in text or 'raw_log' in text:
               raise SystemExit('filesystem paths or raw scanner logs must not be exposed by model discovery')
           for required in (
-              'artifact_storage_id', 'resource_type="ai_model"', 'FIELDORA_MODEL_STORE',
+              'artifact_storage_id', '"view",\n                    "ai_model"', 'FIELDORA_MODEL_STORE',
               'manifest_signature', 'signing_key_id', 'malware_scan', 'payload_sha256',
           ):
               if required not in text:

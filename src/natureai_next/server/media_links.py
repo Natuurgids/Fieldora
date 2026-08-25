@@ -41,6 +41,9 @@ class MediaAssociationRepository(Protocol):
     def links(
         self, media_id: str, organization_id: str
     ) -> tuple[MediaAssociation, ...]: ...
+    def linked_media_ids(
+        self, organization_id: str, association_type: str, target_id: str
+    ) -> tuple[str, ...]: ...
 
 
 class SqliteMediaAssociationRepository:
@@ -117,6 +120,20 @@ class SqliteMediaAssociationRepository:
             ).fetchall()
         return tuple(MediaAssociation(*row) for row in rows)
 
+    def linked_media_ids(
+        self, organization_id: str, association_type: str, target_id: str
+    ) -> tuple[str, ...]:
+        if association_type not in _ALLOWED_ASSOCIATION_TYPES:
+            raise ValueError("unsupported media association type")
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT media_id FROM governed_media_associations "
+                "WHERE organization_id=? AND association_type=? AND target_id=? "
+                "ORDER BY media_id",
+                (organization_id, association_type, target_id),
+            ).fetchall()
+        return tuple(str(row[0]) for row in rows)
+
 
 class PostgresMediaAssociationRepository:
     def __init__(self, connect: Callable[[], Any]) -> None:
@@ -191,6 +208,22 @@ class PostgresMediaAssociationRepository:
                 rows = cursor.fetchall()
         return tuple(MediaAssociation(*row) for row in rows)
 
+    def linked_media_ids(
+        self, organization_id: str, association_type: str, target_id: str
+    ) -> tuple[str, ...]:
+        if association_type not in _ALLOWED_ASSOCIATION_TYPES:
+            raise ValueError("unsupported media association type")
+        with self._connect() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT media_id FROM governed_media_associations "
+                    "WHERE organization_id=%s AND association_type=%s AND target_id=%s "
+                    "ORDER BY media_id",
+                    (organization_id, association_type, target_id),
+                )
+                rows = cursor.fetchall()
+        return tuple(str(row[0]) for row in rows)
+
 
 def new_association(
     *,
@@ -215,9 +248,17 @@ def new_association(
     return association
 
 
+_ALLOWED_ASSOCIATION_TYPES = {
+    "project",
+    "collection",
+    "dossier",
+    "submission",
+    "review_case",
+}
+
+
 def _validate(association: MediaAssociation) -> None:
-    allowed = {"project", "collection", "dossier", "submission", "review_case"}
-    if association.association_type not in allowed:
+    if association.association_type not in _ALLOWED_ASSOCIATION_TYPES:
         raise ValueError("unsupported media association type")
     if not all(
         (

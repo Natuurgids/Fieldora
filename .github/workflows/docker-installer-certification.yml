@@ -125,6 +125,8 @@ jobs:
             'Install-Fieldora-Bootstrap-Handoff.ps1',
             'Install-Fieldora-Offline-Model.ps1',
             'Require-Marker',
+            '$core = $core.Replace($windowsDocker, $linuxDocker)',
+            '$curlStartMarker =',
             '--node linux-docker',
             'FIELDORA_STORAGE_SERVICE_ENABLED: "true"',
             'FIELDORA_STORAGE_SERVICE_CLIENT_CA:',
@@ -137,9 +139,9 @@ jobs:
               throw "Linux clean installer is missing: $needle"
             }
           }
-          foreach ($forbidden in @('Get-Command docker.exe','Get-Command curl.exe','Cert:\CurrentUser','--network host','artifact_store_path','huggingface.co')) {
+          foreach ($forbidden in @('Cert:\CurrentUser','--network host','artifact_store_path','huggingface.co')) {
             if ($linux.Contains($forbidden)) {
-              throw "Linux clean installer contains a Windows-only or forbidden shortcut: $forbidden"
+              throw "Linux clean installer contains a forbidden shortcut: $forbidden"
             }
           }
           foreach ($coreMarker in @(

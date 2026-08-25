@@ -48,6 +48,7 @@ _PROJECT_OWNER_RESOURCE_TYPES = (
 
 class ProjectSummaryLike(Protocol):
     project_id: str
+    organization_id: str
     name: str
     status: str
     owner_id: str
@@ -63,6 +64,7 @@ class ManagedProjectService(Protocol):
         self,
         name: str,
         *,
+        organization_id: str,
         owner_id: str,
         actor_id: str,
         start_date: str = "",
@@ -73,7 +75,7 @@ class ManagedProjectService(Protocol):
         template_id: str | None = None,
     ) -> str: ...
 
-    def projects(self) -> tuple[ProjectSummaryLike, ...]: ...
+    def projects(self, organization_id: str) -> tuple[ProjectSummaryLike, ...]: ...
 
 
 class BrowserFunctionalityFieldoraApi(ProjectOwnerContractFieldoraApi):
@@ -151,7 +153,7 @@ class BrowserFunctionalityFieldoraApi(ProjectOwnerContractFieldoraApi):
             return ApiResponse.json(401, {"error": "unauthorized"})
         assert self._project_management is not None
         items: list[dict[str, object]] = []
-        for project in self._project_management.projects():
+        for project in self._project_management.projects(identity.organization_id):
             decision = self._decisions.decide(
                 AccessRequest(
                     identity.identity_id,
@@ -247,6 +249,7 @@ class BrowserFunctionalityFieldoraApi(ProjectOwnerContractFieldoraApi):
             try:
                 project_id = self._project_management.create_project(
                     name,
+                    organization_id=identity.organization_id,
                     owner_id=str(record.get("owner_id") or identity.identity_id),
                     actor_id=identity.identity_id,
                     start_date=str(record.get("start_date") or ""),
@@ -272,7 +275,7 @@ class BrowserFunctionalityFieldoraApi(ProjectOwnerContractFieldoraApi):
             )
             item = next(
                 project
-                for project in self._project_management.projects()
+                for project in self._project_management.projects(identity.organization_id)
                 if project.project_id == project_id
             )
             return ApiResponse.json(
@@ -293,7 +296,7 @@ class BrowserFunctionalityFieldoraApi(ProjectOwnerContractFieldoraApi):
                 },
             )
 
-        # Temporary compatibility fallback for the one-node reference API.  Managed
+        # Temporary compatibility fallback for the one-node reference API. Managed
         # Fieldora configures a Project Management service and never uses this path.
         try:
             resource_id = str(record["id"]).strip()

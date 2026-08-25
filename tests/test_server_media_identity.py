@@ -62,15 +62,15 @@ def test_registering_same_bytes_twice_is_idempotent_in_same_context(tmp_path: Pa
     assert store.records("organization-1", "project-1") == (first,)
 
 
-def test_same_bytes_in_another_project_remain_separate_until_association_slice(
+def test_same_bytes_in_another_project_use_one_organization_evidence_identity(
     tmp_path: Path,
 ) -> None:
-    """WEB-011 will replace this temporary context boundary with canonical links."""
     store = _store(tmp_path)
     payload = b"shared evidence bytes"
 
     first = _upload(store, payload, project_id="project-1")
     second = _upload(store, payload, project_id="project-2")
 
-    assert second.media_id != first.media_id
-    assert len(store.records("organization-1")) == 2
+    assert second.media_id == first.media_id
+    assert second.relative_path == first.relative_path
+    assert len(store.records("organization-1")) == 1

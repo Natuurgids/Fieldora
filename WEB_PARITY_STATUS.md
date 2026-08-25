@@ -21,9 +21,9 @@ The Windows 11 + Docker Desktop clean installation has been runtime-validated by
 | Work | State | Current evidence / next action |
 |---|---|---|
 | WEB-006 authoritative duplicate-flow trace | DONE (analysis) | Source trace is recorded in `WEB_PARITY_IMPORT_CONTRACT.md`. Desktop uses production `ImportService.plan()/execute()`; browser currently implements a separate upload loop. |
-| WEB-007 canonical evidence identity | DONE (organization canonical) | Same organization + same verified SHA-256/size converges to one media identity across project contexts in reference/SQLite and PostgreSQL paths. `Fieldora media identity and project association certification` run #30 is green. |
+| WEB-007 canonical evidence identity | DONE (organization canonical) | Same organization + same verified SHA-256/size converges to one media identity across project contexts in reference/SQLite and PostgreSQL paths. `Fieldora media identity and project association certification` run #34 is green. |
 | WEB-008 exact duplicate no-op | DONE (same context) | Repeated verified upload/register in the same organization/project returns the canonical existing media record, creates no second media row, and removes redundant temporary/object bytes. `Fieldora media identity certification` run #4 is green on reference/SQLite and PostgreSQL. |
-| WEB-012 dedup race safety | PARTIAL | PostgreSQL content completion and the complete governed-media schema bootstrap are transaction/advisory-lock serialized and certified under eight concurrent clean-start initializers. SQLite/reference concurrency still needs an explicit race test/transaction strategy. |
+| WEB-012 dedup race safety | DONE | PostgreSQL completion/schema bootstrap and SQLite/reference canonical claims are serialized and certified. Eight simultaneous SQLite upload completions and eight simultaneous direct registrations converge to one media ID and one object file. Run #32 reproduced the race with five identities; runs #33 and #34 are green after `BEGIN IMMEDIATE` canonical-claim serialization. |
 | WEB-015 reproduce multi-file browser fetch failure | ANALYSIS | Confirmed browser uses 4 MiB chunks; regular and staged APIs allow up to 8 MiB and the HTTP adapter has no smaller obvious body cap. Need a real managed-server Playwright request trace before changing behavior. |
 | WEB-011 project link on existing evidence | DONE | Upload completion records project associations against the organization-canonical media identity. Project A/B both list and download the same canonical object, an unlinked Project C receives no listing and a 404 download, PostgreSQL persists two distinct project association rows, and concurrent API/worker schema bootstrap is certified. Run #30 plus Platform run #522 are green. |
 | WEB-026 unusable Create Project button | PARTIAL | The structural cause is fixed for managed PostgreSQL: browser creation now enters authoritative PM persistence rather than Science-only snapshots. A real managed-browser click/runtime check is still required before this item is DONE. |
@@ -38,6 +38,9 @@ The Windows 11 + Docker Desktop clean installation has been runtime-validated by
 - `9193475a819d2dfd22d968e98e4815a375232d03` — PostgreSQL identity test.
 - `9512eb699728109df188402a66d5792f06bd3694` — dedicated media identity certification workflow.
 - `9789297c9645f2103d8d14fd95c7a299d020cce0` — repair PostgreSQL advisory key after run #1 exposed illegal NUL separators.
+- `1593dc5cbb6d1c299c05e61c8d38d51b3ce5151d` — add the deterministic eight-way SQLite upload-completion race test; run #32 reproduced five canonical identities.
+- `1a336f6164d8b360c82ec79a6e4be6339c731b56` — serialize SQLite canonical claims with `BEGIN IMMEDIATE` and remove losing object bytes.
+- `36207dd376607e019aa81d1b4443bda658a5b6a4` — extend SQLite race certification to direct `register()` calls.
 
 ## WEB-011 project-association slice commits
 
@@ -116,6 +119,33 @@ Result: SUCCESS (run `32899918088`, job `97971078626`).
 - Ruff governed-media identity and Project-association check passed.
 - Governed media identity, PostgreSQL association persistence and browser Project-scoping tests all passed unchanged after the schema-bootstrap repair.
 - This reconfirms WEB-011 after eliminating the concurrent association-table creation race.
+
+### Fieldora media identity and project association certification — run #32
+
+Result: FAILED usefully (run `32900485020`, job `97972918391`).
+
+- Ruff passed.
+- Existing reference/SQLite, PostgreSQL and browser association tests passed.
+- The new eight-way SQLite completion race reproduced the defect: eight byte-identical uploads returned five distinct media IDs.
+- This proved the reference path's read-before-write duplicate check was not transactionally authoritative.
+
+### Fieldora media identity and project association certification — run #33
+
+Result: SUCCESS (run `32900635567`, job `97973419696`).
+
+- The SQLite canonical claim now re-checks `(organization_id, sha256, size_bytes)` after acquiring `BEGIN IMMEDIATE` and deletes redundant object bytes for losing contenders.
+- The formerly red eight-way upload-completion race passed.
+- PostgreSQL identity and browser Project-association tests remained green and unchanged.
+
+### Fieldora media identity and project association certification — run #34
+
+Result: SUCCESS (run `32900762824`, job `97973835207`).
+
+- Ruff passed.
+- Eight simultaneous SQLite resumable-upload completions converge to one canonical media ID and one object file.
+- Eight simultaneous SQLite direct registrations also converge to one canonical media ID and one object file.
+- PostgreSQL and browser Project-association coverage remained green.
+- This closes WEB-012 across both reference/SQLite entry paths and the managed PostgreSQL path.
 
 ### Fieldora Platform server certification — run #522
 

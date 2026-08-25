@@ -42,6 +42,7 @@ _FORBIDDEN_EXTENSIONS = {
 _DEFAULT_MAX_BYTES = 256 * 1024 * 1024 * 1024
 _MAX_MANIFEST_BYTES = 4 * 1024 * 1024
 _MAX_MANIFEST_FILES = 50_000
+_INSTALL_RECEIPT_NAME = "FIELDORA-INSTALL.json"
 
 
 class MapBundleError(ModelBundleError):
@@ -237,6 +238,8 @@ def install_map_bundle(
         signature_path = bundle_dir.resolve() / "manifest.sig"
         if signature_path.is_file() and not signature_path.is_symlink():
             shutil.copyfile(signature_path, staging / "manifest.sig", follow_symlinks=False)
+        receipt = json.dumps(verified.registry_record(), sort_keys=True, indent=2) + "\n"
+        (staging / _INSTALL_RECEIPT_NAME).write_text(receipt, encoding="utf-8")
         destination.parent.mkdir(parents=True, exist_ok=True)
         os.replace(staging, destination)
     except Exception:

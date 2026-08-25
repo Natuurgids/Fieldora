@@ -32,7 +32,10 @@ from natureai_next.server.linked_storage_web import patch_linked_storage_web_res
 from natureai_next.server.navigation_web_compatibility import patch_navigation_web_response
 from natureai_next.server.offline_models_web import patch_offline_models_web_response
 from natureai_next.server.science_workflow_web import patch_science_workflow_web_response
-from natureai_next.server.web_capabilities import patch_zero_trust_web_response
+from natureai_next.server.web_capabilities import (
+    patch_zero_trust_web_response,
+    project_help_response,
+)
 from natureai_next.server.web_compatibility import (
     patch_web_response,
     public_response,
@@ -155,6 +158,7 @@ def handler_for(
             body = self.rfile.read(content_length) if content_length else b""
             headers = {key: value for key, value in self.headers.items()}
             response = application.dispatch(self.command, target, headers, body)
+            response = project_help_response(application, target, headers, response)
             response = patch_managed_web_response(target, response)
             self._write(response)
 

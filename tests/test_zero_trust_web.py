@@ -84,8 +84,20 @@ def _restricted_api(route: Route) -> None:
             "display_name": "Restricted User",
             "organization_id": "local",
         }
-    elif path == "runtime":
-        payload = {"version": "5", "readiness": {"mode": "managed"}, "backends": {}}
+    elif path == "help":
+        payload = {
+            "items": [
+                {"topic_id": "quick-start", "title": "Quick start", "workspace": "home"},
+                {"topic_id": "accessibility", "title": "Keyboard and accessibility", "workspace": "help"},
+            ]
+        }
+    elif path.startswith("help/"):
+        payload = {
+            "topic_id": "quick-start",
+            "title": "Quick start",
+            "workspace": "home",
+            "content": "Safe help content.",
+        }
     elif path in {"health/live", "health/ready"}:
         payload = {"live": True, "ready": True}
     else:
@@ -101,12 +113,22 @@ def test_unauthorized_workspaces_and_actions_are_absent_and_deep_links_fail_clos
     with _web_fixture(tmp_path) as url, sync_playwright() as playwright:
         browser = getattr(playwright, browser_name).launch(headless=True)
         page = browser.new_page()
+        api_paths: list[str] = []
+        page.on(
+            "request",
+            lambda request: api_paths.append(
+                request.url.split("/api/v1/", 1)[-1].split("?", 1)[0]
+            )
+            if "/api/v1/" in request.url
+            else None,
+        )
         page.route("**/api/v1/**", _restricted_api)
         page.add_init_script(
             "sessionStorage.setItem('fieldora-session','restricted-certification-token')"
         )
         page.goto(url)
         page.wait_for_function("document.body.dataset.fieldoraCapabilities === 'ready'")
+        page.wait_for_selector("#workspace:not([hidden])")
 
         assert page.locator('.nav[data-page="library"]').is_visible()
         assert page.locator('.nav[data-page="projects"]').is_hidden()
@@ -117,13 +139,34 @@ def test_unauthorized_workspaces_and_actions_are_absent_and_deep_links_fail_clos
         assert page.locator(".go-import").first.is_hidden()
         assert page.locator("#portfolio-new-project").is_hidden()
 
-        page.evaluate("showPage('projects')")
+        assert page.locator("#home-metrics").is_hidden()
+        assert page.locator("#home-projects").locator("..").is_hidden()
+        assert page.locator("#home-runtime").locator("..").is_hidden()
+        home_text = page.locator("#page-home").inner_text()
+        assert "Projects" not in home_text
+        assert "Dossiers" not in home_text
+        assert "Server mode" not in home_text
+        assert "Version" not in home_text
+        assert "projects" not in api_paths
+        assert "dossiers" not in api_paths
+        assert "runtime" not in api_paths
+
+        page.evaluate("location.hash='#projects'")
+        page.wait_for_function("location.hash !== '#projects'")
         assert page.locator("#page-projects").is_hidden()
         assert page.locator("#page-home").is_visible()
-        assert page.evaluate("location.hash") != "#projects"
+        assert "projects" not in api_paths
 
-        page.evaluate("showPage('operator')")
+        page.evaluate("location.hash='#operator'")
+        page.wait_for_function("location.hash !== '#operator'")
         assert page.locator("#page-operator").is_hidden()
         assert page.locator("#page-home").is_visible()
+        assert "operator/overview" not in api_paths
+
+        page.locator('.nav[data-page="help"]').click()
+        page.wait_for_selector("#page-help:not([hidden])")
+        help_text = page.locator("#page-help").inner_text()
+        assert "Administration" not in help_text
+        assert "Operator" not in help_text
 
         browser.close()

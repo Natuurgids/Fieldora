@@ -15,7 +15,7 @@ from natureai_next.domain.access_control import (
 )
 from natureai_next.server.api import ApiResponse
 from natureai_next.server.http import handler_for
-from natureai_next.server.web_capabilities import capability_payload
+from natureai_next.server.web_capabilities import capability_payload, project_help_response
 
 
 class AccessRepository:
@@ -79,6 +79,7 @@ def application(repository: AccessRepository):
     return SimpleNamespace(
         _access_repository=repository,
         _decisions=PolicyDecisionService(repository),
+        _identity=lambda _headers: ("test-token", repository.identity),
     )
 
 
@@ -102,6 +103,72 @@ def test_capabilities_fail_closed_and_explicit_deny_hides_projects() -> None:
     assert payload["pages"]["operator"] is False
 
 
+def test_operator_capability_uses_real_infrastructure_pbac_vocabulary() -> None:
+    identity = Identity("user-1", IdentityKind.USER, "User", "local")
+    repository = AccessRepository(
+        identity,
+        (
+            policy(
+                "operator-reader",
+                actions=("infrastructure.view",),
+                resource_types=("infrastructure",),
+                purpose="administration",
+            ),
+        ),
+    )
+
+    payload = capability_payload(application(repository), identity)
+
+    assert payload["pages"]["operator"] is True
+    assert payload["pages"]["administration"] is True
+
+
+def test_operator_explicit_deny_overrides_real_infrastructure_grant() -> None:
+    identity = Identity("user-1", IdentityKind.USER, "User", "local")
+    repository = AccessRepository(
+        identity,
+        (
+            policy(
+                "allow-operator",
+                actions=("infrastructure.view",),
+                resource_types=("infrastructure",),
+                purpose="administration",
+            ),
+            policy(
+                "deny-operator",
+                effect=PolicyEffect.DENY,
+                actions=("infrastructure.view",),
+                resource_types=("infrastructure",),
+                purpose="administration",
+            ),
+        ),
+    )
+
+    payload = capability_payload(application(repository), identity)
+
+    assert payload["pages"]["operator"] is False
+    assert payload["pages"]["administration"] is False
+
+
+def test_review_capability_uses_real_review_case_pbac_vocabulary() -> None:
+    identity = Identity("user-1", IdentityKind.USER, "User", "local")
+    repository = AccessRepository(
+        identity,
+        (
+            policy(
+                "review-reader",
+                actions=("view_review",),
+                resource_types=("review_case",),
+            ),
+        ),
+    )
+
+    payload = capability_payload(application(repository), identity)
+
+    assert payload["pages"]["intake-review"] is True
+    assert payload["pages"]["administration"] is True
+
+
 def test_project_scoped_role_reveals_workspace_but_not_scope_identifier() -> None:
     identity = Identity("user-1", IdentityKind.USER, "User", "local")
     repository = AccessRepository(
@@ -122,6 +189,52 @@ def test_project_scoped_role_reveals_workspace_but_not_scope_identifier() -> Non
     assert payload["pages"]["projects"] is True
     assert payload["pages"]["research"] is True
     assert "secret-project-id" not in json.dumps(payload)
+
+
+def test_help_projection_removes_denied_workspace_topics_and_direct_lookup() -> None:
+    identity = Identity("user-1", IdentityKind.USER, "User", "local")
+    repository = AccessRepository(
+        identity,
+        (policy("allow-library", resource_types=("asset",)),),
+    )
+    app = application(repository)
+    catalogue = ApiResponse.json(
+        200,
+        {
+            "items": [
+                {"topic_id": "quick-start", "title": "Quick start", "workspace": "home"},
+                {"topic_id": "library", "title": "Library", "workspace": "library"},
+                {"topic_id": "admin", "title": "Administration", "workspace": "administration"},
+                {"topic_id": "operator", "title": "Operator", "workspace": "operator"},
+                {"topic_id": "accessibility", "title": "Accessibility", "workspace": "help"},
+            ]
+        },
+    )
+
+    projected = project_help_response(app, "/api/v1/help", {}, catalogue)
+    items = json.loads(projected.body)["items"]
+
+    assert [item["topic_id"] for item in items] == [
+        "quick-start",
+        "library",
+        "accessibility",
+    ]
+    denied = project_help_response(
+        app,
+        "/api/v1/help/operator",
+        {},
+        ApiResponse.json(
+            200,
+            {
+                "topic_id": "operator",
+                "title": "Operator",
+                "workspace": "operator",
+                "content": "hidden",
+            },
+        ),
+    )
+    assert denied.status == 404
+    assert json.loads(denied.body) == {"error": "help_topic_not_found"}
 
 
 def test_http_handler_writes_immutable_tuple_headers() -> None:

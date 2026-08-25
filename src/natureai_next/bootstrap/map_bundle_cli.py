@@ -156,7 +156,10 @@ def verify_map_bundle(
     for entry in entries:
         if not isinstance(entry, dict):
             raise MapBundleError("manifest file entries must be objects")
-        relative = _safe_relative_path(entry.get("path"))
+        try:
+            relative = _safe_relative_path(entry.get("path"))
+        except ModelBundleError as exc:
+            raise MapBundleError(str(exc)) from exc
         relative_text = relative.as_posix()
         if relative_text in seen:
             raise MapBundleError(f"duplicate bundle path: {relative_text}")
@@ -219,70 +222,62 @@ def install_map_bundle(
     map_store.mkdir(parents=True, exist_ok=True)
     destination = map_store / verified.map_id / verified.version
     if destination.exists():
-        raise MapBundleError(f"map version is already installed: {verified.artifact_storage_id}")
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    temp_root = Path(tempfile.mkdtemp(prefix=".fieldora-map-", dir=destination.parent))
+        raise MapBundleError(f"map bundle is already installed: {verified.registry_id}")
+    staging_root = Path(tempfile.mkdtemp(prefix=".fieldora-map-", dir=map_store))
     try:
-        resolved_bundle = bundle_dir.resolve()
+        staging = staging_root / verified.map_id / verified.version
+        staging.mkdir(parents=True)
         for entry in verified.files:
             relative = PurePosixPath(str(entry["path"]))
-            source = resolved_bundle.joinpath(*relative.parts)
-            target = temp_root.joinpath(*relative.parts)
-            target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(source, target, follow_symlinks=False)
-        (temp_root / "FIELDORA-INSTALL.json").write_text(
-            json.dumps(verified.registry_record(), ensure_ascii=False, sort_keys=True, indent=2) + "\n",
-            encoding="utf-8",
-        )
-        os.replace(temp_root, destination)
-    except BaseException:
-        shutil.rmtree(temp_root, ignore_errors=True)
+            source_path = bundle_dir.resolve().joinpath(*relative.parts)
+            target_path = staging.joinpath(*relative.parts)
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(source_path, target_path, follow_symlinks=False)
+        shutil.copyfile(bundle_dir.resolve() / "manifest.json", staging / "manifest.json", follow_symlinks=False)
+        signature_path = bundle_dir.resolve() / "manifest.sig"
+        if signature_path.is_file() and not signature_path.is_symlink():
+            shutil.copyfile(signature_path, staging / "manifest.sig", follow_symlinks=False)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        os.replace(staging, destination)
+    except Exception:
+        shutil.rmtree(staging_root, ignore_errors=True)
         raise
+    shutil.rmtree(staging_root, ignore_errors=True)
     return verified, destination
 
 
 def _parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="fieldora-map-bundle", description="Verify or install an offline Fieldora map bundle.")
-    sub = parser.add_subparsers(dest="command", required=True)
-    for name in ("verify", "install"):
-        command = sub.add_parser(name)
-        command.add_argument("bundle", type=Path)
-        command.add_argument("--max-bytes", type=int, default=_DEFAULT_MAX_BYTES)
-        command.add_argument("--trusted-signing-key", type=Path)
-        command.add_argument("--require-signature", action="store_true")
-        command.add_argument("--require-clean-scan", action="store_true")
-        if name == "install":
-            command.add_argument("--store", type=Path, required=True)
+    parser = argparse.ArgumentParser(description="Verify or install an offline Fieldora map bundle")
+    parser.add_argument("bundle", type=Path)
+    parser.add_argument("--map-store", type=Path)
+    parser.add_argument("--max-total-bytes", type=int, default=_DEFAULT_MAX_BYTES)
+    parser.add_argument("--trusted-signing-key", type=Path)
+    parser.add_argument("--require-signature", action="store_true")
+    parser.add_argument("--require-clean-scan", action="store_true")
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     kwargs = {
-        "max_total_bytes": args.max_bytes,
+        "max_total_bytes": args.max_total_bytes,
         "trusted_signing_key": args.trusted_signing_key,
         "require_signature": args.require_signature,
         "require_clean_scan": args.require_clean_scan,
     }
     try:
-        if args.command == "verify":
+        if args.map_store is None:
             verified = verify_map_bundle(args.bundle, **kwargs)
-            output = {
-                "map_id": verified.map_id,
-                "version": verified.version,
-                "total_bytes": verified.total_bytes,
-                "verification": "sha256-per-file",
-                "manifest_signature": "ed25519" if verified.signature_verified else "unsigned",
-                "signing_key_id": verified.signing_key_id,
-                "malware_scan": verified.malware_scan,
-            }
+            destination = None
         else:
-            verified, _destination = install_map_bundle(args.bundle, args.store, **kwargs)
-            output = verified.registry_record()
+            verified, destination = install_map_bundle(args.bundle, args.map_store, **kwargs)
     except MapBundleError as exc:
-        print(json.dumps({"ok": False, "error": str(exc)}, separators=(",", ":")))
+        print(str(exc))
         return 2
-    print(json.dumps({"ok": True, **output}, separators=(",", ":")))
+    payload = verified.registry_record()
+    if destination is not None:
+        payload["installed_path"] = str(destination)
+    print(json.dumps(payload, sort_keys=True))
     return 0
 
 

@@ -45,7 +45,7 @@ $detected = ""
 if ([string]$manifest.package_class -eq "map" -or -not [string]::IsNullOrWhiteSpace([string]$manifest.map_id)) {
     $detected = "map"
 }
-elif (-not [string]::IsNullOrWhiteSpace([string]$manifest.model_id)) {
+elseif (-not [string]::IsNullOrWhiteSpace([string]$manifest.model_id)) {
     $detected = "model"
 }
 else {

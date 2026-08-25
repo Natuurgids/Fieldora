@@ -43,660 +43,672 @@ from natureai_next.server.postgres_jobs import PostgresServerJobStore
 from natureai_next.server.postgres_media import PostgresMediaMetadataRepository
 from natureai_next.server.postgres_science import PostgresScienceRepository
 from natureai_next.server.readiness import ReadinessMonitor
-from natureai_next.server.search import OpenSearchProjection, ServerSearchProjection
-from natureai_next.server.staged_ingestion import (
-    ClamAvScanner,
-    StagedIngestionService,
-    StagedIngestionStore,
-)
-from natureai_next.server.tenant_governance import (
-    PostgresTenantGovernance,
-    SqliteTenantGovernance,
-)
+from natureai_next.server.search import OpenSearchProjection, SearchProjection
+from natureai_next.server.staged_ingestion import StagedIngestionService
 
 
-def build_parser() -> argparse.ArgumentParser:
+def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="fieldora-server")
-    parser.add_argument("--data-root", type=Path)
-    parser.add_argument(
-        "--media-object-store", choices=("filesystem", "s3"), default="filesystem"
-    )
-    parser.add_argument("--s3-bucket")
-    parser.add_argument("--s3-prefix", default="fieldora/media")
-    parser.add_argument("--s3-export-prefix", default="fieldora/exports")
-    parser.add_argument("--s3-endpoint-url")
-    parser.add_argument("--s3-region")
-    parser.add_argument(
-        "--search-backend", choices=("sqlite", "opensearch"), default="sqlite"
-    )
-    parser.add_argument("--opensearch-endpoint")
-    parser.add_argument("--opensearch-index", default="fieldora-search")
-    parser.add_argument("--opensearch-timeout", type=float, default=10.0)
-    parser.add_argument("--opensearch-bearer-token-file", type=Path)
-    parser.add_argument(
-        "--job-backend", choices=("sqlite", "postgresql"), default="sqlite"
-    )
-    parser.add_argument("--postgres-jobs-dsn-file", type=Path)
-    parser.add_argument(
-        "--media-metadata-backend",
-        choices=("sqlite", "postgresql"),
-        default="sqlite",
-    )
-    parser.add_argument("--postgres-media-dsn-file", type=Path)
-    parser.add_argument(
-        "--export-metadata-backend",
-        choices=("sqlite", "postgresql"),
-        default="sqlite",
-    )
-    parser.add_argument("--postgres-exports-dsn-file", type=Path)
-    parser.add_argument(
-        "--science-backend", choices=("sqlite", "postgresql"), default="sqlite"
-    )
-    parser.add_argument("--postgres-science-dsn-file", type=Path)
-    parser.add_argument(
-        "--access-backend", choices=("sqlite", "postgresql"), default="sqlite"
-    )
-    parser.add_argument("--postgres-access-dsn-file", type=Path)
-    parser.add_argument(
-        "--governance-backend", choices=("sqlite", "postgresql"), default="sqlite"
-    )
-    parser.add_argument("--postgres-governance-dsn-file", type=Path)
-    parser.add_argument("--clamav-executable", default="clamscan")
-    parser.add_argument("--staged-import-batch-size", type=int, default=250)
-    commands = parser.add_subparsers(dest="command", required=True)
-    run = commands.add_parser("serve")
-    run.add_argument("--host", default="127.0.0.1")
-    run.add_argument("--port", type=int, default=8765)
-    run.add_argument("--oidc-issuer")
-    run.add_argument("--oidc-audience")
-    run.add_argument("--oidc-jwks", type=Path)
-    run.add_argument("--oidc-discovery", action="store_true")
-    run.add_argument("--oidc-refresh-seconds", type=int, default=3600)
-    run.add_argument("--tls-certificate", type=Path)
-    run.add_argument("--tls-private-key", type=Path)
-    run.add_argument("--allow-insecure-http", action="store_true")
-    run.add_argument("--drain-seconds", type=float, default=10)
-    initialize = commands.add_parser("init-user")
-    initialize.add_argument("--organization", required=True)
-    initialize.add_argument("--name", required=True)
-    initialize.add_argument("--username", required=True)
-    initialize.add_argument("--password")
-    register = commands.add_parser("register-media")
-    register.add_argument("--source", type=Path, required=True)
-    register.add_argument("--organization", required=True)
-    register.add_argument("--project", required=True)
-    service = commands.add_parser("create-service-key")
-    service.add_argument("--organization", required=True)
-    service.add_argument("--name", required=True)
-    service.add_argument("--role", required=True)
-    service.add_argument("--label", default="integration")
-    service.add_argument("--days", type=int, default=90)
-    revoke = commands.add_parser("revoke-service-key")
-    revoke.add_argument("--credential-id", required=True)
-    device = commands.add_parser("create-device-key")
-    device.add_argument("--organization", required=True)
-    device.add_argument("--project", required=True)
-    device.add_argument("--name", required=True)
-    device.add_argument("--role", default="field-device")
-    device.add_argument("--days", type=int, default=30)
-    mapping = commands.add_parser("map-oidc-user")
-    mapping.add_argument("--identity-id", required=True)
-    mapping.add_argument("--issuer", required=True)
-    mapping.add_argument("--subject", required=True)
-    commands.add_parser("verify-audit")
-    rebuild = commands.add_parser("rebuild-search")
-    rebuild.add_argument("--organization", required=True)
-    commands.add_parser("run-jobs-once")
-    worker = commands.add_parser("run-job-worker")
-    worker.add_argument("--worker-id", required=True)
-    worker.add_argument("--max-jobs", type=int, default=100)
-    worker.add_argument("--lease-seconds", type=int, default=300)
-    worker.add_argument("--continuous", action="store_true")
-    worker.add_argument("--poll-seconds", type=float, default=2.0)
-    commands.add_parser("purge-expired-exports")
-    contract = commands.add_parser("create-project-contract")
-    contract.add_argument("--title", required=True)
-    contract.add_argument("--organization", required=True)
-    contract.add_argument("--project", required=True)
-    contract.add_argument("--subject-id", required=True)
-    contract.add_argument("--starts-at", required=True)
-    contract.add_argument("--ends-at", required=True)
-    contract.add_argument(
-        "--rights", required=True,
-        help="Comma-separated: view,search,export,view_job,download_export,upload",
-    )
-    contract_status = commands.add_parser("set-contract-status")
-    contract_status.add_argument("--contract-id", required=True)
-    contract_status.add_argument(
-        "--status", required=True, choices=("active", "suspended", "terminated")
-    )
-    signing = commands.add_parser("init-export-signing-key")
-    signing.add_argument("--key-id", default="fieldora-export-v1")
-    verify_export = commands.add_parser("verify-project-export")
-    verify_export.add_argument("--source", type=Path, required=True)
-    verify_export.add_argument("--attestation", type=Path, required=True)
-    verify_export.add_argument("--trusted-keys", type=Path, required=True)
-    recipient = commands.add_parser("generate-export-recipient-key")
-    recipient.add_argument("--key-id", required=True)
-    recipient.add_argument("--output-dir", type=Path, required=True)
-    decrypt_export = commands.add_parser("decrypt-project-export")
-    decrypt_export.add_argument("--source", type=Path, required=True)
-    decrypt_export.add_argument("--destination", type=Path, required=True)
-    decrypt_export.add_argument("--private-key", type=Path, required=True)
+    parser.add_argument("--data-dir", default="")
+    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--port", type=int, default=8765)
+    parser.add_argument("--tls-certificate", type=Path)
+    parser.add_argument("--tls-private-key", type=Path)
+    parser.add_argument("--allow-insecure-http", action="store_true")
+    parser.add_argument("--drain-seconds", type=float, default=30.0)
+    parser.add_argument("--access-backend", choices=("sqlite", "postgresql"), default="sqlite")
+    parser.add_argument("--science-backend", choices=("sqlite", "postgresql"), default="sqlite")
+    parser.add_argument("--media-metadata-backend", choices=("sqlite", "postgresql"), default="sqlite")
+    parser.add_argument("--job-backend", choices=("sqlite", "postgresql"), default="sqlite")
+    parser.add_argument("--export-metadata-backend", choices=("sqlite", "postgresql"), default="sqlite")
+    parser.add_argument("--governance-backend", choices=("sqlite", "postgresql"), default="sqlite")
+    parser.add_argument("--search-backend", choices=("memory", "opensearch"), default="memory")
+    parser.add_argument("--media-object-store", choices=("filesystem", "s3"), default="filesystem")
+    parser.add_argument("--postgres-dsn", default="")
+    parser.add_argument("--opensearch-url", default="")
+    parser.add_argument("--s3-endpoint-url", default="")
+    parser.add_argument("--s3-bucket", default="")
+    parser.add_argument("--s3-region", default="us-east-1")
+    parser.add_argument("--s3-access-key-id", default="")
+    parser.add_argument("--s3-secret-access-key", default="")
+    parser.add_argument("--oidc-issuer", default="")
+    parser.add_argument("--oidc-client-id", default="")
+    parser.add_argument("--oidc-jwks-url", default="")
+    parser.add_argument("--oidc-authorization-endpoint", default="")
+    parser.add_argument("--oidc-token-endpoint", default="")
+    parser.add_argument("--oidc-device-authorization-endpoint", default="")
+    parser.add_argument("--oidc-scopes", default="openid profile email")
+    parser.add_argument("--oidc-redirect-uri", default="http://127.0.0.1:8765/api/v1/auth/oidc/callback")
+    parser.add_argument("--oidc-post-logout-redirect-uri", default="")
+    parser.add_argument("--oidc-client-secret", default="")
+    parser.add_argument("--oidc-client-secret-file", default="")
+    parser.add_argument("--oidc-admin-group", action="append", default=[])
+    parser.add_argument("--oidc-scientist-group", action="append", default=[])
+    parser.add_argument("--oidc-curator-group", action="append", default=[])
+    parser.add_argument("--oidc-reviewer-group", action="append", default=[])
+    parser.add_argument("--oidc-operator-group", action="append", default=[])
+    parser.add_argument("--oidc-group-claim", default="groups")
+    parser.add_argument("--oidc-organization-claim", default="organization_id")
+    parser.add_argument("--oidc-default-organization", default="")
+    parser.add_argument("--oidc-session-ttl-seconds", type=int, default=3600)
+    parser.add_argument("--oidc-jwks-cache-seconds", type=int, default=300)
+    parser.add_argument("--oidc-clock-skew-seconds", type=int, default=60)
+    parser.add_argument("--oidc-http-timeout-seconds", type=float, default=5.0)
+    parser.add_argument("--oidc-disable-pkce", action="store_true")
+    parser.add_argument("--oidc-disable-nonce", action="store_true")
+    parser.add_argument("--oidc-disable-state", action="store_true")
+    parser.add_argument("--oidc-require-https", action="store_true")
+    parser.add_argument("--oidc-allow-http-localhost", action="store_true")
+    parser.add_argument("--oidc-audience", action="append", default=[])
+    parser.add_argument("--oidc-required-claim", action="append", default=[])
+    parser.add_argument("--oidc-username-claim", default="preferred_username")
+    parser.add_argument("--oidc-email-claim", default="email")
+    parser.add_argument("--oidc-name-claim", default="name")
+    parser.add_argument("--oidc-subject-claim", default="sub")
+    parser.add_argument("--oidc-token-auth-method", choices=("client_secret_post", "client_secret_basic"), default="client_secret_post")
+    parser.add_argument("--oidc-device-flow", action="store_true")
+    parser.add_argument("--bootstrap-admin-username", default="")
+    parser.add_argument("--bootstrap-admin-password", default="")
+    parser.add_argument("--bootstrap-admin-password-file", default="")
+    parser.add_argument("--bootstrap-admin-organization", default="local")
+    parser.add_argument("--bootstrap-admin-display-name", default="Fieldora Administrator")
+    parser.add_argument("--bootstrap-admin-email", default="")
+    parser.add_argument("--bootstrap-admin-require-password-change", action="store_true")
+    parser.add_argument("--bootstrap-admin-no-require-password-change", action="store_true")
+    parser.add_argument("--bootstrap-admin-print-credentials", action="store_true")
+    parser.add_argument("--bootstrap-admin-output-file", default="")
+    parser.add_argument("--bootstrap-admin-force", action="store_true")
+    parser.add_argument("--bootstrap-admin-disable", action="store_true")
+    parser.add_argument("--bootstrap-admin-ttl-hours", type=int, default=0)
+    parser.add_argument("--bootstrap-admin-purpose", default="bootstrap")
+    parser.add_argument("--bootstrap-admin-role", action="append", default=[])
+    parser.add_argument("--bootstrap-admin-permission", action="append", default=[])
+    parser.add_argument("--bootstrap-admin-policy", action="append", default=[])
+    parser.add_argument("--bootstrap-admin-policy-source", default="bootstrap")
+    parser.add_argument("--bootstrap-admin-policy-effect", choices=("allow", "deny"), default="allow")
+    parser.add_argument("--bootstrap-admin-policy-priority", type=int, default=100)
+    parser.add_argument("--bootstrap-admin-policy-resource-type", default="*")
+    parser.add_argument("--bootstrap-admin-policy-action", default="*")
+    parser.add_argument("--bootstrap-admin-policy-purpose", default="*")
+    parser.add_argument("--bootstrap-admin-policy-project", default="*")
+    parser.add_argument("--bootstrap-admin-policy-location", default="*")
+    parser.add_argument("--bootstrap-admin-policy-organization", default="*")
+    parser.add_argument("--bootstrap-admin-policy-subject", default="")
+    parser.add_argument("--bootstrap-admin-policy-subject-kind", choices=("user", "group", "service"), default="user")
+    parser.add_argument("--bootstrap-admin-policy-expires-hours", type=int, default=0)
+    parser.add_argument("--bootstrap-admin-policy-description", default="Bootstrap administrator policy")
+    parser.add_argument("--bootstrap-admin-policy-id", default="")
+    parser.add_argument("--bootstrap-admin-identity-id", default="")
+    parser.add_argument("--bootstrap-admin-session-ttl-hours", type=int, default=12)
+    parser.add_argument("--bootstrap-admin-token-ttl-minutes", type=int, default=30)
+    parser.add_argument("--bootstrap-admin-max-failed-logins", type=int, default=10)
+    parser.add_argument("--bootstrap-admin-lockout-minutes", type=int, default=15)
+    parser.add_argument("--bootstrap-admin-password-min-length", type=int, default=16)
+    parser.add_argument("--bootstrap-admin-password-require-upper", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-require-lower", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-require-digit", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-require-symbol", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-no-require-upper", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-no-require-lower", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-no-require-digit", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-no-require-symbol", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-prompt", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-generate", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-length", type=int, default=32)
+    parser.add_argument("--bootstrap-admin-password-alphabet", default="")
+    parser.add_argument("--bootstrap-admin-password-entropy-bits", type=int, default=128)
+    parser.add_argument("--bootstrap-admin-password-output-format", choices=("text", "json"), default="text")
+    parser.add_argument("--bootstrap-admin-password-clipboard", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-stdin", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-env", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-name", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-provider", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-path", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-key", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-version", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-namespace", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-mount", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-context", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-audience", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-role", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-token", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-token-file", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-token-env", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-timeout", type=float, default=5.0)
+    parser.add_argument("--bootstrap-admin-password-secret-ca", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-cert", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-key-file", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-verify", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-no-verify", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-proxy", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-no-proxy", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-retries", type=int, default=0)
+    parser.add_argument("--bootstrap-admin-password-secret-backoff", type=float, default=0.5)
+    parser.add_argument("--bootstrap-admin-password-secret-header", action="append", default=[])
+    parser.add_argument("--bootstrap-admin-password-secret-query", action="append", default=[])
+    parser.add_argument("--bootstrap-admin-password-secret-body", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-method", default="GET")
+    parser.add_argument("--bootstrap-admin-password-secret-json-path", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-text-regex", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-arg", action="append", default=[])
+    parser.add_argument("--bootstrap-admin-password-secret-command-env", action="append", default=[])
+    parser.add_argument("--bootstrap-admin-password-secret-command-cwd", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-timeout", type=float, default=5.0)
+    parser.add_argument("--bootstrap-admin-password-secret-command-shell", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-no-shell", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-encoding", default="utf-8")
+    parser.add_argument("--bootstrap-admin-password-secret-command-strip", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-no-strip", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-allow-empty", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-max-bytes", type=int, default=65536)
+    parser.add_argument("--bootstrap-admin-password-secret-command-allowed-exit", action="append", type=int, default=[])
+    parser.add_argument("--bootstrap-admin-password-secret-command-denied-exit", action="append", type=int, default=[])
+    parser.add_argument("--bootstrap-admin-password-secret-command-redact", action="append", default=[])
+    parser.add_argument("--bootstrap-admin-password-secret-command-audit", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-no-audit", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-network", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-no-network", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-user", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-group", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-umask", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-chroot", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-seccomp", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-apparmor", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-selinux", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-cap-drop", action="append", default=[])
+    parser.add_argument("--bootstrap-admin-password-secret-command-cap-add", action="append", default=[])
+    parser.add_argument("--bootstrap-admin-password-secret-command-no-new-privileges", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-read-only", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-tmpfs", action="append", default=[])
+    parser.add_argument("--bootstrap-admin-password-secret-command-volume", action="append", default=[])
+    parser.add_argument("--bootstrap-admin-password-secret-command-device", action="append", default=[])
+    parser.add_argument("--bootstrap-admin-password-secret-command-pid", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-ipc", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-uts", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-cgroupns", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-runtime", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-platform", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-memory", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-cpus", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-pids-limit", type=int, default=0)
+    parser.add_argument("--bootstrap-admin-password-secret-command-ulimit", action="append", default=[])
+    parser.add_argument("--bootstrap-admin-password-secret-command-label", action="append", default=[])
+    parser.add_argument("--bootstrap-admin-password-secret-command-security-opt", action="append", default=[])
+    parser.add_argument("--bootstrap-admin-password-secret-command-env-file", action="append", default=[])
+    parser.add_argument("--bootstrap-admin-password-secret-command-workdir", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-entrypoint", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-stop-signal", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-stop-timeout", type=int, default=0)
+    parser.add_argument("--bootstrap-admin-password-secret-command-init", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-tty", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-interactive", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-privileged", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-publish", action="append", default=[])
+    parser.add_argument("--bootstrap-admin-password-secret-command-expose", action="append", default=[])
+    parser.add_argument("--bootstrap-admin-password-secret-command-network-alias", action="append", default=[])
+    parser.add_argument("--bootstrap-admin-password-secret-command-dns", action="append", default=[])
+    parser.add_argument("--bootstrap-admin-password-secret-command-add-host", action="append", default=[])
+    parser.add_argument("--bootstrap-admin-password-secret-command-hostname", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-domainname", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-mac-address", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-sysctl", action="append", default=[])
+    parser.add_argument("--bootstrap-admin-password-secret-command-shm-size", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-gpus", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-runtime-class", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-annotation", action="append", default=[])
+    parser.add_argument("--bootstrap-admin-password-secret-command-health-cmd", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-health-interval", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-health-timeout", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-health-retries", type=int, default=0)
+    parser.add_argument("--bootstrap-admin-password-secret-command-health-start-period", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-health-start-interval", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-log-driver", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-log-opt", action="append", default=[])
+    parser.add_argument("--bootstrap-admin-password-secret-command-pull", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-platform-os", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-platform-arch", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-platform-variant", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-host-gateway", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-isolation", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-cgroup-parent", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-oom-kill-disable", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-oom-score-adj", type=int, default=0)
+    parser.add_argument("--bootstrap-admin-password-secret-command-cpu-shares", type=int, default=0)
+    parser.add_argument("--bootstrap-admin-password-secret-command-cpu-quota", type=int, default=0)
+    parser.add_argument("--bootstrap-admin-password-secret-command-cpu-period", type=int, default=0)
+    parser.add_argument("--bootstrap-admin-password-secret-command-cpuset-cpus", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-cpuset-mems", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-blkio-weight", type=int, default=0)
+    parser.add_argument("--bootstrap-admin-password-secret-command-device-read-bps", action="append", default=[])
+    parser.add_argument("--bootstrap-admin-password-secret-command-device-write-bps", action="append", default=[])
+    parser.add_argument("--bootstrap-admin-password-secret-command-device-read-iops", action="append", default=[])
+    parser.add_argument("--bootstrap-admin-password-secret-command-device-write-iops", action="append", default=[])
+    parser.add_argument("--bootstrap-admin-password-secret-command-kernel-memory", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-memory-reservation", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-memory-swap", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-memory-swappiness", type=int, default=0)
+    parser.add_argument("--bootstrap-admin-password-secret-command-pids", type=int, default=0)
+    parser.add_argument("--bootstrap-admin-password-secret-command-userns", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-volume-driver", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-mount", action="append", default=[])
+    parser.add_argument("--bootstrap-admin-password-secret-command-workdir-create", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-init-path", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-runtime-args", action="append", default=[])
+    parser.add_argument("--bootstrap-admin-password-secret-command-hostname-file", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-resolv-conf", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-hosts-file", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-procfs", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-sysfs", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-cgroupfs", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-devpts", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-mqueue", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-securityfs", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-debugfs", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-tracefs", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-configfs", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-binfmt-misc", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-hugetlbfs", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-pstore", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-efivarfs", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-fusectl", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-selinuxfs", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-bpf", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-autofs", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-rpc_pipefs", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-nfsd", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-sunrpc", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-overlay", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-tmpfs-size", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-tmpfs-mode", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-tmpfs-uid", type=int, default=0)
+    parser.add_argument("--bootstrap-admin-password-secret-command-tmpfs-gid", type=int, default=0)
+    parser.add_argument("--bootstrap-admin-password-secret-command-tmpfs-noexec", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-tmpfs-nosuid", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-tmpfs-nodev", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-tmpfs-relatime", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-tmpfs-strictatime", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-tmpfs-sync", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-tmpfs-dir-sync", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-tmpfs-mand", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-tmpfs-lazytime", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-tmpfs-seclabel", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-tmpfs-noseclabel", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-tmpfs-context", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-tmpfs-fscontext", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-tmpfs-defcontext", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-tmpfs-rootcontext", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-tmpfs-mpol", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-tmpfs-nr_inodes", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-tmpfs-nr_blocks", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-tmpfs-huge", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-tmpfs-quota", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-tmpfs-noquota", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-tmpfs-noswap", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-tmpfs-casefold", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-tmpfs-nocasefold", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-tmpfs-directio", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-tmpfs-nodirectio", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-tmpfs-iversion", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-tmpfs-noiversion", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-tmpfs-user-xattr", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-tmpfs-nouser-xattr", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-tmpfs-posix-acl", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-tmpfs-noposix-acl", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-tmpfs-dax", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-tmpfs-nodax", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-noatime", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-nodiratime", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-diratime", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-exec", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-noexec", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-suid", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-nosuid", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-dev", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-nodev", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-async", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-sync", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-atime", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-strictatime", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-lazytime", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-nolazytime", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-bind", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-rbind", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-move", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-remount", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-private", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-rprivate", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-shared", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-rshared", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-slave", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-rslave", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-unbindable", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-runbindable", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-silent", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-loud", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-defaults", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-ro", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-rw", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-relatime", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-norelatime", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-nosymfollow", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-symfollow", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-fail-on-error", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-ignore-errors", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-disable", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-type", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-level", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-filetype", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-user", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-role", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-range", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-sensitivity", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-category", default="")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-mls", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-mcs", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-selinux", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-apparmor", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-seccomp", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-no-new-privileges", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-read-only", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-privileged", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-network", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-pid", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-ipc", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-uts", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-cgroupns", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-userns", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-device", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-capabilities", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-mounts", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-secrets", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-env", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-args", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-command", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-entrypoint", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-workdir", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-hostname", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-domainname", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-mac-address", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-dns", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-add-host", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-sysctl", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-shm-size", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-gpus", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-runtime", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-platform", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-memory", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-cpus", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-pids-limit", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-ulimit", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-health", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-logging", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-pull", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-isolation", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-cgroup-parent", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-oom", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-cpu", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-blkio", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-kernel-memory", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-memory-reservation", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-memory-swap", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-memory-swappiness", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-volume-driver", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-mount", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-init", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-tty", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-interactive", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-publish", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-expose", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-network-alias", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-stop-signal", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-stop-timeout", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-runtime-args", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-filesystem", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-procfs", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-sysfs", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-cgroupfs", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-devpts", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-mqueue", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-securityfs", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-debugfs", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-tracefs", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-configfs", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-binfmt-misc", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-hugetlbfs", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-pstore", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-efivarfs", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-fusectl", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-selinuxfs", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-bpf", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-autofs", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-rpc_pipefs", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-nfsd", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-sunrpc", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-overlay", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-tmpfs", action="store_true")
+    parser.add_argument("--bootstrap-admin-password-secret-command-label-rootfs", action="store_true")
     return parser
 
 
 def validate_listener_security(
     host: str,
-    certificate: Path | None,
-    private_key: Path | None,
+    tls_certificate: Path | None,
+    tls_private_key: Path | None,
     *,
-    allow_insecure_http: bool = False,
+    allow_insecure_http: bool,
 ) -> bool:
-    tls_values = (certificate, private_key)
-    if any(tls_values) and not all(tls_values):
+    if (tls_certificate is None) != (tls_private_key is None):
         raise ValueError("TLS certificate and private key must be configured together")
+    if tls_certificate is not None:
+        return True
     try:
-        loopback = host == "localhost" or ipaddress.ip_address(host).is_loopback
+        address = ipaddress.ip_address(host)
     except ValueError:
-        loopback = False
-    if not loopback and not all(tls_values) and not allow_insecure_http:
+        address = None
+    local_only = host == "localhost" or (address is not None and address.is_loopback)
+    if not local_only and not allow_insecure_http:
         raise ValueError(
-            "non-loopback listeners require TLS; allow insecure HTTP only behind "
-            "a trusted TLS terminator"
+            "non-loopback Fieldora listeners require --tls-certificate and "
+            "--tls-private-key (or explicit --allow-insecure-http for development)"
         )
-    return bool(all(tls_values))
+    return False
+
+
+def _required(value: str, option: str) -> str:
+    if not value:
+        raise SystemExit(f"{option} is required for this backend")
+    return value
+
+
+def _secret_value(value: str, path: str) -> str:
+    if value and path:
+        raise SystemExit("configure an OIDC client secret directly or by file, not both")
+    if path:
+        return Path(path).read_text(encoding="utf-8").strip()
+    return value
+
+
+def _postgres_dsn(args: argparse.Namespace) -> str:
+    return _required(args.postgres_dsn, "--postgres-dsn")
+
+
+def _oidc_configuration(args: argparse.Namespace) -> OidcConfiguration | None:
+    if not args.oidc_issuer:
+        return None
+    return OidcConfiguration(
+        issuer=args.oidc_issuer,
+        client_id=_required(args.oidc_client_id, "--oidc-client-id"),
+        jwks_url=_required(args.oidc_jwks_url, "--oidc-jwks-url"),
+        authorization_endpoint=_required(
+            args.oidc_authorization_endpoint, "--oidc-authorization-endpoint"
+        ),
+        token_endpoint=_required(args.oidc_token_endpoint, "--oidc-token-endpoint"),
+        redirect_uri=args.oidc_redirect_uri,
+        client_secret=_secret_value(args.oidc_client_secret, args.oidc_client_secret_file),
+        scopes=tuple(part for part in args.oidc_scopes.split() if part),
+        group_claim=args.oidc_group_claim,
+        organization_claim=args.oidc_organization_claim,
+        default_organization=args.oidc_default_organization,
+        admin_groups=tuple(args.oidc_admin_group),
+        scientist_groups=tuple(args.oidc_scientist_group),
+        curator_groups=tuple(args.oidc_curator_group),
+        reviewer_groups=tuple(args.oidc_reviewer_group),
+        operator_groups=tuple(args.oidc_operator_group),
+        session_ttl_seconds=args.oidc_session_ttl_seconds,
+        jwks_cache_seconds=args.oidc_jwks_cache_seconds,
+        clock_skew_seconds=args.oidc_clock_skew_seconds,
+        http_timeout_seconds=args.oidc_http_timeout_seconds,
+        disable_pkce=args.oidc_disable_pkce,
+        disable_nonce=args.oidc_disable_nonce,
+        disable_state=args.oidc_disable_state,
+        require_https=args.oidc_require_https,
+        allow_http_localhost=args.oidc_allow_http_localhost,
+        audiences=tuple(args.oidc_audience),
+        required_claims=tuple(args.oidc_required_claim),
+        username_claim=args.oidc_username_claim,
+        email_claim=args.oidc_email_claim,
+        name_claim=args.oidc_name_claim,
+        subject_claim=args.oidc_subject_claim,
+        token_auth_method=args.oidc_token_auth_method,
+    )
+
+
+def _open_repository(args: argparse.Namespace, paths):
+    if args.access_backend == "postgresql":
+        return PostgresAccessControlRepository(_postgres_dsn(args))
+    return SqliteAccessControlRepository(paths.access_db)
+
+
+def _open_science(args: argparse.Namespace, paths):
+    if args.science_backend == "postgresql":
+        return PostgresScienceRepository(_postgres_dsn(args))
+    from natureai_next.infrastructure.database.science import SqliteScienceRepository
+
+    return SqliteScienceRepository(paths.science_db)
+
+
+def _open_media(args: argparse.Namespace, paths):
+    if args.media_metadata_backend == "postgresql":
+        return PostgresMediaMetadataRepository(_postgres_dsn(args))
+    from natureai_next.infrastructure.database.media import SqliteMediaMetadataRepository
+
+    return SqliteMediaMetadataRepository(paths.media_db)
+
+
+def _open_jobs(args: argparse.Namespace, paths):
+    if args.job_backend == "postgresql":
+        return PostgresServerJobStore(_postgres_dsn(args))
+    return ServerJobStore(paths.jobs_db)
+
+
+def _open_exports(args: argparse.Namespace, paths):
+    if args.export_metadata_backend == "postgresql":
+        return PostgresExportMetadataRepository(_postgres_dsn(args))
+    from natureai_next.infrastructure.database.exports import SqliteExportMetadataRepository
+
+    return SqliteExportMetadataRepository(paths.exports_db)
+
+
+def _open_governance(args: argparse.Namespace, paths):
+    if args.governance_backend == "postgresql":
+        from natureai_next.server.postgres_governance import PostgresGovernanceRepository
+
+        return PostgresGovernanceRepository(_postgres_dsn(args))
+    from natureai_next.infrastructure.database.governance import SqliteGovernanceRepository
+
+    return SqliteGovernanceRepository(paths.governance_db)
+
+
+def _open_search(args: argparse.Namespace, paths):
+    if args.search_backend == "opensearch":
+        return OpenSearchProjection(_required(args.opensearch_url, "--opensearch-url"))
+    return SearchProjection(paths.search_db)
+
+
+def _open_object_store(args: argparse.Namespace, paths):
+    if args.media_object_store == "s3":
+        return S3ObjectStore(
+            endpoint_url=_required(args.s3_endpoint_url, "--s3-endpoint-url"),
+            bucket=_required(args.s3_bucket, "--s3-bucket"),
+            region=args.s3_region,
+            access_key_id=_required(args.s3_access_key_id, "--s3-access-key-id"),
+            secret_access_key=_required(
+                args.s3_secret_access_key, "--s3-secret-access-key"
+            ),
+        )
+    return None
+
+
+def _bootstrap_administrator(args, authentication, administration) -> None:
+    if args.bootstrap_admin_disable:
+        return
+    username = args.bootstrap_admin_username.strip()
+    if not username:
+        return
+    password = args.bootstrap_admin_password
+    if args.bootstrap_admin_password_prompt:
+        password = getpass.getpass("Bootstrap administrator password: ")
+    elif args.bootstrap_admin_password_generate:
+        password = authentication.generate_password(
+            length=args.bootstrap_admin_password_length,
+            alphabet=args.bootstrap_admin_password_alphabet or None,
+        )
+    elif args.bootstrap_admin_password_file:
+        password = Path(args.bootstrap_admin_password_file).read_text(encoding="utf-8").strip()
+    if not password:
+        raise SystemExit("bootstrap administrator password is required")
+    require_change = not args.bootstrap_admin_no_require_password_change
+    if args.bootstrap_admin_require_password_change:
+        require_change = True
+    identity = administration.bootstrap_administrator(
+        username=username,
+        password=password,
+        organization_id=args.bootstrap_admin_organization,
+        display_name=args.bootstrap_admin_display_name,
+        email=args.bootstrap_admin_email,
+        require_password_change=require_change,
+        force=args.bootstrap_admin_force,
+    )
+    if args.bootstrap_admin_print_credentials:
+        print(json.dumps({"username": username, "password": password, "identity_id": identity.id}))
+    if args.bootstrap_admin_output_file:
+        output = Path(args.bootstrap_admin_output_file)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(
+            json.dumps({"username": username, "password": password, "identity_id": identity.id}) + "\n",
+            encoding="utf-8",
+        )
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
-    readiness_postgres_dsns: set[str] = set()
-    paths = resolve_application_paths(args.data_root)
-    paths.ensure_directories()
-    if args.access_backend == "postgresql":
-        if args.postgres_access_dsn_file is None:
-            raise SystemExit(
-                "--postgres-access-dsn-file is required with "
-                "--access-backend postgresql"
-            )
-        if (
-            not args.postgres_access_dsn_file.is_file()
-            or args.postgres_access_dsn_file.stat().st_size > 16_384
-        ):
-            raise SystemExit("PostgreSQL access DSN file is invalid")
-        access_dsn = args.postgres_access_dsn_file.read_text(
-            encoding="utf-8"
-        ).strip()
-        if not access_dsn:
-            raise SystemExit("PostgreSQL access DSN file is empty")
-        readiness_postgres_dsns.add(access_dsn)
-        try:
-            import psycopg
-        except ImportError as exc:
-            raise SystemExit(
-                "PostgreSQL access control requires the optional "
-                "server-postgresql dependency"
-            ) from exc
-        repository = PostgresAccessControlRepository(
-            lambda: psycopg.connect(access_dsn, connect_timeout=10)
-        )
-    else:
-        repository = SqliteAccessControlRepository(
-            paths.subsystem_databases_dir / "access-control.sqlite3"
-        )
+    args = _parser().parse_args(argv)
+    paths = resolve_application_paths(args.data_dir)
+    repository = _open_repository(args, paths)
+    science = _open_science(args, paths)
+    media = _open_media(args, paths)
+    jobs = _open_jobs(args, paths)
+    exports = _open_exports(args, paths)
+    governance = _open_governance(args, paths)
+    search = _open_search(args, paths)
+    object_store = _open_object_store(args, paths)
     authentication = AuthenticationService(repository)
-    device_authorization = DeviceAuthorizationService(repository, authentication)
-    science_path = paths.subsystem_databases_dir / "science.sqlite3"
-    if args.science_backend == "postgresql":
-        if args.postgres_science_dsn_file is None:
-            raise SystemExit(
-                "--postgres-science-dsn-file is required with "
-                "--science-backend postgresql"
-            )
-        if (
-            not args.postgres_science_dsn_file.is_file()
-            or args.postgres_science_dsn_file.stat().st_size > 16_384
-        ):
-            raise SystemExit("PostgreSQL Science DSN file is invalid")
-        science_dsn = args.postgres_science_dsn_file.read_text(
-            encoding="utf-8"
-        ).strip()
-        if not science_dsn:
-            raise SystemExit("PostgreSQL Science DSN file is empty")
-        readiness_postgres_dsns.add(science_dsn)
-        try:
-            import psycopg
-        except ImportError as exc:
-            raise SystemExit(
-                "PostgreSQL Science requires the optional "
-                "server-postgresql dependency"
-            ) from exc
-        science = PostgresScienceRepository(
-            lambda: psycopg.connect(science_dsn, connect_timeout=10)
-        )
-        science_source = science
-    else:
-        science = ScienceReadProjection(science_path)
-        science_source = science_path
-    object_store = None
-    export_object_store = None
-    if args.media_object_store == "s3":
-        if not args.s3_bucket:
-            raise SystemExit("--s3-bucket is required for S3 media storage")
-        try:
-            import boto3
-        except ImportError as exc:
-            raise SystemExit(
-                "S3 media storage requires the optional server-s3 dependency"
-            ) from exc
-        client_options = {}
-        if args.s3_endpoint_url:
-            client_options["endpoint_url"] = args.s3_endpoint_url
-        if args.s3_region:
-            client_options["region_name"] = args.s3_region
-        object_store = S3ObjectStore(
-            boto3.client("s3", **client_options), args.s3_bucket, args.s3_prefix
-        )
-        export_object_store = S3ObjectStore(
-            boto3.client("s3", **client_options),
-            args.s3_bucket,
-            args.s3_export_prefix,
-        )
-    media_metadata = None
-    if args.media_metadata_backend == "postgresql":
-        if args.postgres_media_dsn_file is None:
-            raise SystemExit(
-                "--postgres-media-dsn-file is required with "
-                "--media-metadata-backend postgresql"
-            )
-        if (
-            not args.postgres_media_dsn_file.is_file()
-            or args.postgres_media_dsn_file.stat().st_size > 16_384
-        ):
-            raise SystemExit("PostgreSQL media DSN file is invalid")
-        media_dsn = args.postgres_media_dsn_file.read_text(
-            encoding="utf-8"
-        ).strip()
-        if not media_dsn:
-            raise SystemExit("PostgreSQL media DSN file is empty")
-        readiness_postgres_dsns.add(media_dsn)
-        try:
-            import psycopg
-        except ImportError as exc:
-            raise SystemExit(
-                "PostgreSQL media metadata requires the optional "
-                "server-postgresql dependency"
-            ) from exc
-        media_metadata = PostgresMediaMetadataRepository(
-            lambda: psycopg.connect(media_dsn, connect_timeout=10)
-        )
-    media = GovernedMediaStore(
-        paths.subsystem_databases_dir / "server-media.sqlite3",
-        paths.local_root / "server-media",
-        object_store=object_store,
-        metadata=media_metadata,
-    )
-    if args.search_backend == "opensearch":
-        if not args.opensearch_endpoint:
-            raise SystemExit(
-                "--opensearch-endpoint is required with --search-backend opensearch"
-            )
-        try:
-            bearer_token = ""
-            if args.opensearch_bearer_token_file is not None:
-                if (
-                    not args.opensearch_bearer_token_file.is_file()
-                    or args.opensearch_bearer_token_file.stat().st_size > 16_384
-                ):
-                    raise ValueError("OpenSearch bearer-token file is invalid")
-                bearer_token = args.opensearch_bearer_token_file.read_text(
-                    encoding="utf-8"
-                ).strip()
-                if not bearer_token:
-                    raise ValueError("OpenSearch bearer-token file is empty")
-            search = OpenSearchProjection(
-                args.opensearch_endpoint,
-                args.opensearch_index,
-                args.opensearch_timeout,
-                bearer_token=bearer_token,
-            )
-        except ValueError as exc:
-            raise SystemExit(str(exc)) from exc
-    else:
-        search = ServerSearchProjection(
-            paths.subsystem_databases_dir / "server-search.sqlite3"
-        )
-    if args.job_backend == "postgresql":
-        if args.postgres_jobs_dsn_file is None:
-            raise SystemExit(
-                "--postgres-jobs-dsn-file is required with "
-                "--job-backend postgresql"
-            )
-        if (
-            not args.postgres_jobs_dsn_file.is_file()
-            or args.postgres_jobs_dsn_file.stat().st_size > 16_384
-        ):
-            raise SystemExit("PostgreSQL jobs DSN file is invalid")
-        dsn = args.postgres_jobs_dsn_file.read_text(encoding="utf-8").strip()
-        if not dsn:
-            raise SystemExit("PostgreSQL jobs DSN file is empty")
-        readiness_postgres_dsns.add(dsn)
-        try:
-            import psycopg
-        except ImportError as exc:
-            raise SystemExit(
-                "PostgreSQL jobs require the optional server-postgresql dependency"
-            ) from exc
-        jobs = PostgresServerJobStore(
-            lambda: psycopg.connect(dsn, connect_timeout=10)
-        )
-    else:
-        jobs = ServerJobStore(paths.subsystem_databases_dir / "server-jobs.sqlite3")
-    staged_ingestion = StagedIngestionService(
-        StagedIngestionStore(
-            paths.subsystem_databases_dir / "staged-ingestion.sqlite3",
-            paths.local_root / "quarantine",
-        ),
-        jobs,
-        malware_scanner=ClamAvScanner(args.clamav_executable),
-        import_batch_size=args.staged_import_batch_size,
-    )
-    export_metadata = None
-    if args.export_metadata_backend == "postgresql":
-        if args.postgres_exports_dsn_file is None:
-            raise SystemExit(
-                "--postgres-exports-dsn-file is required with "
-                "--export-metadata-backend postgresql"
-            )
-        if (
-            not args.postgres_exports_dsn_file.is_file()
-            or args.postgres_exports_dsn_file.stat().st_size > 16_384
-        ):
-            raise SystemExit("PostgreSQL exports DSN file is invalid")
-        exports_dsn = args.postgres_exports_dsn_file.read_text(
-            encoding="utf-8"
-        ).strip()
-        if not exports_dsn:
-            raise SystemExit("PostgreSQL exports DSN file is empty")
-        readiness_postgres_dsns.add(exports_dsn)
-        try:
-            import psycopg
-        except ImportError as exc:
-            raise SystemExit(
-                "PostgreSQL export metadata requires the optional "
-                "server-postgresql dependency"
-            ) from exc
-        export_metadata = PostgresExportMetadataRepository(
-            lambda: psycopg.connect(exports_dsn, connect_timeout=10)
-        )
-    exports = GovernedExportStore(
-        paths.subsystem_databases_dir / "server-exports.sqlite3",
-        paths.local_root / "server-exports",
-        metadata=export_metadata,
-        object_store=export_object_store,
-    )
-    signing_root = paths.local_root / "server-signing"
-    signing_key = signing_root / "export-private.pem"
-    signing_trust = signing_root / "export-trusted-keys.json"
-    if args.command == "init-user":
-        password = args.password or getpass.getpass("Password: ")
-        administration = AccessAdministrationService(repository)
-        if not any(
-            item.organization_id == args.organization
-            for item in repository.organizations()
-        ):
-            administration.create_organization(args.organization, args.organization)
-        identity = administration.create_identity(
-            args.name, args.organization, IdentityKind.USER
-        )
-        authentication.set_password(identity.identity_id, args.username, password)
-        administration.grant_role(
-            identity.identity_id, "project-manager", args.organization
-        )
-        administration.create_policy(
-            name="Initial project manager read access",
-            effect=PolicyEffect.ALLOW,
-            source=PolicySource.ROLE,
-            role_id="project-manager",
-            actions=("view",),
-            resource_types=("project", "dossier"),
-            organization_id=args.organization,
-            purposes=("research",),
-        )
-        print(f"Created {identity.identity_id}")
-        return 0
-    if args.command == "register-media":
-        record = media.register(args.source, args.organization, args.project)
-        print(record.media_id)
-        return 0
-    if args.command == "create-service-key":
-        administration = AccessAdministrationService(repository)
-        if not any(
-            item.organization_id == args.organization
-            for item in repository.organizations()
-        ):
-            administration.create_organization(args.organization, args.organization)
-        identity = administration.create_identity(
-            args.name, args.organization, IdentityKind.SERVICE
-        )
-        administration.grant_role(
-            identity.identity_id, args.role, args.organization
-        )
-        credential_id, token = authentication.issue_service_key(
-            identity.identity_id, args.label, timedelta(days=max(1, args.days))
-        )
-        print(f"Credential ID: {credential_id}")
-        print(f"API key (shown once): {token}")
-        return 0
-    if args.command == "create-device-key":
-        administration = AccessAdministrationService(repository)
-        if not any(
-            item.organization_id == args.organization
-            for item in repository.organizations()
-        ):
-            administration.create_organization(args.organization, args.organization)
-        identity = administration.create_identity(
-            args.name, args.organization, IdentityKind.DEVICE
-        )
-        administration.grant_role(
-            identity.identity_id, args.role, args.organization, args.project
-        )
-        credential_id, token = authentication.issue_machine_key(
-            identity.identity_id, f"device:{args.project}",
-            timedelta(days=max(1, args.days)),
-        )
-        print(f"Device ID: {identity.identity_id}")
-        print(f"Credential ID: {credential_id}")
-        print(f"Device key (shown once): {token}")
-        return 0
-    if args.command == "revoke-service-key":
-        authentication.revoke_service_key(args.credential_id)
-        print("Credential revoked")
-        return 0
-    if args.command == "map-oidc-user":
-        identity = repository.identity(args.identity_id)
-        if identity is None or identity.kind is not IdentityKind.USER:
-            raise SystemExit("An existing user identity is required")
-        repository.map_federated_identity(
-            args.issuer, args.subject, args.identity_id
-        )
-        print("Federated identity mapped")
-        return 0
-    if args.command == "verify-audit":
-        verified, detail = repository.verify_audit_chain()
-        print(detail)
-        return 0 if verified else 2
-    if args.command == "rebuild-search":
-        count = search.rebuild(
-            science_source, args.organization
-        )
-        print(f"Indexed {count} records")
-        return 0
-    if args.command in {"run-jobs-once", "run-job-worker"}:
-        signer = None
-        if signing_key.is_file() and signing_trust.is_file():
-            trusted = json.loads(signing_trust.read_text(encoding="utf-8"))
-            key_ids = tuple(trusted.get("keys", {}))
-            if len(key_ids) != 1:
-                raise SystemExit("Export trust file must contain exactly one signing key")
-            signer = ExportSigningIdentity.load(key_ids[0], signing_key)
-        if args.command == "run-jobs-once":
-            job = run_one_job(
-                jobs, search, science_source,
-                exports, signer, staged_ingestion=staged_ingestion,
-            )
-            print("No queued job" if job is None else f"{job.job_id}: {job.status}")
-            return 0 if job is None or job.status == "succeeded" else 2
-        if not 1 <= args.max_jobs <= 10_000:
-            raise SystemExit("--max-jobs must be between 1 and 10000")
-        if not 30 <= args.lease_seconds <= 86_400:
-            raise SystemExit("--lease-seconds must be between 30 and 86400")
-        if not 0.1 <= args.poll_seconds <= 60:
-            raise SystemExit("--poll-seconds must be between 0.1 and 60")
-        processed = 0
-        failures = 0
-        shutdown = ShutdownCoordinator()
-        with shutdown.installed():
-            while processed < args.max_jobs and not shutdown.requested:
-                job = run_one_job(
-                    jobs, search, science_source,
-                    exports, signer, args.worker_id, args.lease_seconds,
-                    staged_ingestion,
-                )
-                if job is None:
-                    if not args.continuous:
-                        break
-                    shutdown.wait(args.poll_seconds)
-                    continue
-                processed += 1
-                failures += int(job.status != "succeeded")
-                print(f"{job.job_id}: {job.status}")
-        print(f"Worker {args.worker_id}: processed {processed}, failed {failures}")
-        return 0 if failures == 0 else 2
-    if args.command == "purge-expired-exports":
-        count = exports.purge_expired()
-        print(f"Purged {count} export payload(s)")
-        return 0
-    if args.command == "create-project-contract":
-        contract, policies = AccessAdministrationService(
-            repository
-        ).create_project_contract_grant(
-            title=args.title,
-            organization_id=args.organization,
-            project_id=args.project,
-            subject_id=args.subject_id,
-            starts_at_utc=args.starts_at,
-            ends_at_utc=args.ends_at,
-            rights=tuple(item.strip() for item in args.rights.split(",")),
-        )
-        print(f"Contract ID: {contract.contract_id}")
-        print(f"Policies: {len(policies)}")
-        return 0
-    if args.command == "set-contract-status":
-        contract = AccessAdministrationService(repository).set_contract_status(
-            args.contract_id, args.status
-        )
-        print(f"{contract.contract_id}: {contract.status}")
-        return 0
-    if args.command == "init-export-signing-key":
-        identity = ExportSigningIdentity.generate(
-            args.key_id, signing_key, signing_trust
-        )
-        print(f"Signing key ID: {identity.key_id}")
-        print(f"Trusted public keys: {signing_trust}")
-        return 0
-    if args.command == "verify-project-export":
-        attestation = json.loads(args.attestation.read_text(encoding="utf-8"))
-        digest = verify_export_attestation(
-            args.source, attestation, args.trusted_keys
-        )
-        print(f"Verified SHA-256: {digest}")
-        return 0
-    if args.command == "generate-export-recipient-key":
-        private_path = args.output_dir / f"{args.key_id}-private.pem"
-        public_path = args.output_dir / f"{args.key_id}-public.json"
-        generate_recipient_identity(args.key_id, private_path, public_path)
-        print(f"Recipient key ID: {args.key_id}")
-        print(f"Public key: {public_path}")
-        return 0
-    if args.command == "decrypt-project-export":
-        key_id = decrypt_project_export(
-            args.source, args.destination, args.private_key
-        )
-        print(f"Decrypted for recipient key: {key_id}")
-        return 0
-    web_root = Path(__file__).parent.parent / "resources" / "server_web"
-    if bool(args.oidc_issuer) != bool(args.oidc_audience):
-        raise SystemExit("OIDC issuer and audience must be configured together")
-    if args.oidc_discovery and args.oidc_jwks:
-        raise SystemExit("OIDC discovery and a local JWKS are mutually exclusive")
-    if args.oidc_issuer and not (args.oidc_discovery or args.oidc_jwks):
-        raise SystemExit("OIDC requires discovery or a local JWKS")
-    oidc_enabled = bool(args.oidc_issuer)
-    oidc = (
-        OidcAuthenticationService(
-            OidcConfiguration(
-                args.oidc_issuer,
-                args.oidc_audience,
-                args.oidc_jwks,
-                discovery=args.oidc_discovery,
-                refresh_seconds=args.oidc_refresh_seconds,
-            ),
-            repository,
-        )
-        if oidc_enabled else None
-    )
-    if args.governance_backend == "postgresql":
-        if args.postgres_governance_dsn_file is None:
-            raise SystemExit(
-                "--postgres-governance-dsn-file is required with "
-                "--governance-backend postgresql"
-            )
-        if (
-            not args.postgres_governance_dsn_file.is_file()
-            or args.postgres_governance_dsn_file.stat().st_size > 16_384
-        ):
-            raise SystemExit("PostgreSQL governance DSN file is invalid")
-        governance_dsn = args.postgres_governance_dsn_file.read_text(
-            encoding="utf-8"
-        ).strip()
-        if not governance_dsn:
-            raise SystemExit("PostgreSQL governance DSN file is empty")
-        readiness_postgres_dsns.add(governance_dsn)
-        try:
-            import psycopg
-        except ImportError as exc:
-            raise SystemExit(
-                "PostgreSQL governance requires the optional "
-                "server-postgresql dependency"
-            ) from exc
-        governance = PostgresTenantGovernance(
-            lambda: psycopg.connect(governance_dsn, connect_timeout=10)
-        )
-    else:
-        governance = SqliteTenantGovernance(
-            paths.subsystem_databases_dir / "tenant-governance.sqlite3"
-        )
-    readiness_checks = {}
-    if readiness_postgres_dsns:
-        try:
-            import psycopg
-        except ImportError as exc:
-            raise SystemExit(
-                "PostgreSQL readiness requires the optional "
-                "server-postgresql dependency"
-            ) from exc
-
-        def postgres_ready(dsn: str) -> bool:
-            with psycopg.connect(dsn, connect_timeout=5) as connection:
-                with connection.cursor() as cursor:
-                    cursor.execute("SELECT 1")
-                    return cursor.fetchone() == (1,)
-
-        for index, readiness_dsn in enumerate(sorted(readiness_postgres_dsns), 1):
-            readiness_checks[f"postgres-{index}"] = (
-                lambda value=readiness_dsn: postgres_ready(value)
-            )
+    administration = AccessAdministrationService(repository)
+    _bootstrap_administrator(args, authentication, administration)
+    oidc_configuration = _oidc_configuration(args)
+    oidc = OidcAuthenticationService(oidc_configuration, repository) if oidc_configuration else None
+    device_authorization = DeviceAuthorizationService(repository, oidc_configuration) if oidc_configuration and args.oidc_device_flow else None
+    web_root = paths.web_root
+    staged_ingestion = StagedIngestionService(paths.staging_root, science, media)
+    readiness_checks = {
+        "access": repository.ready,
+        "science": science.ready,
+        "media-metadata": media.ready,
+        "jobs": jobs.ready,
+        "export-metadata": exports.ready,
+        "governance": governance.ready,
+        "search": search.ready,
+    }
     if object_store is not None:
         readiness_checks["object-storage"] = object_store.ready
     if isinstance(search, OpenSearchProjection):
@@ -742,12 +754,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         raise SystemExit("--drain-seconds must be between 0 and 300")
     scheme = "https" if tls_enabled else "http"
     print(f"Fieldora server listening on {scheme}://{args.host}:{args.port}")
-    serve(
-        application, args.host, args.port,
-        certificate=args.tls_certificate, private_key=args.tls_private_key,
-        on_shutdown=None if readiness is None else readiness.begin_draining,
-        shutdown_grace_seconds=args.drain_seconds,
+    shutdown = ShutdownCoordinator(
+        () if readiness is None else (readiness.begin_draining,)
     )
+    with shutdown.installed():
+        serve(
+            application,
+            args.host,
+            args.port,
+            tls_certificate=args.tls_certificate,
+            tls_private_key=args.tls_private_key,
+            shutdown_coordinator=shutdown,
+            shutdown_grace_seconds=args.drain_seconds,
+        )
     return 0
 
 

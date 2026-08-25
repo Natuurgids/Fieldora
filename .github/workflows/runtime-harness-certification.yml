@@ -1,0 +1,76 @@
+name: Fieldora real-host runtime harness certification
+
+on:
+  pull_request:
+    paths:
+      - "scripts/Certify-Fieldora-Clean-Runtime.ps1"
+      - ".github/workflows/runtime-harness-certification.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  runtime-harness-contract:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Parse runtime certification harness
+        shell: pwsh
+        run: |
+          $path = './scripts/Certify-Fieldora-Clean-Runtime.ps1'
+          $text = Get-Content -LiteralPath $path -Raw
+          [void][scriptblock]::Create($text)
+          Write-Host 'Runtime harness PowerShell syntax: OK'
+
+      - name: Certify destructive-host guardrails
+        shell: pwsh
+        run: |
+          $text = Get-Content -LiteralPath ./scripts/Certify-Fieldora-Clean-Runtime.ps1 -Raw
+          foreach ($needle in @(
+            "[ValidateSet('Windows11','RockyLinux9')]",
+            "[ValidatePattern('^[0-9a-fA-F]{40}$')]",
+            '[switch]$AllowDestructiveInstall',
+            'Refusing destructive runtime certification without -AllowDestructiveInstall.',
+            "Windows runtime certification is pinned to D:\FDTEST",
+            'Rocky runtime certification is pinned to /var/tmp/fieldora-runtime-certification',
+            "Real-host Linux certification requires Rocky Linux 9",
+            "`$osRelease['ID'] -ne 'rocky'",
+            "`$osRelease['VERSION_ID'].StartsWith('9')"
+          )) {
+            if (-not $text.Contains($needle)) { throw "Runtime harness safety marker is missing: $needle" }
+          }
+          Write-Host 'Disposable Windows and Rocky 9 host guardrails: OK'
+
+      - name: Certify exact-SHA and runtime proof contract
+        shell: pwsh
+        run: |
+          $text = Get-Content -LiteralPath ./scripts/Certify-Fieldora-Clean-Runtime.ps1 -Raw
+          foreach ($needle in @(
+            'raw.githubusercontent.com/Natuurgids/Fieldora/$FieldoraRef/$entryPoint',
+            "Assert-Container 'fieldora-postgres'",
+            "Assert-Container 'fieldora-server'",
+            "Assert-Container 'fieldora-worker'",
+            "Assert-Container 'fieldora-cert-renewer'",
+            "'/health/live'",
+            "'/health/ready'",
+            "'/openapi.json'",
+            "'/docs'",
+            'bootstrap-handoff/ADMIN-CREDENTIALS.txt',
+            'FIELDORA_STORAGE_SERVICE_ENABLED: "true"',
+            'FIELDORA_STORAGE_SERVICE_PORT: "8766"',
+            'FIELDORA_STORAGE_SERVICE_CLIENT_CA:',
+            'FIELDORA_MODEL_STORE: "/var/lib/fieldora-models"',
+            './fieldora-models:/var/lib/fieldora-models:ro',
+            'fieldora.clean-runtime-certification.v1',
+            'content_recorded=$false',
+            'secrets_or_payloads_recorded = $false',
+            'FIELDORA REAL-HOST RUNTIME CERTIFICATION PASSED'
+          )) {
+            if (-not $text.Contains($needle)) { throw "Runtime proof contract is missing: $needle" }
+          }
+          foreach ($forbidden in @('--insecure','-k ','huggingface.co','artifact_store_path','ca-private.pem','issuer-private.pem')) {
+            if ($text.Contains($forbidden)) { throw "Runtime harness contains forbidden shortcut or secret marker: $forbidden" }
+          }
+          Write-Host 'Exact-SHA runtime proof and secret-opacity contract: OK'

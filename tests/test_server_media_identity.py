@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import hashlib
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from natureai_next.server.media import GovernedMediaStore, MediaRecord
+from natureai_next.server.media import GovernedMediaStore, MediaRecord, UploadSession
 
 
 def _store(tmp_path: Path) -> GovernedMediaStore:
@@ -74,3 +76,44 @@ def test_same_bytes_in_another_project_use_one_organization_evidence_identity(
     assert second.media_id == first.media_id
     assert second.relative_path == first.relative_path
     assert len(store.records("organization-1")) == 1
+
+
+def test_concurrent_verified_uploads_converge_to_one_sqlite_evidence_identity(
+    tmp_path: Path,
+) -> None:
+    store = _store(tmp_path)
+    payload = b"concurrent canonical evidence bytes"
+    digest = hashlib.sha256(payload).hexdigest()
+    uploads: list[UploadSession] = []
+    for index in range(8):
+        uploads.append(
+            store.begin_upload(
+                f"subject-{index}",
+                "organization-1",
+                "project-1",
+                f"evidence-{index}.bin",
+                "application/octet-stream",
+                len(payload),
+                digest,
+            )
+        )
+
+    barrier = threading.Barrier(len(uploads))
+
+    def complete(upload: UploadSession) -> MediaRecord:
+        barrier.wait(timeout=10)
+        result = store.append_upload(upload, 0, payload)
+        assert isinstance(result, MediaRecord)
+        return result
+
+    with ThreadPoolExecutor(max_workers=len(uploads)) as executor:
+        records = list(executor.map(complete, uploads))
+
+    assert len({record.media_id for record in records}) == 1
+    assert len(store.records("organization-1")) == 1
+    object_files = [
+        path
+        for path in (tmp_path / "objects").rglob("*")
+        if path.is_file() and ".uploads" not in path.parts
+    ]
+    assert len(object_files) == 1

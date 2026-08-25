@@ -53,6 +53,7 @@ def test_science_schema_bootstrap_is_safe_for_concurrent_api_and_worker_start() 
 def test_media_schema_bootstrap_is_safe_for_concurrent_api_and_worker_start() -> None:
     dsn = _dsn()
     with psycopg.connect(dsn, connect_timeout=10) as connection:
+        connection.execute("DROP TABLE IF EXISTS governed_media_associations CASCADE")
         connection.execute("DROP TABLE IF EXISTS governed_uploads CASCADE")
         connection.execute("DROP TABLE IF EXISTS governed_media CASCADE")
 
@@ -65,5 +66,9 @@ def test_media_schema_bootstrap_is_safe_for_concurrent_api_and_worker_start() ->
     with psycopg.connect(dsn, connect_timeout=10) as connection:
         media = connection.execute("SELECT count(*) FROM governed_media").fetchone()
         uploads = connection.execute("SELECT count(*) FROM governed_uploads").fetchone()
+        associations = connection.execute(
+            "SELECT count(*) FROM governed_media_associations"
+        ).fetchone()
     assert media == (0,)
     assert uploads == (0,)
+    assert associations == (0,)

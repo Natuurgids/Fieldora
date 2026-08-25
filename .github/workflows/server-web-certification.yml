@@ -9,6 +9,7 @@ on:
       - "src/natureai_next/server/web_compatibility.py"
       - "src/natureai_next/server/navigation_web_compatibility.py"
       - "src/natureai_next/server/desktop_alignment_web.py"
+      - "src/natureai_next/server/project_facility_workspace_web.py"
       - "src/natureai_next/server/administration_workspace_web.py"
       - "src/natureai_next/server/workspace_language_web.py"
       - "src/natureai_next/server/library_collections_web.py"
@@ -29,6 +30,7 @@ on:
       - "tests/test_server_web_compatibility.py"
       - "tests/test_server_web_browser_navigation.py"
       - "tests/test_desktop_alignment_web.py"
+      - "tests/test_project_facility_workspace_web.py"
       - "tests/test_administration_workspace_web.py"
       - "tests/test_workspace_language_web.py"
       - "tests/test_browser_functionality_web.py"
@@ -71,6 +73,7 @@ jobs:
           src/natureai_next/server/web_compatibility.py
           src/natureai_next/server/navigation_web_compatibility.py
           src/natureai_next/server/desktop_alignment_web.py
+          src/natureai_next/server/project_facility_workspace_web.py
           src/natureai_next/server/administration_workspace_web.py
           src/natureai_next/server/workspace_language_web.py
           src/natureai_next/server/library_collections_web.py
@@ -88,6 +91,7 @@ jobs:
           tests/test_server_web_compatibility.py
           tests/test_server_web_browser_navigation.py
           tests/test_desktop_alignment_web.py
+          tests/test_project_facility_workspace_web.py
           tests/test_administration_workspace_web.py
           tests/test_workspace_language_web.py
           tests/test_browser_functionality_web.py
@@ -104,6 +108,7 @@ jobs:
           tests/test_server_web_compatibility.py
           tests/test_server_web_browser_navigation.py
           tests/test_desktop_alignment_web.py
+          tests/test_project_facility_workspace_web.py
           tests/test_administration_workspace_web.py
           tests/test_workspace_language_web.py
           tests/test_browser_functionality_web.py

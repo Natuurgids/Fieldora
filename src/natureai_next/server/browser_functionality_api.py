@@ -148,7 +148,7 @@ class BrowserFunctionalityFieldoraApi(ProjectOwnerContractFieldoraApi):
     def _upload_context(self, method: str, path: str):
         if self._media is None or method != "PUT":
             return None
-        prefix = "/api/v1/media/uploads/"
+        prefix = "/api/v1/uploads/"
         if not path.startswith(prefix):
             return None
         upload_id = path[len(prefix):].strip()

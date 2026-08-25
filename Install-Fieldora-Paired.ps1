@@ -19,29 +19,25 @@ param(
     [string]$OfflineModelBundle = "",
     [string]$OfflineModelTrustedSigningKey = "",
     [switch]$RequireOfflineModelSignature,
-    [switch]$RequireOfflineModelCleanScan
+    [switch]$RequireOfflineModelCleanScan,
+    [string]$OfflineMapBundle = "",
+    [string]$OfflineMapTrustedSigningKey = "",
+    [switch]$RequireOfflineMapSignature,
+    [switch]$RequireOfflineMapCleanScan
 )
 
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
-
-if ($PSVersionTable.PSVersion.Major -lt 7) {
-    throw "PowerShell 7 is required."
-}
-if (-not ($IsWindows -or $IsLinux)) {
-    throw "The paired clean installer supports Windows and Linux hosts."
-}
-if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
-    throw "Docker is required."
-}
+if ($PSVersionTable.PSVersion.Major -lt 7) { throw "PowerShell 7 is required." }
+if (-not ($IsWindows -or $IsLinux)) { throw "The paired clean installer supports Windows and Linux hosts." }
+if (-not (Get-Command docker -ErrorAction SilentlyContinue)) { throw "Docker is required." }
 
 $encodedFieldoraRef = [Uri]::EscapeDataString($FieldoraRef)
 $wrapperName = if ($IsWindows) { "Install-Fieldora-Clean-Windows.ps1" } else { "Install-Fieldora-Clean-Linux.ps1" }
 $fieldoraUrl = "https://raw.githubusercontent.com/Natuurgids/Fieldora/$encodedFieldoraRef/$wrapperName"
-if ($FieldoraRef -match '^[0-9a-fA-F]{40}$') {
-    $fieldoraUrl = "https://raw.githubusercontent.com/Natuurgids/Fieldora/$FieldoraRef/$wrapperName"
-}
+if ($FieldoraRef -match '^[0-9a-fA-F]{40}$') { $fieldoraUrl = "https://raw.githubusercontent.com/Natuurgids/Fieldora/$FieldoraRef/$wrapperName" }
 $tempWrapper = Join-Path ([IO.Path]::GetTempPath()) "Fieldora-Paired-$([Guid]::NewGuid().ToString('N')).ps1"
+$tempMapInstaller = Join-Path ([IO.Path]::GetTempPath()) "Fieldora-Map-$([Guid]::NewGuid().ToString('N')).ps1"
 
 try {
     Write-Host "Installing Fieldora trusted server layer from $FieldoraRef..." -ForegroundColor Cyan
@@ -56,9 +52,7 @@ try {
     }
     if (-not [string]::IsNullOrWhiteSpace($AdminPassword)) { $fieldoraArgs.AdminPassword = $AdminPassword }
     if (-not [string]::IsNullOrWhiteSpace($OfflineModelBundle)) { $fieldoraArgs.OfflineModelBundle = $OfflineModelBundle }
-    if (-not [string]::IsNullOrWhiteSpace($OfflineModelTrustedSigningKey)) {
-        $fieldoraArgs.OfflineModelTrustedSigningKey = $OfflineModelTrustedSigningKey
-    }
+    if (-not [string]::IsNullOrWhiteSpace($OfflineModelTrustedSigningKey)) { $fieldoraArgs.OfflineModelTrustedSigningKey = $OfflineModelTrustedSigningKey }
     if ($RequireOfflineModelSignature) { $fieldoraArgs.RequireOfflineModelSignature = $true }
     if ($RequireOfflineModelCleanScan) { $fieldoraArgs.RequireOfflineModelCleanScan = $true }
     & $tempWrapper @fieldoraArgs
@@ -68,7 +62,6 @@ try {
     Write-Host "============================================================" -ForegroundColor DarkCyan
     Write-Host "==> Installing paired FieldoraBastion tool boundary" -ForegroundColor Cyan
     Write-Host "============================================================" -ForegroundColor DarkCyan
-
     $bastionRoot = Join-Path $InstallRoot "bastion"
     $sourceRoot = Join-Path $bastionRoot "source"
     New-Item -ItemType Directory -Force -Path $bastionRoot | Out-Null
@@ -78,35 +71,24 @@ try {
         New-Item -ItemType Directory -Force -Path $extract | Out-Null
         $encodedBastionRef = [Uri]::EscapeDataString($BastionRef)
         $bastionUrl = "https://github.com/Natuurgids/FieldoraBastion/archive/refs/heads/$encodedBastionRef.zip"
-        if ($BastionRef -match '^[0-9a-fA-F]{40}$') {
-            $bastionUrl = "https://github.com/Natuurgids/FieldoraBastion/archive/$BastionRef.zip"
-        }
+        if ($BastionRef -match '^[0-9a-fA-F]{40}$') { $bastionUrl = "https://github.com/Natuurgids/FieldoraBastion/archive/$BastionRef.zip" }
         Write-Host "Downloading paired Bastion $BastionRef"
         Invoke-WebRequest -Uri $bastionUrl -OutFile $archive -UseBasicParsing
         Expand-Archive -Path $archive -DestinationPath $extract -Force
         $src = Get-ChildItem $extract -Directory | Select-Object -First 1
         if (-not $src) { throw "FieldoraBastion archive extraction failed." }
         New-Item -ItemType Directory -Force -Path $sourceRoot | Out-Null
-        Get-ChildItem $src.FullName -Force | ForEach-Object {
-            Copy-Item $_.FullName $sourceRoot -Recurse -Force
-        }
+        Get-ChildItem $src.FullName -Force | ForEach-Object { Copy-Item $_.FullName $sourceRoot -Recurse -Force }
     }
     finally {
         Remove-Item -LiteralPath $archive -Force -ErrorAction SilentlyContinue
         Remove-Item -LiteralPath $extract -Recurse -Force -ErrorAction SilentlyContinue
     }
-    if (-not (Test-Path -LiteralPath (Join-Path $sourceRoot "Containerfile"))) {
-        throw "Paired FieldoraBastion source is incomplete."
-    }
+    if (-not (Test-Path -LiteralPath (Join-Path $sourceRoot "Containerfile"))) { throw "Paired FieldoraBastion source is incomplete." }
     foreach ($path in @(
-        (Join-Path $bastionRoot "quarantine\model"),
-        (Join-Path $bastionRoot "quarantine\maps"),
-        (Join-Path $bastionRoot "approved"),
-        (Join-Path $bastionRoot "scanner-db"),
-        (Join-Path $bastionRoot "signing")
-    )) {
-        New-Item -ItemType Directory -Force -Path $path | Out-Null
-    }
+        (Join-Path $bastionRoot "quarantine\model"), (Join-Path $bastionRoot "quarantine\maps"),
+        (Join-Path $bastionRoot "approved"), (Join-Path $bastionRoot "scanner-db"), (Join-Path $bastionRoot "signing")
+    )) { New-Item -ItemType Directory -Force -Path $path | Out-Null }
 
     & docker build -t fieldora-bastion:paired -f (Join-Path $sourceRoot "Containerfile") $sourceRoot
     if ($LASTEXITCODE -ne 0) { throw "FieldoraBastion image build failed." }
@@ -127,10 +109,23 @@ try {
     }
     $pairing | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $bastionRoot "PAIRING.json") -Encoding utf8NoBOM
 
+    if (-not [string]::IsNullOrWhiteSpace($OfflineMapBundle)) {
+        $mapInstallerUrl = "https://raw.githubusercontent.com/Natuurgids/Fieldora/$encodedFieldoraRef/Install-Fieldora-Offline-Map.ps1"
+        if ($FieldoraRef -match '^[0-9a-fA-F]{40}$') { $mapInstallerUrl = "https://raw.githubusercontent.com/Natuurgids/Fieldora/$FieldoraRef/Install-Fieldora-Offline-Map.ps1" }
+        Invoke-WebRequest -Uri $mapInstallerUrl -OutFile $tempMapInstaller -UseBasicParsing
+        $mapArgs = @{ InstallRoot = $InstallRoot; BundlePath = $OfflineMapBundle }
+        if (-not [string]::IsNullOrWhiteSpace($OfflineMapTrustedSigningKey)) { $mapArgs.TrustedSigningKey = $OfflineMapTrustedSigningKey }
+        if ($RequireOfflineMapSignature) { $mapArgs.RequireSignature = $true }
+        if ($RequireOfflineMapCleanScan) { $mapArgs.RequireCleanScan = $true }
+        & $tempMapInstaller @mapArgs
+        if ($LASTEXITCODE -ne 0) { throw "Offline map provisioning failed with exit code $LASTEXITCODE." }
+    }
+
     Write-Host "Fieldora + FieldoraBastion paired installation: VERIFIED" -ForegroundColor Green
     Write-Host "Bastion is installed but not auto-started; scanner/build tools remain explicit and isolated." -ForegroundColor Green
     Write-Host "Bastion pairing metadata: $bastionRoot\PAIRING.json" -ForegroundColor Green
 }
 finally {
     Remove-Item -LiteralPath $tempWrapper -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $tempMapInstaller -Force -ErrorAction SilentlyContinue
 }

@@ -221,6 +221,55 @@ else:
 
     Write-Host "Windows CurrentUser Fieldora CA trust: VERIFIED" -ForegroundColor Green
 
+    Write-Host ""
+    Write-Host "============================================================" -ForegroundColor DarkCyan
+    Write-Host "==> Certifying bootstrap administrator HTTP authentication" -ForegroundColor Cyan
+    Write-Host "============================================================" -ForegroundColor DarkCyan
+    $credentialPath = Join-Path $InstallRoot "bootstrap-handoff\ADMIN-CREDENTIALS.txt"
+    if (-not (Test-Path -LiteralPath $credentialPath)) {
+        throw "Bootstrap administrator credential handoff is missing at $credentialPath"
+    }
+    $credentialText = Get-Content -LiteralPath $credentialPath -Raw
+    $usernameMatch = [regex]::Match($credentialText, '(?m)^Username:\s*(.+?)\s*$')
+    $passwordMatch = [regex]::Match($credentialText, '(?m)^Password:\s*(.+?)\s*$')
+    if (-not $usernameMatch.Success -or -not $passwordMatch.Success) {
+        throw "Bootstrap administrator credential handoff could not be parsed."
+    }
+    $bootstrapUsername = $usernameMatch.Groups[1].Value
+    $bootstrapPassword = $passwordMatch.Groups[1].Value
+    $loginPayloadPath = Join-Path $env:TEMP "Fieldora-Login-$([Guid]::NewGuid().ToString('N')).json"
+    try {
+        @{ username = $bootstrapUsername; password = $bootstrapPassword } |
+            ConvertTo-Json -Compress |
+            Set-Content -LiteralPath $loginPayloadPath -Encoding utf8NoBOM
+        $sessionJson = (@(& curl.exe --fail --silent --show-error --ssl-revoke-best-effort `
+            --header "Content-Type: application/json" `
+            --data-binary "@$loginPayloadPath" `
+            https://127.0.0.1:8765/api/v1/session) -join "").Trim()
+        if ($LASTEXITCODE -ne 0) {
+            throw "Bootstrap administrator login failed with exit code $LASTEXITCODE."
+        }
+        $session = $sessionJson | ConvertFrom-Json
+        if ([string]::IsNullOrWhiteSpace([string]$session.access_token)) {
+            throw "Bootstrap administrator login did not return an access token."
+        }
+        $meJson = (@(& curl.exe --fail --silent --show-error --ssl-revoke-best-effort `
+            --header "Authorization: Bearer $($session.access_token)" `
+            https://127.0.0.1:8765/api/v1/me) -join "").Trim()
+        if ($LASTEXITCODE -ne 0) {
+            throw "Authenticated administrator identity check failed with exit code $LASTEXITCODE."
+        }
+        $me = $meJson | ConvertFrom-Json
+        if ($me.organization_id -ne $Organization -or $me.display_name -ne $AdminName) {
+            throw "Authenticated administrator identity does not match the bootstrap account."
+        }
+    }
+    finally {
+        Remove-Item -LiteralPath $loginPayloadPath -Force -ErrorAction SilentlyContinue
+        $bootstrapPassword = $null
+    }
+    Write-Host "Bootstrap administrator HTTP authentication: VERIFIED" -ForegroundColor Green
+
     if (-not [string]::IsNullOrWhiteSpace($OfflineModelBundle)) {
         Write-Host ""
         Write-Host "============================================================" -ForegroundColor DarkCyan

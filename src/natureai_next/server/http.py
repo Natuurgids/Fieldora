@@ -156,7 +156,7 @@ def handler_for(
             target = rewrite_public_target(self.command, self.path)
             content_length = int(self.headers.get("Content-Length", "0"))
             body = self.rfile.read(content_length) if content_length else b""
-            headers = {key: value for key, value in self.headers.items()}
+            headers = {key.lower(): value for key, value in self.headers.items()}
             response = application.dispatch(self.command, target, headers, body)
             response = project_help_response(application, target, headers, response)
             response = patch_managed_web_response(target, response)

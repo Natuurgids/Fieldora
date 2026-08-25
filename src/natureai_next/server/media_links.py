@@ -136,28 +136,38 @@ class SqliteMediaAssociationRepository:
 
 
 class PostgresMediaAssociationRepository:
-    def __init__(self, connect: Callable[[], Any]) -> None:
+    def __init__(self, connect: Callable[[], Any], *, initialize: bool = True) -> None:
         self._connect = connect
-        with self._connect() as connection:
-            with connection.cursor() as cursor:
-                cursor.execute(
-                    """
-                    CREATE TABLE IF NOT EXISTS governed_media_associations(
-                        media_id TEXT NOT NULL,
-                        organization_id TEXT NOT NULL,
-                        association_type TEXT NOT NULL,
-                        target_id TEXT NOT NULL,
-                        purpose TEXT NOT NULL,
-                        linked_by TEXT NOT NULL,
-                        linked_at_epoch BIGINT NOT NULL,
-                        PRIMARY KEY(media_id,association_type,target_id)
+        if initialize:
+            with self._connect() as connection:
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        "SELECT pg_advisory_xact_lock(hashtext(%s))",
+                        ("fieldora_media_schema_v1",),
                     )
-                    """
-                )
-                cursor.execute(
-                    "CREATE INDEX IF NOT EXISTS ix_governed_media_associations_target_pg "
-                    "ON governed_media_associations(organization_id,association_type,target_id)"
-                )
+                    self.bootstrap_schema(cursor)
+
+    @staticmethod
+    def bootstrap_schema(cursor: Any) -> None:
+        """Create association schema inside the caller's serialized transaction."""
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS governed_media_associations(
+                media_id TEXT NOT NULL,
+                organization_id TEXT NOT NULL,
+                association_type TEXT NOT NULL,
+                target_id TEXT NOT NULL,
+                purpose TEXT NOT NULL,
+                linked_by TEXT NOT NULL,
+                linked_at_epoch BIGINT NOT NULL,
+                PRIMARY KEY(media_id,association_type,target_id)
+            )
+            """
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS ix_governed_media_associations_target_pg "
+            "ON governed_media_associations(organization_id,association_type,target_id)"
+        )
 
     def link(self, association: MediaAssociation) -> None:
         _validate(association)

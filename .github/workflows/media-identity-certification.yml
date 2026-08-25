@@ -1,0 +1,62 @@
+name: Fieldora media identity certification
+
+on:
+  pull_request:
+    paths:
+      - "src/natureai_next/server/media.py"
+      - "src/natureai_next/server/postgres_media.py"
+      - "tests/test_server_media_identity.py"
+      - "tests/test_postgres_media_identity.py"
+      - ".github/workflows/media-identity-certification.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  media-identity-certification:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: fieldora_media_test
+          POSTGRES_USER: fieldora_test
+          POSTGRES_PASSWORD: fieldora_test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U fieldora_test -d fieldora_media_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      FIELDORA_TEST_POSTGRES_DSN: >-
+        postgresql://fieldora_test:fieldora_test_password@127.0.0.1:5432/fieldora_media_test
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install certification dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -e ".[dev,server-postgresql]"
+
+      - name: Ruff governed media identity
+        run: >-
+          python -m ruff check
+          src/natureai_next/server/media.py
+          src/natureai_next/server/postgres_media.py
+          tests/test_server_media_identity.py
+          tests/test_postgres_media_identity.py
+
+      - name: Governed media identity tests
+        run: >-
+          pytest -q
+          tests/test_server_media_identity.py
+          tests/test_postgres_media_identity.py

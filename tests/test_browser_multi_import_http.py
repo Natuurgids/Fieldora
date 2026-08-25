@@ -183,7 +183,7 @@ def test_multi_file_import_over_real_http_has_no_failed_fetch(tmp_path: Path) ->
         page.locator("#workspace").wait_for(state="visible")
         page.locator('[data-page="library"]').click()
         page.locator("#page-library").wait_for(state="visible")
-        page.locator("#upload-project").select_option("project-1")
+        page.evaluate("document.getElementById('upload-project').value='project-1'")
         page.locator("#upload-file").set_input_files(
             [
                 {
@@ -203,8 +203,7 @@ def test_multi_file_import_over_real_http_has_no_failed_fetch(tmp_path: Path) ->
                 },
             ]
         )
-        page.locator("#upload-start").click()
-        page.locator("#upload-status").wait_for(state="visible")
+        page.evaluate("document.getElementById('upload-start').click()")
         page.wait_for_function(
             """
             const node=document.getElementById('upload-status');

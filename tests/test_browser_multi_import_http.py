@@ -234,4 +234,9 @@ def test_multi_file_import_over_real_http_has_no_failed_fetch(tmp_path: Path) ->
             "text/plain",
             "audio/wav",
         }
+        for record in records:
+            links = media.associations.links(record.media_id, "local")
+            assert [(link.association_type, link.target_id) for link in links] == [
+                ("project", "project-1")
+            ]
         browser.close()

@@ -206,8 +206,10 @@ def test_multi_file_import_over_real_http_has_no_failed_fetch(tmp_path: Path) ->
         page.evaluate("document.getElementById('upload-start').click()")
         page.wait_for_function(
             """
-            const node=document.getElementById('upload-status');
-            return node.textContent.includes('verified') || node.style.color.includes('danger');
+            () => {
+              const node=document.getElementById('upload-status');
+              return node.textContent.includes('verified') || node.style.color.includes('danger');
+            }
             """,
             timeout=10_000,
         )

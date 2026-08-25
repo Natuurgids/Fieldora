@@ -6,7 +6,8 @@ _ADMINISTRATION_WORKSPACE_PATCH = bytes(
     r"""
 
 /* Fieldora Administration alignment: preserve every protected destination while
-   grouping the flat eight-tab strip into understandable management domains. */
+   grouping them into understandable management domains. Audit is its own governed
+   workspace so its API authority can be projected independently from Governance. */
 (()=>{
  if(window.__fieldoraAdministrationWorkspaceWired)return;
  window.__fieldoraAdministrationWorkspaceWired=true;
@@ -19,16 +20,58 @@ _ADMINISTRATION_WORKSPACE_PATCH = bytes(
  `;
  document.head.appendChild(style);
 
+ const governance=document.getElementById("page-administration");
+ const auditCard=document.getElementById("audit-list")?.closest(".card");
+ let auditPage=document.getElementById("page-audit");
+ if(governance&&auditCard&&!auditPage){
+  auditPage=document.createElement("section");
+  auditPage.className="page";
+  auditPage.id="page-audit";
+  auditPage.hidden=true;
+  const top=document.createElement("div");
+  top.className="top";
+  top.innerHTML='<h1>Audit</h1><button id="audit-refresh" class="primary" type="button">Refresh</button>';
+  auditPage.appendChild(top);
+  auditPage.appendChild(auditCard);
+  governance.after(auditPage);
+  document.getElementById("audit-refresh").onclick=()=>loadAudit();
+ }
+
+ /* Governance must not implicitly fetch Audit. The Audit workspace invokes the
+    already-governed /api/v1/audit contract only when that destination is opened. */
+ if(typeof loadAdministration==="function"){
+  loadAdministration=async function(){await Promise.all([loadRuntime(),loadContracts("contracts")])};
+ }
+ const administrationShowPage=showPage;
+ showPage=function(page){
+  administrationShowPage(page);
+  if(page==="audit")loadAudit();
+ };
+
  const groups=[
-  ["Governance & review",["administration","intake-review","reference"]],
+  ["Governance & review",["administration","audit","intake-review","reference"]],
   ["Operations",["operations","connectors"]],
   ["Platform services",["aiadmin","operator","platform"]],
  ];
- const adminPages=["administration","operations","intake-review","aiadmin","reference","connectors","operator","platform"];
+ const adminPages=["administration","audit","operations","intake-review","aiadmin","reference","connectors","operator","platform"];
+ const existingAdminNav=governance?.querySelector(".workspace-subnav");
+ if(auditPage&&existingAdminNav&&!auditPage.querySelector(".workspace-subnav")){
+  const cloned=existingAdminNav.cloneNode(true);
+  auditPage.querySelector(".top")?.after(cloned);
+ }
  adminPages.forEach(page=>{
   const host=document.getElementById(`page-${page}`);
   const nav=host?.querySelector(".workspace-subnav");
-  if(!nav||nav.dataset.administrationGrouped)return;
+  if(!nav)return;
+  if(!nav.querySelector('[data-workspace-target="audit"]')&&auditPage){
+   const button=document.createElement("button");
+   button.type="button";
+   button.dataset.workspaceTarget="audit";
+   button.textContent="Audit";
+   button.onclick=()=>showPage("audit");
+   nav.appendChild(button);
+  }
+  if(nav.dataset.administrationGrouped)return;
   const buttons=new Map(
    [...nav.querySelectorAll("[data-workspace-target]")].map(button=>[
     button.dataset.workspaceTarget,

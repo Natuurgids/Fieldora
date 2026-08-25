@@ -31,6 +31,9 @@ from natureai_next.server.platform_extensions import ProjectOptionalStagedIngest
 from natureai_next.server.postgres_linked_preview import PostgresLinkedPreviewLeases
 from natureai_next.server.postgres_linked_storage import PostgresLinkedStorageRepository
 from natureai_next.server.postgres_offline_sync import PostgresOfflineSyncStore
+from natureai_next.server.postgres_project_management import (
+    PostgresProjectManagementService,
+)
 from natureai_next.server.service_runtime import ServiceRuntimeSupervisor
 from natureai_next.server.storage_service_runtime import (
     StorageServiceListenerConfig,
@@ -52,6 +55,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     supervisor = _runtime_supervisor(arguments, command)
     sync_factory = _offline_sync_factory(arguments, command)
     linked_storage_factory = _linked_storage_factory(arguments, command)
+    project_management_factory = _project_management_factory(arguments, command)
     storage_listener = _storage_service_listener(arguments, command)
     base_administration = server_cli.AccessAdministrationService
     base_run_one_job = server_cli.run_one_job
@@ -75,6 +79,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     OfflineFirstFieldoraApi.configure_offline_sync(sync_factory)
     OfflineFirstFieldoraApi.configure_linked_storage(linked_storage_factory)
+    OfflineFirstFieldoraApi.configure_project_management(project_management_factory)
     server_cli.FieldoraApi = OfflineFirstFieldoraApi
     server_cli.StagedIngestionStore = ProjectOptionalStagedIngestionStore
     server_cli.AccessAdministrationService = TrackingAdministration
@@ -94,6 +99,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             supervisor.stop()
         OfflineFirstFieldoraApi.configure_offline_sync(None)
         OfflineFirstFieldoraApi.configure_linked_storage(None)
+        OfflineFirstFieldoraApi.configure_project_management(None)
         server_cli.FieldoraApi = BrowserFunctionalityFieldoraApi
         server_cli.StagedIngestionStore = ProjectOptionalStagedIngestionStore
         server_cli.AccessAdministrationService = base_administration
@@ -126,6 +132,18 @@ def _science_postgres_connect(
             f"PostgreSQL {capability} requires the server-postgresql dependency"
         ) from exc
     return lambda: psycopg.connect(dsn, connect_timeout=10)
+
+
+def _project_management_factory(
+    arguments: list[str], command: str
+) -> Callable[[], PostgresProjectManagementService] | None:
+    if command != "serve":
+        return None
+    science_backend = _argument_value(arguments, "--science-backend") or "sqlite"
+    if science_backend != "postgresql":
+        return None
+    connect = _science_postgres_connect(arguments, capability="project management")
+    return lambda: PostgresProjectManagementService(connect)
 
 
 def _offline_sync_factory(

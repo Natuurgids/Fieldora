@@ -45,8 +45,31 @@ def _web_fixture(tmp_path: Path):
 
 def _mock_api(route: Route) -> None:
     path = route.request.url.split("/api/v1/", 1)[-1].split("?", 1)[0]
-    if path == "me":
+    if path == "web/capabilities":
         payload: object = {
+            "default_deny": True,
+            "pages": {
+                "home": True,
+                "library": True,
+                "observations": True,
+                "projects": False,
+                "research-records": True,
+                "research": True,
+                "dossiers": False,
+                "capacity": False,
+                "knowledge": True,
+                "administration": False,
+                "help": True,
+            },
+            "actions": {
+                "projects.create": False,
+                "library.import": True,
+                "aiadmin.manage": False,
+                "operator.manage": False,
+            },
+        }
+    elif path == "me":
+        payload = {
             "identity_id": "admin-1",
             "display_name": "Administrator",
             "organization_id": "local",

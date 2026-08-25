@@ -12,6 +12,9 @@ from natureai_next.domain.access_control import (
     AccessRequest,
     Identity,
     IdentityKind,
+    Policy,
+    PolicyEffect,
+    PolicySource,
 )
 from natureai_next.server.browser_functionality_api import BrowserFunctionalityFieldoraApi
 from natureai_next.server.http import handler_for
@@ -60,6 +63,53 @@ class _Science:
         return 1
 
 
+class _AccessRepository:
+    def policies(self) -> tuple[Policy, ...]:
+        return (
+            Policy(
+                "library-view",
+                "View governed evidence",
+                PolicyEffect.ALLOW,
+                PolicySource.DIRECT,
+                "test",
+                "admin-1",
+                "",
+                ("view",),
+                ("asset",),
+                organization_id="local",
+                purposes=("research",),
+            ),
+            Policy(
+                "library-import",
+                "Import governed evidence",
+                PolicyEffect.ALLOW,
+                PolicySource.DIRECT,
+                "test",
+                "admin-1",
+                "",
+                ("upload",),
+                ("asset",),
+                organization_id="local",
+                project_id="project-1",
+                purposes=("research",),
+            ),
+            Policy(
+                "project-view",
+                "View import project",
+                PolicyEffect.ALLOW,
+                PolicySource.DIRECT,
+                "test",
+                "admin-1",
+                "",
+                ("view",),
+                ("project",),
+                organization_id="local",
+                project_id="project-1",
+                purposes=("research",),
+            ),
+        )
+
+
 @contextlib.contextmanager
 def _live_browser_server(tmp_path: Path):
     media = GovernedMediaStore(
@@ -72,6 +122,7 @@ def _live_browser_server(tmp_path: Path):
         _Science(),
         Path("src/natureai_next/resources/server_web"),
         media,
+        audit_repository=_AccessRepository(),
     )
     server = ThreadingHTTPServer(("127.0.0.1", 0), handler_for(api))
     server.daemon_threads = True
@@ -114,13 +165,7 @@ def test_multi_file_import_over_real_http_has_no_failed_fetch(tmp_path: Path) ->
         )
         page.goto(url)
         page.locator("#workspace").wait_for(state="visible")
-        page.evaluate(
-            """
-            const library=document.getElementById('page-library');
-            library.removeAttribute('data-fieldora-authorization-hidden');
-            library.hidden=false;
-            """
-        )
+        page.locator('[data-page="library"]').click()
         page.locator("#page-library").wait_for(state="visible")
         page.locator("#upload-project").select_option("project-1")
         page.locator("#upload-file").set_input_files(
@@ -145,10 +190,17 @@ def test_multi_file_import_over_real_http_has_no_failed_fetch(tmp_path: Path) ->
         page.locator("#upload-start").click()
         page.locator("#upload-status").wait_for(state="visible")
         page.wait_for_function(
-            "document.getElementById('upload-status').textContent.includes('3 files verified')"
+            """
+            const node=document.getElementById('upload-status');
+            return node.textContent.includes('verified') || node.style.color.includes('danger');
+            """,
+            timeout=10_000,
         )
 
-        assert failed_requests == []
+        status_text = page.locator("#upload-status").inner_text()
+        trace = f"status={status_text!r}, failed={failed_requests!r}, responses={upload_responses!r}"
+        assert status_text.startswith("3 files verified"), trace
+        assert failed_requests == [], trace
         assert [status for _method, _url, status in upload_responses] == [
             201,
             201,
@@ -156,7 +208,7 @@ def test_multi_file_import_over_real_http_has_no_failed_fetch(tmp_path: Path) ->
             201,
             201,
             201,
-        ]
+        ], trace
         records = media.records("local")
         assert len(records) == 3
         assert {record.mime_type for record in records} == {

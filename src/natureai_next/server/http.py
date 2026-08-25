@@ -159,7 +159,7 @@ def handler_for(
         def _write(self, response) -> None:
             self.send_response(response.status)
             self.send_header("Content-Type", response.content_type)
-            for key, value in response.headers.items():
+            for key, value in response.headers:
                 self.send_header(key, value)
             self.send_header("Content-Length", str(len(response.body)))
             self.end_headers()

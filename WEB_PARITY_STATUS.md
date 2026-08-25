@@ -21,11 +21,11 @@ The Windows 11 + Docker Desktop clean installation has been runtime-validated by
 | Work | State | Current evidence / next action |
 |---|---|---|
 | WEB-006 authoritative duplicate-flow trace | DONE (analysis) | Source trace is recorded in `WEB_PARITY_IMPORT_CONTRACT.md`. Desktop uses production `ImportService.plan()/execute()`; browser currently implements a separate upload loop. |
-| WEB-007 canonical evidence identity | PARTIAL | Same organization + same project + same verified SHA-256/size now converges to one media identity in filesystem/SQLite and PostgreSQL metadata paths. Organization-wide identity across project contexts remains WEB-011 because project visibility must move to associations first. |
+| WEB-007 canonical evidence identity | DONE (organization canonical) | Same organization + same verified SHA-256/size converges to one media identity across project contexts in reference/SQLite and PostgreSQL paths. `Fieldora media identity and project association certification` run #26 is green. |
 | WEB-008 exact duplicate no-op | DONE (same context) | Repeated verified upload/register in the same organization/project returns the canonical existing media record, creates no second media row, and removes redundant temporary/object bytes. `Fieldora media identity certification` run #4 is green on reference/SQLite and PostgreSQL. |
 | WEB-012 dedup race safety | PARTIAL | PostgreSQL completion uses transaction-scoped advisory serialization around content identity and is certified. SQLite/reference concurrency still needs an explicit race test/transaction strategy. |
 | WEB-015 reproduce multi-file browser fetch failure | ANALYSIS | Confirmed browser uses 4 MiB chunks; regular and staged APIs allow up to 8 MiB and the HTTP adapter has no smaller obvious body cap. Need a real managed-server Playwright request trace before changing behavior. |
-| WEB-011 project link on existing evidence | READY | `media_links.py` already models organization-owned media plus project/collection/etc. associations. It is not yet wired into the main media upload/list path; do not broaden hash identity across projects until visibility/link semantics are wired. |
+| WEB-011 project link on existing evidence | DONE | Upload completion records project associations against the organization-canonical media identity. Project A/B both list and download the same canonical object, an unlinked Project C receives no listing and a 404 download, and PostgreSQL persists two distinct project association rows. Run #26 is green. |
 | WEB-026 unusable Create Project button | PARTIAL | The structural cause is fixed for managed PostgreSQL: browser creation now enters authoritative PM persistence rather than Science-only snapshots. A real managed-browser click/runtime check is still required before this item is DONE. |
 | WEB-027 desktop Project creation trace | DONE (analysis) | `WEB_PARITY_PROJECT_CONTRACT.md` records that authoritative creation validates dates, creates the canonical ID, five workflow statuses, admin PM membership, activity and optional template state. |
 | WEB-028 shared web Project creation contract | DONE (managed creation subset) | Managed PostgreSQL creation is organization-scoped, server-ID authoritative, creates desktop-equivalent default statuses/admin PM membership/activity, and remains PBAC-gated. `Fieldora project parity certification` run #1 is green. Templates and later edit/archive/child work remain separate WEB-029–032 slices. |
@@ -38,6 +38,19 @@ The Windows 11 + Docker Desktop clean installation has been runtime-validated by
 - `9193475a819d2dfd22d968e98e4815a375232d03` — PostgreSQL identity test.
 - `9512eb699728109df188402a66d5792f06bd3694` — dedicated media identity certification workflow.
 - `9789297c9645f2103d8d14fd95c7a299d020cce0` — repair PostgreSQL advisory key after run #1 exposed illegal NUL separators.
+
+## WEB-011 project-association slice commits
+
+- `78d5f56f2f402321ed39c64c68a0a91f561e1e83` — canonicalize governed media across Project contexts.
+- `6fb6713b6853927025c7c4f92f18c60748eef258` — query governed media associations by target Project.
+- `614516411100f02558f812e71f77986ec8287189` — canonicalize PostgreSQL media across Project contexts.
+- `0889371a1090e08f3d25bea42624110463abbbc3` — expose PostgreSQL media associations beside canonical metadata.
+- `197fb951de4ac4870ed41f48bf282fc5adda199a` — attach governed associations to the media store.
+- `475701d3c1349745634e492de46c2c94c938f54e` — wire Project associations into browser media upload/list/download access.
+- `3b7178520be5e67f7b589c6a21d7cd4e3c0b5351` — certify browser canonical-media Project association behavior.
+- `bea1390a8c642b512a1859ff212ec98cfbd690ae` — certify PostgreSQL canonical-media Project association persistence.
+- `4548021f164bc5438c662f1537a2580420c094d4` — extend the named media certification workflow to WEB-011.
+- `715b0dc6daa14a3081a4a0ede37002f603dada3e` — initialize the managed Project fixture required by the broader browser test file.
 
 ## Project creation slice commits
 
@@ -70,6 +83,27 @@ Result: SUCCESS.
 - Filesystem/reference identity tests passed.
 - PostgreSQL governed-media identity test passed.
 - This certifies same-context exact duplicate no-op and the PostgreSQL transaction-serialized canonical completion path.
+
+### Fieldora media identity and project association certification — run #25
+
+Result: FAILED usefully (run `32899240337`, job `97968911395`).
+
+- PostgreSQL 16 service initialized successfully.
+- Ruff passed.
+- The new WEB-011 canonical-media, Project-association, scoped list/download and PostgreSQL assertions passed.
+- Three pre-existing Project creation tests failed because their `__new__` fixture did not initialize the newly introduced `_project_management` constructor state.
+- Commit `715b0dc6daa14a3081a4a0ede37002f603dada3e` fixes the fixture without weakening WEB-011 assertions.
+
+### Fieldora media identity and project association certification — run #26
+
+Result: SUCCESS (run `32899441458`, job `97969558972`).
+
+- PostgreSQL 16 service initialized successfully.
+- Ruff governed-media identity and Project-association check passed.
+- Reference/SQLite canonical identity tests passed.
+- Browser certification proves byte-identical uploads in Project A/B use one media ID, create two Project associations, remain visible/downloadable in both linked Projects, and are absent/404 in an unlinked Project.
+- PostgreSQL certification proves one organization-canonical media row plus two distinct persisted Project association rows, with target-scoped lookup returning only the linked canonical media ID.
+- Zero-trust web certification on the same code head also passed; broader server-web and Platform server lanes were still in progress when this result was recorded.
 
 ### Fieldora project parity certification — run #1
 

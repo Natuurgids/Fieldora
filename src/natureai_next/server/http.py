@@ -32,6 +32,7 @@ from natureai_next.server.linked_storage_web import patch_linked_storage_web_res
 from natureai_next.server.navigation_web_compatibility import patch_navigation_web_response
 from natureai_next.server.offline_models_web import patch_offline_models_web_response
 from natureai_next.server.science_workflow_web import patch_science_workflow_web_response
+from natureai_next.server.web_capabilities import patch_zero_trust_web_response
 from natureai_next.server.web_compatibility import (
     patch_web_response,
     public_response,
@@ -117,6 +118,7 @@ def patch_managed_web_response(target: str, response):
         patch_administration_workspace_web_response,
         patch_workspace_language_web_response,
         patch_offline_models_web_response,
+        patch_zero_trust_web_response,
     ):
         response = patch(target, response)
     return response

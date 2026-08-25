@@ -5,6 +5,7 @@ on:
     paths:
       - "Install-Fieldora-Clean.ps1"
       - "Install-Fieldora-Clean-Windows.ps1"
+      - "Install-Fieldora-Clean-Linux.ps1"
       - "Install-Fieldora-Bootstrap-Handoff.ps1"
       - "Install-Fieldora-Offline-Model.ps1"
       - "src/natureai_next/server/service_trust.py"
@@ -26,7 +27,7 @@ jobs:
       - name: Parse PowerShell installers
         shell: pwsh
         run: |
-          foreach ($path in @('./Install-Fieldora-Clean.ps1','./Install-Fieldora-Clean-Windows.ps1','./Install-Fieldora-Bootstrap-Handoff.ps1','./Install-Fieldora-Offline-Model.ps1')) {
+          foreach ($path in @('./Install-Fieldora-Clean.ps1','./Install-Fieldora-Clean-Windows.ps1','./Install-Fieldora-Clean-Linux.ps1','./Install-Fieldora-Bootstrap-Handoff.ps1','./Install-Fieldora-Offline-Model.ps1')) {
             $text = Get-Content -LiteralPath $path -Raw
             [void][scriptblock]::Create($text)
             Write-Host "$path syntax: OK"
@@ -110,6 +111,50 @@ jobs:
             }
           }
           Write-Host "Optional local offline model provisioning and desired-state preservation: OK"
+
+      - name: Certify Linux clean install compatibility layer
+        shell: pwsh
+        run: |
+          $linux = Get-Content -LiteralPath ./Install-Fieldora-Clean-Linux.ps1 -Raw
+          $core = Get-Content -LiteralPath ./Install-Fieldora-Clean.ps1 -Raw
+          foreach ($needle in @(
+            'if (-not $IsLinux)',
+            'Get-Command docker',
+            'Get-Command curl',
+            'Install-Fieldora-Clean.ps1',
+            'Install-Fieldora-Bootstrap-Handoff.ps1',
+            'Install-Fieldora-Offline-Model.ps1',
+            'Require-Marker',
+            '--node linux-docker',
+            'FIELDORA_STORAGE_SERVICE_ENABLED: "true"',
+            'FIELDORA_STORAGE_SERVICE_CLIENT_CA:',
+            'FIELDORA_MODEL_STORE: "/var/lib/fieldora-models"',
+            './fieldora-models:/var/lib/fieldora-models:ro',
+            'bootstrap-handoff/ADMIN-CREDENTIALS.txt',
+            'FIELDORA LINUX CLEAN INSTALL PASSED'
+          )) {
+            if (-not $linux.Contains($needle)) {
+              throw "Linux clean installer is missing: $needle"
+            }
+          }
+          foreach ($forbidden in @('Get-Command docker.exe','Get-Command curl.exe','Cert:\CurrentUser','--network host','artifact_store_path','huggingface.co')) {
+            if ($linux.Contains($forbidden)) {
+              throw "Linux clean installer contains a Windows-only or forbidden shortcut: $forbidden"
+            }
+          }
+          foreach ($coreMarker in @(
+            'Step "Checking Docker Desktop"',
+            'Get-Command docker.exe -ErrorAction SilentlyContinue',
+            'Step "Trusting the local Fieldora HTTPS certificate for the current Windows user"',
+            '$curl = Get-Command curl.exe -ErrorAction SilentlyContinue',
+            'Step "Starting complete Fieldora stack"',
+            '$servicesJson = Docker-Output'
+          )) {
+            if (-not $core.Contains($coreMarker)) {
+              throw "Linux compatibility layer no longer matches the certified core installer marker: $coreMarker"
+            }
+          }
+          Write-Host "Linux compatibility adaptation markers and security contract: OK"
 
       - name: Certify Windows CurrentUser root trust
         shell: pwsh

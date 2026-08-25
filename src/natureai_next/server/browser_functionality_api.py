@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from http.cookies import SimpleCookie
+from typing import Protocol
 from urllib.parse import quote, unquote, urlsplit
 
 from natureai_next.application.access_control import AccessAdministrationService
@@ -44,8 +46,51 @@ _PROJECT_OWNER_RESOURCE_TYPES = (
 )
 
 
+class ProjectSummaryLike(Protocol):
+    project_id: str
+    name: str
+    status: str
+    owner_id: str
+    start_date: str
+    due_date: str
+    budget: float
+    currency: str
+    description: str
+
+
+class ManagedProjectService(Protocol):
+    def create_project(
+        self,
+        name: str,
+        *,
+        owner_id: str,
+        actor_id: str,
+        start_date: str = "",
+        due_date: str = "",
+        description: str = "",
+        budget: float = 0,
+        currency: str = "EUR",
+        template_id: str | None = None,
+    ) -> str: ...
+
+    def projects(self) -> tuple[ProjectSummaryLike, ...]: ...
+
+
 class BrowserFunctionalityFieldoraApi(ProjectOwnerContractFieldoraApi):
     """Add secure same-origin browser sessions and explicit project creation."""
+
+    _project_management_factory: Callable[[], ManagedProjectService] | None = None
+
+    @classmethod
+    def configure_project_management(
+        cls, factory: Callable[[], ManagedProjectService] | None
+    ) -> None:
+        cls._project_management_factory = factory
+
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        factory = type(self)._project_management_factory
+        self._project_management = None if factory is None else factory()
 
     def dispatch(
         self, method: str, target: str, headers: dict[str, str], body: bytes
@@ -58,6 +103,12 @@ class BrowserFunctionalityFieldoraApi(ProjectOwnerContractFieldoraApi):
         route = urlsplit(target)
         if route.path == "/api/v1/web/capabilities" and method == "GET":
             response = self._web_capabilities(routed_headers)
+        elif (
+            route.path == "/api/v1/projects"
+            and method == "GET"
+            and self._project_management is not None
+        ):
+            response = self._managed_projects(routed_headers)
         elif route.path == "/api/v1/projects" and method == "POST":
             response = self._create_project(routed_headers, body)
         else:
@@ -92,6 +143,42 @@ class BrowserFunctionalityFieldoraApi(ProjectOwnerContractFieldoraApi):
         pages["audit"] = audit
         pages["administration"] = pages.get("administration") is True or audit
         return ApiResponse.json(200, payload)
+
+    def _managed_projects(self, headers: dict[str, str]) -> ApiResponse:
+        try:
+            _token, identity = self._identity(headers)
+        except AuthenticationFailed:
+            return ApiResponse.json(401, {"error": "unauthorized"})
+        assert self._project_management is not None
+        items: list[dict[str, object]] = []
+        for project in self._project_management.projects():
+            decision = self._decisions.decide(
+                AccessRequest(
+                    identity.identity_id,
+                    "view",
+                    "project",
+                    project.project_id,
+                    identity.organization_id,
+                    project.project_id,
+                    "research",
+                )
+            )
+            if not decision.allowed:
+                continue
+            items.append(
+                {
+                    "id": project.project_id,
+                    "name": project.name,
+                    "description": project.description,
+                    "status": project.status,
+                    "owner_id": project.owner_id,
+                    "start_date": project.start_date,
+                    "due_date": project.due_date,
+                    "budget": project.budget,
+                    "currency": project.currency,
+                }
+            )
+        return ApiResponse.json(200, {"items": items})
 
     def _browser_session_response(
         self,
@@ -137,15 +224,86 @@ class BrowserFunctionalityFieldoraApi(ProjectOwnerContractFieldoraApi):
             record = json.loads(body)
             if not isinstance(record, dict):
                 raise ValueError
-            resource_id = str(record["id"]).strip()
             name = str(record.get("name") or record.get("title") or "").strip()
-            if not resource_id or not name:
+            if not name:
+                raise ValueError
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return ApiResponse.json(400, {"error": "invalid_request"})
+
+        if self._project_management is not None:
+            decision = self._decisions.decide(
+                AccessRequest(
+                    identity.identity_id,
+                    "create",
+                    "project",
+                    "",
+                    identity.organization_id,
+                    "",
+                    headers.get("x-fieldora-purpose", "research"),
+                )
+            )
+            if not decision.allowed:
+                return ApiResponse.json(403, {"error": "forbidden"})
+            try:
+                project_id = self._project_management.create_project(
+                    name,
+                    owner_id=str(record.get("owner_id") or identity.identity_id),
+                    actor_id=identity.identity_id,
+                    start_date=str(record.get("start_date") or ""),
+                    due_date=str(record.get("due_date") or ""),
+                    description=str(record.get("description") or ""),
+                    budget=float(record.get("budget") or 0),
+                    currency=str(record.get("currency") or "EUR"),
+                    template_id=(
+                        str(record["template_id"]).strip()
+                        if record.get("template_id")
+                        else None
+                    ),
+                )
+            except (TypeError, ValueError) as exc:
+                return ApiResponse.json(
+                    400, {"error": "invalid_request", "detail": str(exc)}
+                )
+            self._grant_project_owner(
+                identity.identity_id,
+                identity.organization_id,
+                project_id,
+                name,
+            )
+            item = next(
+                project
+                for project in self._project_management.projects()
+                if project.project_id == project_id
+            )
+            return ApiResponse.json(
+                201,
+                {
+                    "item": {
+                        "id": item.project_id,
+                        "name": item.name,
+                        "description": item.description,
+                        "status": item.status,
+                        "owner_id": item.owner_id,
+                        "start_date": item.start_date,
+                        "due_date": item.due_date,
+                        "budget": item.budget,
+                        "currency": item.currency,
+                    },
+                    "revision": 1,
+                },
+            )
+
+        # Temporary compatibility fallback for the one-node reference API.  Managed
+        # Fieldora configures a Project Management service and never uses this path.
+        try:
+            resource_id = str(record["id"]).strip()
+            if not resource_id:
                 raise ValueError
             record["id"] = resource_id
             record["name"] = name
             record.setdefault("status", "active")
             record.setdefault("owner_id", identity.identity_id)
-        except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+        except (KeyError, TypeError, ValueError):
             return ApiResponse.json(400, {"error": "invalid_request"})
 
         decision = self._decisions.decide(
@@ -171,35 +329,49 @@ class BrowserFunctionalityFieldoraApi(ProjectOwnerContractFieldoraApi):
             )
         except ValueError:
             return ApiResponse.json(409, {"error": "revision_conflict"})
-
-        # A creator must be able to work inside the project immediately.  This is
-        # not an administrator bypass: the grant is subject-specific and constrained
-        # to the new project, organization and research purpose.  Later contracts or
-        # explicit denies still participate in the normal PBAC decision.
-        if self._access_repository is not None:
-            administration = AccessAdministrationService(self._access_repository)
-            administration.create_policy(
-                name=f"Project owner workspace: {name}",
-                effect=PolicyEffect.ALLOW,
-                source=PolicySource.OBJECT_GRANT,
-                source_id=resource_id,
-                subject_id=identity.identity_id,
-                actions=(
-                    "view",
-                    "edit",
-                    "upload",
-                    "download",
-                    "search",
-                    "link",
-                    "unlink",
-                    "export",
-                ),
-                resource_types=_PROJECT_OWNER_RESOURCE_TYPES,
-                organization_id=identity.organization_id,
-                project_id=resource_id,
-                purposes=("research",),
-            )
+        self._grant_project_owner(
+            identity.identity_id,
+            identity.organization_id,
+            resource_id,
+            name,
+        )
         return ApiResponse.json(201, {"item": record, "revision": revision})
+
+    def _grant_project_owner(
+        self,
+        identity_id: str,
+        organization_id: str,
+        project_id: str,
+        name: str,
+    ) -> None:
+        # A creator must be able to work inside the project immediately. This is not
+        # an administrator bypass: the grant is subject-specific and constrained to
+        # the new project, organization and research purpose. Explicit denies still
+        # participate in the normal PBAC decision.
+        if self._access_repository is None:
+            return
+        administration = AccessAdministrationService(self._access_repository)
+        administration.create_policy(
+            name=f"Project owner workspace: {name}",
+            effect=PolicyEffect.ALLOW,
+            source=PolicySource.OBJECT_GRANT,
+            source_id=project_id,
+            subject_id=identity_id,
+            actions=(
+                "view",
+                "edit",
+                "upload",
+                "download",
+                "search",
+                "link",
+                "unlink",
+                "export",
+            ),
+            resource_types=_PROJECT_OWNER_RESOURCE_TYPES,
+            organization_id=organization_id,
+            project_id=project_id,
+            purposes=("research",),
+        )
 
 
 def _session_cookie(raw_cookie: str) -> str:

@@ -152,7 +152,7 @@ def handler_for(
             content_length = int(self.headers.get("Content-Length", "0"))
             body = self.rfile.read(content_length) if content_length else b""
             headers = {key: value for key, value in self.headers.items()}
-            response = application.handle(self.command, target, headers, body)
+            response = application.dispatch(self.command, target, headers, body)
             response = patch_managed_web_response(target, response)
             self._write(response)
 

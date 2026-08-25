@@ -45,7 +45,18 @@ _ADMINISTRATION_WORKSPACE_PATCH = bytes(
  const administrationShowPage=showPage;
  showPage=function(page){
   administrationShowPage(page);
-  if(page==="audit")loadAudit();
+  if(page!=="audit"||!auditPage||auditPage.hidden||auditPage.dataset.fieldoraAuthorizationHidden==="true")return;
+  const auditList=document.getElementById("audit-list");
+  if(auditList&&!auditList.childElementCount){
+   auditList.innerHTML='<div class="empty">Loading audit…</div>';
+  }
+  document.querySelectorAll('.sidebar .nav[data-page]').forEach(button=>{
+   button.setAttribute("aria-selected",String(button.dataset.page==="administration"));
+  });
+  document.querySelectorAll('[data-workspace-target]').forEach(button=>{
+   button.setAttribute("aria-selected",String(button.dataset.workspaceTarget==="audit"));
+  });
+  loadAudit();
  };
 
  const groups=[

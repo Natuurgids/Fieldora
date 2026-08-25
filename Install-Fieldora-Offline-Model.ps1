@@ -33,6 +33,7 @@ if ($LASTEXITCODE -ne 0) { throw "Docker Compose is unavailable." }
 $installFull = [IO.Path]::GetFullPath($InstallRoot)
 $bundleFull = [IO.Path]::GetFullPath($BundlePath)
 $composePath = Join-Path $installFull "compose.yaml"
+$standardOverridePath = Join-Path $installFull "compose.override.yaml"
 $modelStore = Join-Path $installFull "fieldora-models"
 $overridePath = Join-Path $installFull "compose.models.yaml"
 
@@ -111,8 +112,23 @@ services:
 '@
 Set-Content -LiteralPath $overridePath -Encoding utf8NoBOM -Value $override
 
+# Preserve the clean install's standard override (for example the internal mTLS
+# storage-service listener) when applying the model-store overlay. Explicit -f
+# arguments otherwise suppress Compose's automatic compose.override.yaml loading.
+$composeArgs = @("-f", $composePath)
+if (Test-Path -LiteralPath $standardOverridePath -PathType Leaf) {
+    $composeArgs += @("-f", $standardOverridePath)
+}
+$composeArgs += @("-f", $overridePath)
+
+Write-Host "Validating model-store Compose overlay with existing Fieldora overrides..." -ForegroundColor Cyan
+& docker compose @composeArgs config -q
+if ($LASTEXITCODE -ne 0) {
+    throw "Fieldora model-store Compose overlay is invalid or conflicts with the existing deployment override."
+}
+
 Write-Host "Applying persistent read-only model-store mount..." -ForegroundColor Cyan
-& docker compose -f $composePath -f $overridePath up -d fieldora-server fieldora-worker
+& docker compose @composeArgs up -d fieldora-server fieldora-worker
 if ($LASTEXITCODE -ne 0) {
     throw "Fieldora services could not be recreated with the offline model store."
 }

@@ -60,7 +60,8 @@ class PostgresMediaMetadataRepository:
                     "CREATE INDEX IF NOT EXISTS ix_governed_media_content_pg "
                     "ON governed_media(organization_id,sha256,size_bytes)"
                 )
-        self.associations = PostgresMediaAssociationRepository(connect)
+                PostgresMediaAssociationRepository.bootstrap_schema(cursor)
+        self.associations = PostgresMediaAssociationRepository(connect, initialize=False)
 
     def insert_media(self, record: MediaRecord) -> MediaRecord:
         with self._connect() as connection:

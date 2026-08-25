@@ -6,7 +6,7 @@ import json
 from collections.abc import Callable
 from http.cookies import SimpleCookie
 from typing import Protocol
-from urllib.parse import quote, unquote, urlsplit
+from urllib.parse import parse_qs, quote, unquote, urlsplit
 
 from natureai_next.application.access_control import AccessAdministrationService
 from natureai_next.application.authentication import AuthenticationFailed
@@ -20,6 +20,7 @@ from natureai_next.server.browser_functionality_web import (
     patch_browser_functionality_response,
 )
 from natureai_next.server.directory_intake_web import patch_directory_intake_response
+from natureai_next.server.media_links import new_association
 from natureai_next.server.project_owner_contract_api import ProjectOwnerContractFieldoraApi
 from natureai_next.server.web_capabilities import capability_payload
 
@@ -103,6 +104,7 @@ class BrowserFunctionalityFieldoraApi(ProjectOwnerContractFieldoraApi):
             routed_headers["authorization"] = f"Bearer {cookie_token}"
 
         route = urlsplit(target)
+        upload_context = self._upload_context(method, route.path)
         if route.path == "/api/v1/web/capabilities" and method == "GET":
             response = self._web_capabilities(routed_headers)
         elif (
@@ -113,14 +115,187 @@ class BrowserFunctionalityFieldoraApi(ProjectOwnerContractFieldoraApi):
             response = self._managed_projects(routed_headers)
         elif route.path == "/api/v1/projects" and method == "POST":
             response = self._create_project(routed_headers, body)
+        elif (
+            route.path == "/api/v1/media"
+            and method == "GET"
+            and parse_qs(route.query).get("project_id", [""])[0]
+        ):
+            response = self._associated_media_list_response(
+                route.query, routed_headers
+            )
+        elif (
+            route.path.startswith("/api/v1/media/")
+            and method in {"GET", "HEAD"}
+            and parse_qs(route.query).get("project_id", [""])[0]
+        ):
+            response = self._associated_media_response(
+                route.path.rsplit("/", 1)[-1],
+                method,
+                route.query,
+                routed_headers,
+            )
         else:
             response = super().dispatch(method, target, routed_headers, body)
 
+        if upload_context is not None and response.status == 201:
+            self._link_completed_upload(upload_context, routed_headers, response)
         response = self._browser_session_response(
             method, route.path, routed_headers, cookie_token, response
         )
         response = patch_browser_functionality_response(target, response)
         return patch_directory_intake_response(target, response)
+
+    def _upload_context(self, method: str, path: str):
+        if self._media is None or method != "PUT":
+            return None
+        prefix = "/api/v1/media/uploads/"
+        if not path.startswith(prefix):
+            return None
+        upload_id = path[len(prefix):].strip()
+        return self._media.upload(upload_id) if upload_id else None
+
+    def _link_completed_upload(
+        self, upload, headers: dict[str, str], response: ApiResponse
+    ) -> None:
+        if self._media is None or not upload.project_id:
+            return
+        try:
+            payload = json.loads(response.body)
+            media_id = str(payload["media_id"])
+        except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+            return
+        self._media.associations.link(
+            new_association(
+                media_id=media_id,
+                organization_id=upload.organization_id,
+                association_type="project",
+                target_id=upload.project_id,
+                purpose=headers.get("x-fieldora-purpose", "research"),
+                linked_by=upload.subject_id,
+            )
+        )
+
+    def _associated_media_list_response(
+        self, query_string: str, headers: dict[str, str]
+    ) -> ApiResponse:
+        if self._media is None:
+            return ApiResponse.json(404, {"error": "not_found"})
+        try:
+            _token, identity = self._identity(headers)
+        except AuthenticationFailed:
+            return ApiResponse.json(401, {"error": "unauthorized"})
+        query = parse_qs(query_string)
+        project_id = query.get("project_id", [""])[0].strip()
+        try:
+            limit = max(1, min(int(query.get("limit", ["200"])[0]), 500))
+        except ValueError:
+            return ApiResponse.json(400, {"error": "invalid_limit"})
+        linked_ids = set(
+            self._media.associations.linked_media_ids(
+                identity.organization_id, "project", project_id
+            )
+        )
+        items: list[dict[str, object]] = []
+        for record in self._media.records(identity.organization_id, "", 500):
+            if record.project_id != project_id and record.media_id not in linked_ids:
+                continue
+            decision = self._decisions.decide(
+                AccessRequest(
+                    identity.identity_id,
+                    "view",
+                    "asset",
+                    record.media_id,
+                    record.organization_id,
+                    project_id,
+                    headers.get("x-fieldora-purpose", "research"),
+                )
+            )
+            if decision.allowed:
+                items.append(
+                    {
+                        "media_id": record.media_id,
+                        "project_id": project_id,
+                        "mime_type": record.mime_type,
+                        "size_bytes": record.size_bytes,
+                        "sha256": record.sha256,
+                        "download_url": (
+                            f"/api/v1/media/{record.media_id}?project_id={quote(project_id)}"
+                        ),
+                    }
+                )
+            if len(items) == limit:
+                break
+        return ApiResponse.json(200, {"items": items, "count": len(items)})
+
+    def _associated_media_response(
+        self,
+        media_id: str,
+        method: str,
+        query_string: str,
+        headers: dict[str, str],
+    ) -> ApiResponse:
+        if self._media is None:
+            return ApiResponse.json(404, {"error": "not_found"})
+        try:
+            _token, identity = self._identity(headers)
+        except AuthenticationFailed:
+            return ApiResponse.json(401, {"error": "unauthorized"})
+        project_id = parse_qs(query_string).get("project_id", [""])[0].strip()
+        record = self._media.record(media_id)
+        if record is None or record.organization_id != identity.organization_id:
+            return ApiResponse.json(404, {"error": "not_found"})
+        linked_ids = set(
+            self._media.associations.linked_media_ids(
+                identity.organization_id, "project", project_id
+            )
+        )
+        if record.project_id != project_id and media_id not in linked_ids:
+            return ApiResponse.json(404, {"error": "not_found"})
+        decision = self._decisions.decide(
+            AccessRequest(
+                identity.identity_id,
+                "download",
+                "asset",
+                media_id,
+                record.organization_id,
+                project_id,
+                headers.get("x-fieldora-purpose", "research"),
+            )
+        )
+        if not decision.allowed:
+            return ApiResponse.json(404, {"error": "not_found"})
+        start, end, status = 0, record.size_bytes - 1, 200
+        requested = headers.get("range", "")
+        if requested:
+            try:
+                unit, values = requested.split("=", 1)
+                first, last = values.split("-", 1)
+                if unit != "bytes" or "," in values:
+                    raise ValueError
+                start = int(first)
+                end = record.size_bytes - 1 if not last else int(last)
+                if start < 0 or end < start or end >= record.size_bytes:
+                    raise ValueError
+                status = 206
+            except ValueError:
+                return ApiResponse(
+                    416,
+                    b"",
+                    "application/json",
+                    (("Content-Range", f"bytes */{record.size_bytes}"),),
+                )
+        body = b"" if method == "HEAD" else self._media.read_range(record, start, end)
+        response_headers = [
+            ("Accept-Ranges", "bytes"),
+            ("Content-Length", str(end - start + 1)),
+            ("ETag", f'"sha256-{record.sha256}"'),
+            ("X-Content-SHA256", record.sha256),
+        ]
+        if status == 206:
+            response_headers.append(
+                ("Content-Range", f"bytes {start}-{end}/{record.size_bytes}")
+            )
+        return ApiResponse(status, body, record.mime_type, tuple(response_headers))
 
     def _web_capabilities(self, headers: dict[str, str]) -> ApiResponse:
         """Project browser destinations from the same PBAC tuples as their APIs."""

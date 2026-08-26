@@ -34,7 +34,7 @@ The Windows 11 + Docker Desktop clean installation has been runtime-validated by
 
 - `2831150daf9b708a1d84ecb01be177bbb12a82dc` — PostgreSQL same-context canonical content completion.
 - `d810b803e74a0511798ed9f67a21e066f4875b3f` — governed media store returns canonical record and removes redundant bytes.
-- `70a94bc50ea18b5ebed8f9f67a21e066f4875b3f` — filesystem/reference identity tests.
+- `70a94bc50ea18b5ebed8f9ebac62cebced31ee14` — filesystem/reference identity tests.
 - `9193475a819d2dfd22d968e98e4815a375232d03` — PostgreSQL identity test.
 - `9512eb699728109df188402a66d5792f06bd3694` — dedicated media identity certification workflow.
 - `9789297c9645f2103d8d14fd95c7a299d020cce0` — repair PostgreSQL advisory key after run #1 exposed illegal NUL separators.

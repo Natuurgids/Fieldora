@@ -11,6 +11,7 @@ from uuid import uuid4
 import pytest
 from playwright.sync_api import Page, sync_playwright
 
+from natureai_next.application.access_control import PolicyDecisionService
 from natureai_next.domain.access_control import (
     AccessDecision,
     AccessRequest,
@@ -42,12 +43,13 @@ class _Authentication:
 
 
 class _Decisions:
-    def __init__(self) -> None:
+    def __init__(self, repository: SqliteAccessControlRepository) -> None:
         self.requests: list[AccessRequest] = []
+        self._service = PolicyDecisionService(repository)
 
     def decide(self, request: AccessRequest) -> AccessDecision:
         self.requests.append(request)
-        return AccessDecision(True, "test")
+        return self._service.decide(request)
 
 
 class _Science:
@@ -66,8 +68,11 @@ def _connect_factory():
     return lambda: psycopg.connect(dsn, connect_timeout=10)
 
 
-def _access_repository(database_path: Path, organization_id: str) -> SqliteAccessControlRepository:
+def _access_repository(
+    database_path: Path, identity: Identity
+) -> SqliteAccessControlRepository:
     repository = SqliteAccessControlRepository(database_path)
+    repository.put_identity(identity)
     repository.put_policy(
         Policy(
             policy_id="browser-project-scope",
@@ -75,11 +80,11 @@ def _access_repository(database_path: Path, organization_id: str) -> SqliteAcces
             effect=PolicyEffect.ALLOW,
             source=PolicySource.DIRECT,
             source_id="browser-project-test",
-            subject_id="browser-project-user",
+            subject_id=identity.identity_id,
             role_id="",
             actions=("view", "create"),
             resource_types=("project",),
-            organization_id=organization_id,
+            organization_id=identity.organization_id,
             purposes=("research",),
         )
     )
@@ -89,10 +94,11 @@ def _access_repository(database_path: Path, organization_id: str) -> SqliteAcces
 @contextlib.contextmanager
 def _managed_browser_server(organization_id: str, access_database: Path):
     project_management = PostgresProjectManagementService(_connect_factory())
-    decisions = _Decisions()
-    access_repository = _access_repository(access_database, organization_id)
+    authentication = _Authentication(organization_id)
+    access_repository = _access_repository(access_database, authentication.identity)
+    decisions = _Decisions(access_repository)
     api = BrowserFunctionalityFieldoraApi(
-        _Authentication(organization_id),
+        authentication,
         decisions,
         _Science(),
         Path("src/natureai_next/resources/server_web"),
@@ -128,6 +134,20 @@ def _open_project_editor(page: Page, url: str) -> None:
     page.locator("#portfolio-project-editor").wait_for(state="visible")
 
 
+def _project_access_request(
+    organization_id: str, project_id: str, action: str
+) -> AccessRequest:
+    return AccessRequest(
+        "browser-project-user",
+        action,
+        "project",
+        project_id,
+        organization_id,
+        project_id,
+        "research",
+    )
+
+
 @pytest.mark.integration
 def test_create_project_click_persists_authoritative_postgres_project(tmp_path: Path) -> None:
     organization_id = f"browser-org-{uuid4()}"
@@ -148,6 +168,9 @@ def test_create_project_click_persists_authoritative_postgres_project(tmp_path: 
             ),
         )
         _open_project_editor(page, url)
+        assert not decisions.decide(
+            _project_access_request(organization_id, "not-created-yet", "edit")
+        ).allowed
         page.locator("#portfolio-project-name").fill("Managed Browser Project")
         page.locator("#portfolio-project-start-date").fill("2026-09-01")
         page.locator("#portfolio-project-due-date").fill("2026-12-31")
@@ -193,6 +216,12 @@ def test_create_project_click_persists_authoritative_postgres_project(tmp_path: 
         assert projects[0].budget == 1250.5
         assert projects[0].currency == "EUR"
         assert project_management.member_role(canonical_id, "browser-project-user") == "admin"
+        assert decisions.decide(
+            _project_access_request(organization_id, canonical_id, "edit")
+        ).allowed
+        assert not decisions.decide(
+            _project_access_request(organization_id, canonical_id, "delete")
+        ).allowed
         assert [item["name"] for item in project_management.statuses(canonical_id)] == [
             "To Do",
             "In Progress",

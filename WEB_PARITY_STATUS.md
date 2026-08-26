@@ -29,6 +29,7 @@ The Windows 11 + Docker Desktop clean installation has been runtime-validated by
 | WEB-026 unusable Create Project button | DONE | Root cause was managed-web patch composition: the Project editor created by `browser_functionality_web.py` was inserted inside the legacy portfolio split, then the later project cockpit removed that split while the Add Project button retained a closure to the detached editor. Commit `0a4b6eb6db2d7306c78ec9bf61e27268a6f3fe1a` keeps the editor connected outside the disposable split. `Fieldora project parity certification` run #46 (`32936244117`) is green and certifies real Chromium Research → Projects & Portfolio → Add Project → Create Project against authoritative PostgreSQL PM persistence, canonical server ID, visible cockpit refresh, default statuses, creator admin membership, activity, PBAC create decision, and no Science snapshot fallback. |
 | WEB-027 desktop Project creation trace | DONE (analysis) | `WEB_PARITY_PROJECT_CONTRACT.md` records that authoritative creation validates dates, creates the canonical ID, five workflow statuses, admin PM membership, activity and optional template state. |
 | WEB-028 shared web Project creation contract | DONE (managed creation subset) | Managed PostgreSQL creation is organization-scoped, server-ID authoritative, creates desktop-equivalent default statuses/admin PM membership/activity, and remains PBAC-gated. `Fieldora project parity certification` run #46 is green, including the real managed-browser click/runtime path. Templates and later edit/archive/child work remain separate WEB-029–032 slices. |
+| WEB-029 Project validation parity | DONE | Ordinary managed browser creation now binds ownership to the authenticated creator, does not send a browser-selected initial lifecycle status, and transports name/description/start date/due date/budget/currency to the authoritative Project service. Real Chromium/PostgreSQL coverage proves valid fields persist and an impossible due-before-start schedule returns 400, keeps the editor open and persists nothing. `Fieldora project parity certification` run #53 (`32937090033`) is green. |
 
 ## Evidence-identity slice commits
 
@@ -80,6 +81,11 @@ The Windows 11 + Docker Desktop clean installation has been runtime-validated by
 - `1939649a` — use the production SQLite access repository in the browser fixture so zero-trust capability projection and inherited runtime dependencies are representative.
 - `0a4b6eb6db2d7306c78ec9bf61e27268a6f3fe1a` — keep the Project editor connected when the later project cockpit removes the legacy portfolio split.
 - `a15cb6a71842f2771db469000118b5e85b7b90f1` — certify visible canonical Project refresh through the final cockpit tree after creation.
+- `afdaeae61c5eeace61406deab7166a9bfa42dc58` — add the red WEB-029 owner/status validation regression; Project parity run #49 reproduced unauthorized payload ownership winning.
+- `df20cf39330fe86d9da59f27aa233a757cd1595b` — make authenticated creator ownership authoritative at the ordinary managed browser create boundary.
+- `5d487fc7343853b76fe57e558303c0b593790c0e` — add the red real-browser shared-field parity regression.
+- `d26f65a54348f6f2c0e72ed4d3814d3216abdbec` — replace browser-only initial status/owner submission with shared start/due/budget/currency transport fields.
+- `3dd9dab67681936621e076b43f35950b8e964050` — certify due-before-start rejection through the real browser/API/PostgreSQL path.
 
 ## Certification history
 
@@ -127,6 +133,17 @@ Result: SUCCESS (run `32936244117`, job `98077885921`).
 - The fixture makes Science writes fatal, proving the browser runtime did not fall back to the old Science snapshot persistence path.
 - The recorded access decisions include the PBAC-gated Project `create` decision and the browser emitted no failed network requests.
 - This closes WEB-026.
+
+### Fieldora project parity certification — run #53
+
+Result: SUCCESS (run `32937090033`, job `98080309042`).
+
+- PostgreSQL 16, Chromium installation and Ruff all passed.
+- Ordinary managed browser creation no longer accepts payload owner delegation; authenticated creator ownership is authoritative and the service-created lifecycle remains `active`.
+- The final browser editor transports name, description, start date, due date, budget and currency without duplicating Project business validation in JavaScript.
+- A valid real Chromium creation persists all shared scalar fields to the canonical PostgreSQL Project, refreshes the visible cockpit, and omits browser `owner_id`/`status` authority from the request.
+- A real Chromium submission with due date before start date reaches the same authoritative Project service, returns HTTP 400, leaves the editor visible and persists no Project.
+- This closes WEB-029.
 
 ## Guardrails
 

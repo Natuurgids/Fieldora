@@ -7,11 +7,15 @@ on:
       - "src/natureai_next/server/postgres_project_management.py"
       - "src/natureai_next/server/browser_functionality_api.py"
       - "src/natureai_next/server/browser_functionality_web.py"
+      - "src/natureai_next/server/project_lifecycle_api.py"
+      - "src/natureai_next/server/project_lifecycle_web.py"
+      - "src/natureai_next/server/linked_storage_browser_api.py"
       - "src/natureai_next/server/http.py"
       - "src/natureai_next/bootstrap/platform_server_cli.py"
       - "tests/test_postgres_project_management.py"
       - "tests/test_browser_project_management_api.py"
       - "tests/test_browser_project_management_http.py"
+      - "tests/test_browser_project_lifecycle_http.py"
       - ".github/workflows/project-parity-certification.yml"
   workflow_dispatch:
 
@@ -61,11 +65,15 @@ jobs:
           src/natureai_next/server/postgres_project_management.py
           src/natureai_next/server/browser_functionality_api.py
           src/natureai_next/server/browser_functionality_web.py
+          src/natureai_next/server/project_lifecycle_api.py
+          src/natureai_next/server/project_lifecycle_web.py
+          src/natureai_next/server/linked_storage_browser_api.py
           src/natureai_next/server/http.py
           src/natureai_next/bootstrap/platform_server_cli.py
           tests/test_postgres_project_management.py
           tests/test_browser_project_management_api.py
           tests/test_browser_project_management_http.py
+          tests/test_browser_project_lifecycle_http.py
 
       - name: Managed project parity tests
         run: >-
@@ -73,3 +81,4 @@ jobs:
           tests/test_postgres_project_management.py
           tests/test_browser_project_management_api.py
           tests/test_browser_project_management_http.py
+          tests/test_browser_project_lifecycle_http.py

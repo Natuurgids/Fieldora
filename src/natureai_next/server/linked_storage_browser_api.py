@@ -121,6 +121,30 @@ class LinkedStorageBrowserFieldoraApi(ProjectLifecycleFieldoraApi):
                 }
             )
 
+        instances = self._media.instances(media_id, identity.organization_id)
+        if not instances:
+            return ApiResponse.json(404, {"error": "not_found"})
+        managed_count = sum(
+            instance.storage_kind == "managed" for instance in instances
+        )
+        referenced_count = sum(
+            instance.storage_kind == "referenced" for instance in instances
+        )
+        if managed_count and referenced_count:
+            storage_policy = "hybrid"
+        elif referenced_count:
+            storage_policy = "referenced"
+        else:
+            storage_policy = "managed"
+        storage = {
+            "storage_policy": storage_policy,
+            "managed_instances": managed_count,
+            "referenced_instances": referenced_count,
+            "available_instances": sum(
+                instance.availability == "available" for instance in instances
+            ),
+        }
+
         return ApiResponse.json(
             200,
             {
@@ -130,6 +154,7 @@ class LinkedStorageBrowserFieldoraApi(ProjectLifecycleFieldoraApi):
                     "size_bytes": record.size_bytes,
                     "sha256": record.sha256,
                 },
+                "storage": storage,
                 "associations": associations,
             },
         )

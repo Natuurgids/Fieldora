@@ -174,10 +174,14 @@ def test_project_edit_status_archive_and_conflict_are_revision_safe(tmp_path: Pa
         ) as update_info:
             page.locator("#portfolio-project-lifecycle-save").click()
         assert update_info.value.status == 200
+        page.get_by_text("Project details saved.", exact=True).wait_for(state="visible")
         updated = project_management.projects(organization_id)[0]
         assert updated.name == "Lifecycle Project Updated"
         assert updated.revision > created_revision
         updated_revision = updated.revision
+        assert page.locator("#portfolio-project-lifecycle-revision").inner_text() == (
+            f"Server revision {updated_revision}"
+        )
 
         page.locator("#portfolio-project-lifecycle-status").select_option("cancelled")
         with page.expect_response(
@@ -186,10 +190,15 @@ def test_project_edit_status_archive_and_conflict_are_revision_safe(tmp_path: Pa
         ) as status_info:
             page.locator("#portfolio-project-lifecycle-apply-status").click()
         assert status_info.value.status == 200
+        assert status_info.value.request.post_data_json["status"] == "cancelled"
+        page.get_by_text("Project status updated.", exact=True).wait_for(state="visible")
         current = project_management.projects(organization_id)[0]
         assert current.status == "cancelled"
         assert current.revision > updated_revision
         status_revision = current.revision
+        assert page.locator("#portfolio-project-lifecycle-revision").inner_text() == (
+            f"Server revision {status_revision}"
+        )
 
         project_management.update_project(
             project_id,
@@ -219,6 +228,9 @@ def test_project_edit_status_archive_and_conflict_are_revision_safe(tmp_path: Pa
         after_conflict = project_management.projects(organization_id)[0]
         assert after_conflict.description == "Concurrent server edit"
         assert after_conflict.revision == concurrent_revision
+        assert page.locator("#portfolio-project-lifecycle-revision").inner_text() == (
+            f"Server revision {concurrent_revision}"
+        )
 
         with page.expect_response(
             lambda response: response.request.method == "PATCH"

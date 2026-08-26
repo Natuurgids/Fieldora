@@ -207,3 +207,84 @@ def test_postgres_existing_governed_media_is_backfilled_as_managed(tmp_path: Pat
     )
 
     _assert_one_managed_instance(reloaded_store, record)
+
+
+@pytest.mark.integration
+def test_postgres_referenced_content_has_canonical_identity_without_managed_object(
+    tmp_path: Path,
+) -> None:
+    connect = _connect_factory()
+    repository = PostgresMediaMetadataRepository(connect)
+    store = GovernedMediaStore(
+        tmp_path / "unused-referenced.sqlite3",
+        tmp_path / "referenced-objects",
+        metadata=repository,
+    )
+    organization_id = f"org-{uuid4()}"
+    project_id = f"project-{uuid4()}"
+    payload = b"postgres referenced-only evidence"
+    digest = hashlib.sha256(payload).hexdigest()
+    source_ref = f"linked:storage-1:object-1:{digest}"
+
+    first = store.attach_referenced(
+        organization_id=organization_id,
+        project_id=project_id,
+        mime_type="application/octet-stream",
+        size_bytes=len(payload),
+        sha256=digest,
+        source_ref=source_ref,
+    )
+    repeated = store.attach_referenced(
+        organization_id=organization_id,
+        project_id=project_id,
+        mime_type="application/octet-stream",
+        size_bytes=len(payload),
+        sha256=digest,
+        source_ref=source_ref,
+    )
+
+    assert repeated.media_id == first.media_id
+    assert first.relative_path is None
+    assert len(store.records(organization_id)) == 1
+    instances = store.instances(first.media_id, organization_id)
+    assert len(instances) == 1
+    assert instances[0].storage_kind == "referenced"
+    assert instances[0].source_ref == source_ref
+
+
+@pytest.mark.integration
+def test_postgres_referenced_then_managed_upgrades_same_canonical_identity(
+    tmp_path: Path,
+) -> None:
+    connect = _connect_factory()
+    repository = PostgresMediaMetadataRepository(connect)
+    store = GovernedMediaStore(
+        tmp_path / "unused-hybrid.sqlite3",
+        tmp_path / "hybrid-objects",
+        metadata=repository,
+    )
+    organization_id = f"org-{uuid4()}"
+    project_id = f"project-{uuid4()}"
+    payload = b"postgres referenced evidence later managed"
+    digest = hashlib.sha256(payload).hexdigest()
+    referenced = store.attach_referenced(
+        organization_id=organization_id,
+        project_id=project_id,
+        mime_type="application/octet-stream",
+        size_bytes=len(payload),
+        sha256=digest,
+        source_ref=f"linked:storage-1:object-2:{digest}",
+    )
+
+    managed = _upload(
+        store,
+        payload,
+        organization_id=organization_id,
+        project_id=project_id,
+    )
+
+    assert managed.media_id == referenced.media_id
+    assert managed.relative_path is not None
+    assert len(store.records(organization_id)) == 1
+    instances = store.instances(managed.media_id, organization_id)
+    assert [instance.storage_kind for instance in instances] == ["managed", "referenced"]

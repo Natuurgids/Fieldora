@@ -81,6 +81,21 @@ def _access_repository(path: Path, organization_id: str) -> SqliteAccessControlR
             purposes=("research",),
         )
     )
+    repository.put_policy(
+        Policy(
+            policy_id="browser-lifecycle-manage-allocation",
+            name="Browser lifecycle allocation management scope",
+            effect=PolicyEffect.ALLOW,
+            source=PolicySource.DIRECT,
+            source_id="browser-project-child-test",
+            subject_id="browser-lifecycle-user",
+            role_id="",
+            actions=("manage",),
+            resource_types=("project",),
+            organization_id=organization_id,
+            purposes=("research",),
+        )
+    )
     return repository
 
 
@@ -249,6 +264,128 @@ def test_project_edit_status_archive_and_conflict_are_revision_safe(tmp_path: Pa
             "project.updated",
             "project.archived",
         ]
+        browser.close()
+
+
+@pytest.mark.integration
+def test_project_child_controls_persist_authoritative_hierarchy_and_allocation(tmp_path: Path) -> None:
+    organization_id = f"browser-children-org-{uuid4()}"
+    with _managed_server(
+        organization_id, tmp_path / "access-control-children.sqlite3"
+    ) as (url, project_management), sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        page = browser.new_page()
+        failed_requests: list[tuple[str, str, str]] = []
+        page.on(
+            "requestfailed",
+            lambda request: failed_requests.append(
+                (request.method, request.url, request.failure or "unknown")
+            ),
+        )
+        page.add_init_script(
+            "sessionStorage.setItem('fieldora-session','browser-lifecycle-token')"
+        )
+        page.goto(url)
+        _open_projects(page)
+        project_id = _create_project(page)
+        page.locator(f'[data-project-tree="{project_id}"]').click()
+
+        work_editor = page.locator("#work-save").locator("xpath=ancestor::details[1]")
+        if work_editor.count():
+            work_editor.locator("summary").click()
+        page.locator("#work-type").select_option("phase")
+        page.locator("#work-project").select_option(project_id)
+        page.locator("#work-name").fill("Browser Field Phase")
+        page.locator("#work-description").fill("Created through governed PM")
+        with page.expect_response(
+            lambda response: response.request.method == "POST"
+            and response.url.endswith("/api/v1/phases")
+        ) as phase_info:
+            page.locator("#work-save").click()
+        phase_response = phase_info.value
+        phase = phase_response.json()["item"]
+        assert phase_response.status == 201
+        assert phase["id"] != phase_response.request.post_data_json["id"]
+        page.get_by_text("Browser Field Phase", exact=False).first.wait_for(state="visible")
+
+        page.locator("#work-type").select_option("sprint")
+        page.locator("#work-name").fill("Browser September Sprint")
+        page.locator("#work-parent").fill("")
+        page.locator("#work-sprint").fill("")
+        with page.expect_response(
+            lambda response: response.request.method == "POST"
+            and response.url.endswith("/api/v1/sprints")
+        ) as sprint_info:
+            page.locator("#work-save").click()
+        sprint_response = sprint_info.value
+        sprint = sprint_response.json()["item"]
+        assert sprint_response.status == 201
+        assert sprint["status"] == "planned"
+        assert sprint["id"] != sprint_response.request.post_data_json["id"]
+
+        page.locator("#work-type").select_option("task")
+        page.locator("#work-name").fill("Browser Survey Task")
+        page.locator("#work-parent").fill(phase["id"])
+        page.locator("#work-sprint").fill(sprint["id"])
+        page.locator("#work-assignee").fill("browser-lifecycle-user")
+        page.locator("#work-estimate").fill("5.5")
+        page.locator("#work-realized").fill("1.25")
+        with page.expect_response(
+            lambda response: response.request.method == "POST"
+            and response.url.endswith("/api/v1/tasks")
+        ) as task_info:
+            page.locator("#work-save").click()
+        task_response = task_info.value
+        task = task_response.json()["item"]
+        assert task_response.status == 201
+        assert task["status"] == "To Do"
+        assert task["phase_id"] == phase["id"]
+        assert task["sprint_id"] == sprint["id"]
+        assert task["manual_estimate"] == 5.5
+        assert task["realized"] == 1.25
+        assert task["id"] != task_response.request.post_data_json["id"]
+        page.get_by_text("Browser Survey Task", exact=False).first.wait_for(state="visible")
+
+        page.locator('#page-projects [data-workspace-target="capacity"]').click()
+        page.locator("#page-capacity").wait_for(state="visible")
+        page.locator("#capacity-type").select_option("allocation")
+        page.locator("#capacity-user").fill("browser-lifecycle-user")
+        page.locator("#capacity-project").select_option(project_id)
+        page.locator("#capacity-start").fill("2026-09-01T09:00")
+        page.locator("#capacity-end").fill("2026-09-30T17:00")
+        page.locator("#capacity-hours").fill("24")
+        page.locator("#capacity-description").fill("Field lead")
+        with page.expect_response(
+            lambda response: response.request.method == "POST"
+            and response.url.endswith("/api/v1/allocations")
+        ) as allocation_info:
+            page.locator("#capacity-save").click()
+        allocation_response = allocation_info.value
+        allocation = allocation_response.json()["item"]
+        assert allocation_response.status == 201
+        assert allocation["id"] != allocation_response.request.post_data_json["id"]
+        assert allocation["hours_per_week"] == 24
+        assert allocation["role"] == "Field lead"
+        page.locator("#allocation-list").get_by_text(
+            "browser-lifecycle-user", exact=True
+        ).wait_for(state="visible")
+
+        phases = project_management.phases(organization_id)
+        sprints = project_management.sprints(organization_id)
+        tasks = project_management.tasks(organization_id)
+        allocations = project_management.allocations(organization_id)
+        assert [item["id"] for item in phases] == [phase["id"]]
+        assert [item["id"] for item in sprints] == [sprint["id"]]
+        assert [item["id"] for item in tasks] == [task["id"]]
+        assert [item["id"] for item in allocations] == [allocation["id"]]
+        assert [event["event_type"] for event in project_management.activity(project_id)] == [
+            "project.created",
+            "phase.created",
+            "sprint.created",
+            "task.created",
+            "allocation.updated",
+        ]
+        assert failed_requests == []
         browser.close()
 
 

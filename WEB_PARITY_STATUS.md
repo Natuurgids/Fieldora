@@ -32,6 +32,8 @@ The Windows 11 + Docker Desktop clean installation has been runtime-validated by
 | WEB-029 Project validation parity | DONE | Ordinary managed browser creation now binds ownership to the authenticated creator, does not send a browser-selected initial lifecycle status, and transports name/description/start date/due date/budget/currency to the authoritative Project service. Real Chromium/PostgreSQL coverage proves valid fields persist and an impossible due-before-start schedule returns 400, keeps the editor open and persists nothing. `Fieldora project parity certification` run #53 (`32937090033`) is green. |
 | WEB-030 Project owner immediate access | DONE | The real browser fixture now uses repository-backed `PolicyDecisionService` rather than a permissive stub. Creator `edit project` is default-denied before creation, immediately allowed for the canonical Project after the scoped object grant, while unrelated `delete project` remains denied. PostgreSQL PM membership is still `admin` and visible Project refresh remains green. `Fieldora project parity certification` run #55 (`32937427005`) is green. |
 | WEB-031 Project edit/archive lifecycle | DONE | Production managed-server composition inherits `ProjectLifecycleFieldoraApi`, which adds per-Project fail-closed edit capability plus revision-safe edit and non-destructive archive UI/API behavior. Dedicated Chromium/PostgreSQL lifecycle coverage certifies canonical `expected_revision`, authoritative reload on stale-revision `409`, PBAC-hidden mutation actions and `project.archived` persistence. Project parity run #68 (`32943126097`) is green on the cleaned branch head after removing a duplicate false-red harness. |
+| WEB-032 Project hierarchy/lifecycle parity | DONE | Project parity run #74 (`32949639582`, job `98117924355`) is green at certified implementation head `24a95c9491bd20f7156b5977e3b1b8156cff4a7d`. It certifies real governed Project → phase → sprint → task → allocation persistence and authoritative hierarchy behavior; the fixture adds only the required `view allocation` authority for the Capacity surface. |
+| WEB-033 Library evidence-detail parity | DONE | Media identity certification run #91 (`32950877375`, job `98121747191`) is green at certified implementation head `973ba3d3c6a291b551e999ca3528e2a2cccbbfbe`. Real Chromium certifies asset-level `view asset` plus per-association PBAC filtering: authorized Project/Collection provenance is visible, unauthorized Dossier provenance is absent, and internal object paths/original upload filename are not disclosed. |
 
 ## Evidence-identity slice commits
 
@@ -178,6 +180,26 @@ Result: SUCCESS (run `32943126097`, job `98098101467`).
 - Archive is a revisioned non-destructive status transition and persists `project.archived` rather than deleting Project state.
 - A duplicate lifecycle test that instantiated the lower-level `BrowserFunctionalityFieldoraApi` was removed after it correctly failed to see the production-only lifecycle patch; run #68 proves the cleaned production certification lane remains green.
 - This closes WEB-031.
+
+### Fieldora project parity certification — run #74
+
+Result: SUCCESS (run `32949639582`, job `98117924355`) at certified implementation head `24a95c9491bd20f7156b5977e3b1b8156cff4a7d`.
+
+- PostgreSQL 16, Chromium installation, Ruff and the managed Project parity tests passed.
+- The governed browser path persists the authoritative Project → phase → sprint → task → allocation hierarchy and reloads canonical server state.
+- Capacity visibility is exercised with the minimum fixture PBAC authority required by that surface: `view allocation`.
+- This closes WEB-032 without weakening production PBAC behavior.
+
+### Fieldora media identity certification — run #91
+
+Result: SUCCESS (run `32950877375`, job `98121747191`) at certified implementation head `973ba3d3c6a291b551e999ca3528e2a2cccbbfbe`.
+
+- PostgreSQL 16, Chromium installation, Ruff and governed media identity/project-association tests passed.
+- The requested evidence asset independently passes `view asset` PBAC in its Project context before detail is returned.
+- Each association independently passes its own `view` PBAC check: authorized Project and Collection provenance is visible while unauthorized Dossier provenance is absent.
+- The real detail UI does not disclose `relative_path`, filesystem/object-store paths, organization IDs or the original upload filename, and does not manufacture unstored metadata.
+- Existing `/api/v1/media/{id}` byte/download behavior remains unchanged.
+- This closes WEB-033.
 
 ## Guardrails
 

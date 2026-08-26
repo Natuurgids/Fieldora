@@ -130,7 +130,7 @@ _BROWSER_FUNCTIONALITY_PATCH = bytes(
   const top=projectsPage.querySelector(".top"),button=document.createElement("button");
   button.id="portfolio-new-project";button.className="primary";button.textContent="＋ Add project";top?.appendChild(button);
   const editor=document.createElement("section");editor.id="portfolio-project-editor";editor.className="card section";editor.hidden=true;
-  editor.innerHTML='<h2>Add project</h2><div class="form-grid"><label>Name<input id="portfolio-project-name"></label><label>Status<select id="portfolio-project-status"><option value="active">active</option><option value="planned">planned</option></select></label></div><label class="section">Description<textarea id="portfolio-project-description"></textarea></label><div class="actions section"><button id="portfolio-project-save" class="primary">Create project</button><button id="portfolio-project-cancel">Cancel</button></div><p id="portfolio-project-status-message" class="status"></p>';
+  editor.innerHTML='<h2>Add project</h2><div class="form-grid"><label>Name<input id="portfolio-project-name"></label><label>Start date<input id="portfolio-project-start-date" type="date"></label><label>Due date<input id="portfolio-project-due-date" type="date"></label><label>Budget<input id="portfolio-project-budget" type="number" min="0" step="0.01" value="0"></label><label>Currency<input id="portfolio-project-currency" value="EUR" maxlength="8"></label></div><label class="section">Description<textarea id="portfolio-project-description"></textarea></label><p class="muted">New projects start active. Ownership is assigned to the authenticated creator by the server.</p><div class="actions section"><button id="portfolio-project-save" class="primary">Create project</button><button id="portfolio-project-cancel">Cancel</button></div><p id="portfolio-project-status-message" class="status"></p>';
   const first=projectsPage.querySelector(".card"),legacySplit=first?.closest(".split");
   if(legacySplit)legacySplit.before(editor);else if(first)first.before(editor);else projectsPage.appendChild(editor);
   button.onclick=()=>{editor.hidden=false;byId("portfolio-project-name").focus()};
@@ -138,7 +138,7 @@ _BROWSER_FUNCTIONALITY_PATCH = bytes(
   byId("portfolio-project-save").onclick=async()=>{
    const name=byId("portfolio-project-name").value.trim();if(!name)return status("portfolio-project-status-message","Project name is required.",true);
    try{
-    const record={id:crypto.randomUUID(),name,description:byId("portfolio-project-description").value.trim(),status:byId("portfolio-project-status").value,owner_id:me?.identity_id||""};
+    const record={id:crypto.randomUUID(),name,description:byId("portfolio-project-description").value.trim(),start_date:byId("portfolio-project-start-date").value,due_date:byId("portfolio-project-due-date").value,budget:Number(byId("portfolio-project-budget").value||0),currency:byId("portfolio-project-currency").value.trim()||"EUR"};
     await api("/api/v1/projects",{method:"POST",purpose:"research",body:JSON.stringify(record)});
     projects=(await api("/api/v1/projects")).items||[];projectOptions();editor.hidden=true;await loadPortfolio();
    }catch(e){status("portfolio-project-status-message",e.message,true)}

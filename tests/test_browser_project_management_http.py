@@ -159,12 +159,12 @@ def test_create_project_click_persists_authoritative_postgres_project(tmp_path: 
         response = response_info.value
         response_payload = response.json()
         request_payload = json.loads(response.request.post_data or "{}")
+        canonical_id = response_payload["item"]["id"]
 
         page.locator("#portfolio-project-editor").wait_for(state="hidden")
-        page.get_by_text("Managed Browser Project", exact=True).first.wait_for(state="visible")
+        page.locator(f'[data-project-tree="{canonical_id}"]').wait_for(state="visible")
 
         assert response.status == 201
-        canonical_id = response_payload["item"]["id"]
         assert canonical_id
         assert canonical_id != request_payload["id"]
         assert response_payload["item"]["status"] == "active"

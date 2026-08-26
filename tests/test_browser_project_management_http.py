@@ -16,6 +16,9 @@ from natureai_next.domain.access_control import (
     AccessRequest,
     Identity,
     IdentityKind,
+    Policy,
+    PolicyEffect,
+    PolicySource,
 )
 from natureai_next.server.browser_functionality_api import BrowserFunctionalityFieldoraApi
 from natureai_next.server.http import handler_for
@@ -46,6 +49,31 @@ class _Decisions:
         return AccessDecision(True, "test")
 
 
+class _AccessRepository:
+    def __init__(self, organization_id: str) -> None:
+        self.saved_policies = [
+            Policy(
+                policy_id="browser-project-scope",
+                name="Browser Project creator scope",
+                effect=PolicyEffect.ALLOW,
+                source=PolicySource.DIRECT,
+                source_id="browser-project-test",
+                subject_id="browser-project-user",
+                role_id="",
+                actions=("view", "create"),
+                resource_types=("project",),
+                organization_id=organization_id,
+                purposes=("research",),
+            )
+        ]
+
+    def policies(self) -> tuple[Policy, ...]:
+        return tuple(self.saved_policies)
+
+    def put_policy(self, policy: Policy) -> None:
+        self.saved_policies.append(policy)
+
+
 class _Science:
     def records(self, _collection: str) -> tuple[dict, ...]:
         return ()
@@ -71,6 +99,7 @@ def _managed_browser_server(organization_id: str):
         decisions,
         _Science(),
         Path("src/natureai_next/resources/server_web"),
+        audit_repository=_AccessRepository(organization_id),
     )
     api._project_management = project_management
     server = ThreadingHTTPServer(("127.0.0.1", 0), handler_for(api))
@@ -110,6 +139,7 @@ def test_create_project_click_persists_authoritative_postgres_project() -> None:
             "sessionStorage.setItem('fieldora-session','browser-token')"
         )
         page.goto(url)
+        page.wait_for_function("document.body.dataset.fieldoraCapabilities === 'ready'")
         page.locator("#workspace").wait_for(state="visible")
         page.locator('[data-page="research"]').click()
         page.locator("#page-research").wait_for(state="visible")

@@ -30,6 +30,7 @@ The Windows 11 + Docker Desktop clean installation has been runtime-validated by
 | WEB-027 desktop Project creation trace | DONE (analysis) | `WEB_PARITY_PROJECT_CONTRACT.md` records that authoritative creation validates dates, creates the canonical ID, five workflow statuses, admin PM membership, activity and optional template state. |
 | WEB-028 shared web Project creation contract | DONE (managed creation subset) | Managed PostgreSQL creation is organization-scoped, server-ID authoritative, creates desktop-equivalent default statuses/admin PM membership/activity, and remains PBAC-gated. `Fieldora project parity certification` run #46 is green, including the real managed-browser click/runtime path. Templates and later edit/archive/child work remain separate WEB-029–032 slices. |
 | WEB-029 Project validation parity | DONE | Ordinary managed browser creation now binds ownership to the authenticated creator, does not send a browser-selected initial lifecycle status, and transports name/description/start date/due date/budget/currency to the authoritative Project service. Real Chromium/PostgreSQL coverage proves valid fields persist and an impossible due-before-start schedule returns 400, keeps the editor open and persists nothing. `Fieldora project parity certification` run #53 (`32937090033`) is green. |
+| WEB-030 Project owner immediate access | DONE | The real browser fixture now uses repository-backed `PolicyDecisionService` rather than a permissive stub. Creator `edit project` is default-denied before creation, immediately allowed for the canonical Project after the scoped object grant, while unrelated `delete project` remains denied. PostgreSQL PM membership is still `admin` and visible Project refresh remains green. `Fieldora project parity certification` run #55 (`32937427005`) is green. |
 
 ## Evidence-identity slice commits
 
@@ -86,6 +87,7 @@ The Windows 11 + Docker Desktop clean installation has been runtime-validated by
 - `5d487fc7343853b76fe57e558303c0b593790c0e` — add the red real-browser shared-field parity regression.
 - `d26f65a54348f6f2c0e72ed4d3814d3216abdbec` — replace browser-only initial status/owner submission with shared start/due/budget/currency transport fields.
 - `3dd9dab67681936621e076b43f35950b8e964050` — certify due-before-start rejection through the real browser/API/PostgreSQL path.
+- `1825af11aead99c86517d5b4588a935d6eb8956d` — certify immediate creator authority with the real default-deny PBAC decision service.
 
 ## Certification history
 
@@ -144,6 +146,18 @@ Result: SUCCESS (run `32937090033`, job `98080309042`).
 - A valid real Chromium creation persists all shared scalar fields to the canonical PostgreSQL Project, refreshes the visible cockpit, and omits browser `owner_id`/`status` authority from the request.
 - A real Chromium submission with due date before start date reaches the same authoritative Project service, returns HTTP 400, leaves the editor visible and persists no Project.
 - This closes WEB-029.
+
+### Fieldora project parity certification — run #55
+
+Result: SUCCESS (run `32937427005`, job `98081315202`).
+
+- The browser fixture uses the real repository-backed `PolicyDecisionService` with default-deny semantics.
+- Before Project creation, the authenticated creator has no `edit` right for a not-yet-created Project.
+- The managed create flow writes its scoped object-grant policy and PostgreSQL PM `admin` membership for the canonical Project.
+- Immediately after creation, the same PBAC service allows `edit project` for that canonical Project.
+- An unrelated `delete project` request remains default-denied, proving the creator grant does not broaden into unrestricted Project authority.
+- The real Chromium create/refresh and WEB-029 validation paths remain green under the authoritative PBAC engine.
+- This closes WEB-030.
 
 ## Guardrails
 

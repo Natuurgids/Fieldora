@@ -11,6 +11,18 @@ from natureai_next.server.media import MediaInstanceRecord, MediaRecord, UploadS
 from natureai_next.server.media_links import PostgresMediaAssociationRepository
 
 
+_INSTANCE_AVAILABILITY = {
+    "available",
+    "offline",
+    "missing",
+    "changed",
+    "corrupt",
+    "permission_denied",
+    "cloud_placeholder",
+    "unverified",
+}
+
+
 class PostgresMediaMetadataRepository:
     def __init__(self, connect: Callable[[], Any]) -> None:
         self._connect = connect
@@ -27,7 +39,7 @@ class PostgresMediaMetadataRepository:
                     """
                     CREATE TABLE IF NOT EXISTS governed_media(
                         media_id TEXT PRIMARY KEY,
-                        relative_path TEXT NOT NULL UNIQUE,
+                        relative_path TEXT UNIQUE,
                         organization_id TEXT NOT NULL,
                         project_id TEXT NOT NULL,
                         mime_type TEXT NOT NULL,
@@ -35,6 +47,9 @@ class PostgresMediaMetadataRepository:
                         sha256 TEXT NOT NULL CHECK(length(sha256) = 64)
                     )
                     """
+                )
+                cursor.execute(
+                    "ALTER TABLE governed_media ALTER COLUMN relative_path DROP NOT NULL"
                 )
                 cursor.execute(
                     """
@@ -51,13 +66,23 @@ class PostgresMediaMetadataRepository:
                                 'permission_denied','cloud_placeholder','unverified'
                             )),
                         size_bytes BIGINT NOT NULL CHECK(size_bytes > 0),
-                        sha256 TEXT NOT NULL CHECK(length(sha256) = 64)
+                        sha256 TEXT NOT NULL CHECK(length(sha256) = 64),
+                        source_ref TEXT NOT NULL DEFAULT ''
                     )
                     """
                 )
                 cursor.execute(
+                    "ALTER TABLE governed_media_instances "
+                    "ADD COLUMN IF NOT EXISTS source_ref TEXT NOT NULL DEFAULT ''"
+                )
+                cursor.execute(
                     "CREATE UNIQUE INDEX IF NOT EXISTS ux_governed_media_managed_instance_pg "
                     "ON governed_media_instances(media_id) WHERE storage_kind='managed'"
+                )
+                cursor.execute(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS ux_governed_media_referenced_source_pg "
+                    "ON governed_media_instances(organization_id,source_ref) "
+                    "WHERE storage_kind='referenced' AND source_ref<>''"
                 )
                 cursor.execute(
                     "CREATE INDEX IF NOT EXISTS ix_governed_media_instances_scope_pg "
@@ -90,14 +115,16 @@ class PostgresMediaMetadataRepository:
                 )
                 cursor.execute(
                     "SELECT media_id,organization_id,size_bytes,sha256 FROM governed_media m "
-                    "WHERE NOT EXISTS(SELECT 1 FROM governed_media_instances i "
+                    "WHERE relative_path IS NOT NULL AND NOT EXISTS("
+                    "SELECT 1 FROM governed_media_instances i "
                     "WHERE i.media_id=m.media_id AND i.storage_kind='managed')"
                 )
                 for media_id, organization_id, size_bytes, sha256 in cursor.fetchall():
                     cursor.execute(
                         "INSERT INTO governed_media_instances("
                         "instance_id,media_id,organization_id,storage_kind,availability,"
-                        "size_bytes,sha256) VALUES(%s,%s,%s,'managed','available',%s,%s)",
+                        "size_bytes,sha256,source_ref) "
+                        "VALUES(%s,%s,%s,'managed','available',%s,%s,'')",
                         (
                             str(uuid4()),
                             media_id,
@@ -110,16 +137,90 @@ class PostgresMediaMetadataRepository:
         self.associations = PostgresMediaAssociationRepository(connect, initialize=False)
 
     def insert_media(self, record: MediaRecord) -> MediaRecord:
+        if record.relative_path is None:
+            raise ValueError("managed media requires an object-store path")
         with self._connect() as connection:
             with connection.cursor() as cursor:
                 self._lock_content_identity(cursor, record)
                 existing = self._find_content(cursor, record)
                 if existing is not None:
-                    self._ensure_managed_instance(cursor, existing)
-                    return existing
+                    canonical = self._attach_managed_path(cursor, existing, record)
+                    self._ensure_managed_instance(cursor, canonical)
+                    return canonical
                 self._insert_media(cursor, record)
                 self._ensure_managed_instance(cursor, record)
         return record
+
+    def attach_referenced(
+        self,
+        *,
+        organization_id: str,
+        project_id: str,
+        mime_type: str,
+        size_bytes: int,
+        sha256: str,
+        source_ref: str,
+        availability: str = "available",
+    ) -> MediaRecord:
+        digest = _validated_sha256(sha256)
+        if size_bytes <= 0:
+            raise ValueError("invalid referenced media size")
+        source_ref = source_ref.strip()
+        if not source_ref:
+            raise ValueError("referenced source identity is required")
+        if availability not in _INSTANCE_AVAILABILITY:
+            raise ValueError("invalid media instance availability")
+        candidate = MediaRecord(
+            str(uuid4()),
+            None,
+            organization_id,
+            project_id,
+            mime_type[:200] or "application/octet-stream",
+            size_bytes,
+            digest,
+        )
+        with self._connect() as connection:
+            with connection.cursor() as cursor:
+                self._lock_content_identity(cursor, candidate)
+                cursor.execute(
+                    "SELECT media_id,size_bytes,sha256 FROM governed_media_instances "
+                    "WHERE organization_id=%s AND storage_kind='referenced' "
+                    "AND source_ref=%s FOR UPDATE",
+                    (organization_id, source_ref),
+                )
+                source_row = cursor.fetchone()
+                if source_row is not None:
+                    if int(source_row[1]) != size_bytes or str(source_row[2]) != digest:
+                        raise ValueError("referenced source identity changed content")
+                    cursor.execute(
+                        "SELECT media_id,relative_path,organization_id,project_id,mime_type,"
+                        "size_bytes,sha256 FROM governed_media WHERE media_id=%s",
+                        (str(source_row[0]),),
+                    )
+                    row = cursor.fetchone()
+                    if row is None:
+                        raise RuntimeError("referenced instance lost canonical media")
+                    return MediaRecord(*row)
+                canonical = self._find_content(cursor, candidate)
+                if canonical is None:
+                    self._insert_media(cursor, candidate)
+                    canonical = candidate
+                cursor.execute(
+                    "INSERT INTO governed_media_instances("
+                    "instance_id,media_id,organization_id,storage_kind,availability,"
+                    "size_bytes,sha256,source_ref) "
+                    "VALUES(%s,%s,%s,'referenced',%s,%s,%s,%s)",
+                    (
+                        str(uuid4()),
+                        canonical.media_id,
+                        organization_id,
+                        availability,
+                        size_bytes,
+                        digest,
+                        source_ref,
+                    ),
+                )
+        return canonical
 
     def insert_upload(self, upload: UploadSession) -> None:
         with self._connect() as connection:
@@ -182,6 +283,8 @@ class PostgresMediaMetadataRepository:
         finish the same content concurrently without requiring a destructive uniqueness
         migration over pre-existing deployments.
         """
+        if record.relative_path is None:
+            raise ValueError("managed media requires an object-store path")
         with self._connect() as connection:
             with connection.cursor() as cursor:
                 cursor.execute(
@@ -197,6 +300,8 @@ class PostgresMediaMetadataRepository:
                 if canonical is None:
                     self._insert_media(cursor, record)
                     canonical = record
+                else:
+                    canonical = self._attach_managed_path(cursor, canonical, record)
                 self._ensure_managed_instance(cursor, canonical)
                 cursor.execute(
                     "DELETE FROM governed_uploads WHERE upload_id=%s", (upload_id,)
@@ -244,7 +349,7 @@ class PostgresMediaMetadataRepository:
             with connection.cursor() as cursor:
                 cursor.execute(
                     "SELECT instance_id,media_id,organization_id,storage_kind,availability,"
-                    "size_bytes,sha256 FROM governed_media_instances "
+                    "size_bytes,sha256,source_ref FROM governed_media_instances "
                     "WHERE media_id=%s AND organization_id=%s "
                     "ORDER BY storage_kind,instance_id",
                     (media_id, organization_id),
@@ -298,11 +403,37 @@ class PostgresMediaMetadataRepository:
         )
 
     @staticmethod
+    def _attach_managed_path(
+        cursor: Any, canonical: MediaRecord, managed: MediaRecord
+    ) -> MediaRecord:
+        if managed.relative_path is None:
+            raise ValueError("managed media requires an object-store path")
+        if canonical.relative_path is not None:
+            return canonical
+        cursor.execute(
+            "UPDATE governed_media SET relative_path=%s "
+            "WHERE media_id=%s AND relative_path IS NULL",
+            (managed.relative_path, canonical.media_id),
+        )
+        return MediaRecord(
+            canonical.media_id,
+            managed.relative_path,
+            canonical.organization_id,
+            canonical.project_id,
+            canonical.mime_type,
+            canonical.size_bytes,
+            canonical.sha256,
+        )
+
+    @staticmethod
     def _ensure_managed_instance(cursor: Any, record: MediaRecord) -> None:
+        if record.relative_path is None:
+            raise ValueError("managed media requires an object-store path")
         cursor.execute(
             "INSERT INTO governed_media_instances("
-            "instance_id,media_id,organization_id,storage_kind,availability,size_bytes,sha256"
-            ") VALUES(%s,%s,%s,'managed','available',%s,%s) "
+            "instance_id,media_id,organization_id,storage_kind,availability,"
+            "size_bytes,sha256,source_ref) "
+            "VALUES(%s,%s,%s,'managed','available',%s,%s,'') "
             "ON CONFLICT (media_id) WHERE storage_kind='managed' DO NOTHING",
             (
                 str(uuid4()),
@@ -312,3 +443,10 @@ class PostgresMediaMetadataRepository:
                 record.sha256,
             ),
         )
+
+
+def _validated_sha256(value: str) -> str:
+    digest = value.casefold()
+    if len(digest) != 64 or any(char not in "0123456789abcdef" for char in digest):
+        raise ValueError("invalid sha256")
+    return digest

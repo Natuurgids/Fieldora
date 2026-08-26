@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from types import SimpleNamespace
 
 from natureai_next.server.browser_functionality_api import BrowserFunctionalityFieldoraApi
@@ -19,6 +19,7 @@ class _Project:
     budget: float = 0.0
     currency: str = "EUR"
     description: str = ""
+    revision: int = 100
 
 
 class _ProjectService:
@@ -62,6 +63,59 @@ class _ProjectService:
             item for item in self.created if item.organization_id == organization_id
         )
 
+    def update_project(
+        self,
+        project_id: str,
+        *,
+        organization_id: str,
+        actor_id: str,
+        expected_revision: int,
+        name: str | None = None,
+        description: str | None = None,
+        start_date: str | None = None,
+        due_date: str | None = None,
+        budget: float | None = None,
+        currency: str | None = None,
+    ) -> int:
+        assert actor_id == "user-1"
+        for index, project in enumerate(self.created):
+            if project.project_id != project_id or project.organization_id != organization_id:
+                continue
+            if expected_revision != project.revision:
+                raise ValueError("project revision conflict")
+            revision = project.revision + 1
+            self.created[index] = replace(
+                project,
+                name=project.name if name is None else name,
+                description=project.description if description is None else description,
+                start_date=project.start_date if start_date is None else start_date,
+                due_date=project.due_date if due_date is None else due_date,
+                budget=project.budget if budget is None else float(budget),
+                currency=project.currency if currency is None else currency,
+                revision=revision,
+            )
+            return revision
+        raise KeyError(project_id)
+
+    def archive_project(
+        self,
+        project_id: str,
+        *,
+        organization_id: str,
+        actor_id: str,
+        expected_revision: int,
+    ) -> int:
+        assert actor_id == "user-1"
+        for index, project in enumerate(self.created):
+            if project.project_id != project_id or project.organization_id != organization_id:
+                continue
+            if expected_revision != project.revision:
+                raise ValueError("project revision conflict")
+            revision = project.revision + 1
+            self.created[index] = replace(project, status="archived", revision=revision)
+            return revision
+        raise KeyError(project_id)
+
 
 class _Decisions:
     def __init__(self, allowed: bool = True) -> None:
@@ -87,9 +141,7 @@ class _ManagedApi(BrowserFunctionalityFieldoraApi):
         )
 
 
-def test_managed_project_create_ignores_browser_supplied_identity() -> None:
-    service = _ProjectService()
-    api = _ManagedApi(service)
+def _create(api: _ManagedApi) -> dict:
     response = api._create_project(
         {"x-fieldora-purpose": "research"},
         json.dumps(
@@ -105,12 +157,19 @@ def test_managed_project_create_ignores_browser_supplied_identity() -> None:
             }
         ).encode("utf-8"),
     )
-
     assert response.status == 201
-    payload = json.loads(response.body)
+    return json.loads(response.body)
+
+
+def test_managed_project_create_ignores_browser_supplied_identity() -> None:
+    service = _ProjectService()
+    api = _ManagedApi(service)
+    payload = _create(api)
+
     assert payload["item"]["id"] == "server-generated-project-id"
     assert payload["item"]["id"] != "browser-generated-id-must-not-win"
     assert payload["item"]["name"] == "Browser Project"
+    assert payload["item"]["revision"] == 100
     assert service.created[0].organization_id == "organization-1"
     request = api._decisions.requests[0]
     assert request.action == "create"
@@ -152,3 +211,114 @@ def test_managed_project_create_denial_persists_nothing() -> None:
 
     assert response.status == 403
     assert service.created == []
+
+
+def test_managed_project_edit_requires_edit_and_returns_new_revision() -> None:
+    service = _ProjectService()
+    api = _ManagedApi(service)
+    created = _create(api)
+
+    response = api._update_project(
+        "server-generated-project-id",
+        {"x-fieldora-purpose": "research"},
+        json.dumps(
+            {
+                "expected_revision": created["item"]["revision"],
+                "name": "Edited Browser Project",
+                "description": "Edited through the managed API",
+                "due_date": "2026-11-30",
+                "budget": 300.25,
+                "currency": "USD",
+            }
+        ).encode("utf-8"),
+    )
+
+    assert response.status == 200
+    payload = json.loads(response.body)
+    assert payload["item"]["name"] == "Edited Browser Project"
+    assert payload["item"]["description"] == "Edited through the managed API"
+    assert payload["item"]["revision"] == 101
+    assert service.created[0].revision == 101
+    edit_request = api._decisions.requests[-1]
+    assert edit_request.action == "edit"
+    assert edit_request.resource_type == "project"
+    assert edit_request.resource_id == "server-generated-project-id"
+    assert edit_request.project_id == "server-generated-project-id"
+
+
+def test_managed_project_stale_edit_returns_conflict_without_overwrite() -> None:
+    service = _ProjectService()
+    api = _ManagedApi(service)
+    created = _create(api)
+    current_revision = created["item"]["revision"]
+    service.update_project(
+        "server-generated-project-id",
+        organization_id="organization-1",
+        actor_id="user-1",
+        expected_revision=current_revision,
+        name="Concurrent Winner",
+    )
+
+    response = api._update_project(
+        "server-generated-project-id",
+        {"x-fieldora-purpose": "research"},
+        json.dumps(
+            {
+                "expected_revision": current_revision,
+                "name": "Stale Browser Edit",
+            }
+        ).encode("utf-8"),
+    )
+
+    assert response.status == 409
+    payload = json.loads(response.body)
+    assert payload["error"] == "revision_conflict"
+    assert payload["current"]["name"] == "Concurrent Winner"
+    assert payload["current"]["revision"] == 101
+    assert service.created[0].name == "Concurrent Winner"
+
+
+def test_managed_project_archive_is_non_destructive_and_revision_guarded() -> None:
+    service = _ProjectService()
+    api = _ManagedApi(service)
+    created = _create(api)
+
+    response = api._archive_project(
+        "server-generated-project-id",
+        {"x-fieldora-purpose": "research"},
+        json.dumps(
+            {"expected_revision": created["item"]["revision"]}
+        ).encode("utf-8"),
+    )
+
+    assert response.status == 200
+    payload = json.loads(response.body)
+    assert payload["item"]["id"] == "server-generated-project-id"
+    assert payload["item"]["status"] == "archived"
+    assert payload["item"]["revision"] == 101
+    assert len(service.created) == 1
+    archive_request = api._decisions.requests[-1]
+    assert archive_request.action == "edit"
+    assert archive_request.resource_id == "server-generated-project-id"
+
+
+def test_managed_project_edit_denial_persists_nothing() -> None:
+    service = _ProjectService()
+    create_api = _ManagedApi(service)
+    created = _create(create_api)
+    api = _ManagedApi(service, allowed=False)
+
+    response = api._update_project(
+        "server-generated-project-id",
+        {"x-fieldora-purpose": "research"},
+        json.dumps(
+            {
+                "expected_revision": created["item"]["revision"],
+                "name": "Denied Edit",
+            }
+        ).encode("utf-8"),
+    )
+
+    assert response.status == 403
+    assert service.created[0].name == "Browser Project"
+    assert service.created[0].revision == 100

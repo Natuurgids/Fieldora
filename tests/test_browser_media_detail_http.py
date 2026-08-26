@@ -253,6 +253,11 @@ def test_library_detail_exposes_only_authorized_governed_identity_and_provenance
         assert detail.get_by_text("collection-visible", exact=True).is_visible()
         assert detail.get_by_text("Project", exact=True).is_visible()
         assert detail.get_by_text("project-1", exact=True).is_visible()
+        download_button = page.locator("#media-download")
+        if storage_policy == "referenced":
+            assert download_button.count() == 0
+        else:
+            assert download_button.is_visible()
         rendered = page.locator("#media-detail").inner_text()
         assert "dossier-hidden" not in rendered
         assert "private-storage-provider-route" not in rendered

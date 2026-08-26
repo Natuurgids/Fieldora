@@ -58,6 +58,15 @@ def _connect_factory():
 
 def _access_repository(path: Path, organization_id: str) -> SqliteAccessControlRepository:
     repository = SqliteAccessControlRepository(path)
+    repository.put_identity(
+        Identity(
+            "browser-lifecycle-user",
+            IdentityKind.USER,
+            "Project Lifecycle User",
+            organization_id,
+            attributes={"platform_admin": "true"},
+        )
+    )
     repository.put_policy(
         Policy(
             policy_id="browser-lifecycle-create",
@@ -196,7 +205,10 @@ def test_project_edit_status_archive_and_conflict_are_revision_safe(tmp_path: Pa
             "Project changed on the server. Latest values reloaded; review them before saving again.",
             exact=True,
         ).wait_for(state="visible")
-        assert page.locator("#portfolio-project-lifecycle-description").input_value() == "Concurrent server edit"
+        assert (
+            page.locator("#portfolio-project-lifecycle-description").input_value()
+            == "Concurrent server edit"
+        )
         assert project_management.projects(organization_id)[0].description == "Concurrent server edit"
         assert project_management.projects(organization_id)[0].revision == 4
 

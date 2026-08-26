@@ -1,6 +1,6 @@
 # Fieldora web parity live status
 
-Last updated: 2026-08-25
+Last updated: 2026-08-26
 
 Read this file together with:
 
@@ -24,7 +24,7 @@ The Windows 11 + Docker Desktop clean installation has been runtime-validated by
 | WEB-007 canonical evidence identity | DONE (organization canonical) | Same organization + same verified SHA-256/size converges to one media identity across project contexts in reference/SQLite and PostgreSQL paths. `Fieldora media identity and project association certification` run #34 is green. |
 | WEB-008 exact duplicate no-op | DONE (same context) | Repeated verified upload/register in the same organization/project returns the canonical existing media record, creates no second media row, and removes redundant temporary/object bytes. `Fieldora media identity certification` run #4 is green on reference/SQLite and PostgreSQL. |
 | WEB-012 dedup race safety | DONE | PostgreSQL completion/schema bootstrap and SQLite/reference canonical claims are serialized and certified. Eight simultaneous SQLite upload completions and eight simultaneous direct registrations converge to one media ID and one object file. Run #32 reproduced the race with five identities; runs #33 and #34 are green after `BEGIN IMMEDIATE` canonical-claim serialization. |
-| WEB-015 reproduce multi-file browser fetch failure | ANALYSIS | Confirmed browser uses 4 MiB chunks; regular and staged APIs allow up to 8 MiB and the HTTP adapter has no smaller obvious body cap. Need a real managed-server Playwright request trace before changing behavior. |
+| WEB-015 reproduce multi-file browser fetch failure | DONE | Root cause was browser patch precedence: `web_compatibility.py` replaced the correct multi-file `uploadSelectedFiles()` click handler with a single-file `generalUpload()` handler. Commit `72ce70a3ceb9f0c4531e758745a2cd6ed0e861ed` removes that override. `Fieldora browser multi import certification` run #13 is green over the real threaded HTTP adapter with three files, zero `requestfailed` events, six 201 upload responses, three media rows and Project links for every file. |
 | WEB-011 project link on existing evidence | DONE | Upload completion records project associations against the organization-canonical media identity. Project A/B both list and download the same canonical object, an unlinked Project C receives no listing and a 404 download, PostgreSQL persists two distinct project association rows, and concurrent API/worker schema bootstrap is certified. Run #30 plus Platform run #522 are green. |
 | WEB-026 unusable Create Project button | PARTIAL | The structural cause is fixed for managed PostgreSQL: browser creation now enters authoritative PM persistence rather than Science-only snapshots. A real managed-browser click/runtime check is still required before this item is DONE. |
 | WEB-027 desktop Project creation trace | DONE (analysis) | `WEB_PARITY_PROJECT_CONTRACT.md` records that authoritative creation validates dates, creates the canonical ID, five workflow statuses, admin PM membership, activity and optional template state. |
@@ -41,6 +41,13 @@ The Windows 11 + Docker Desktop clean installation has been runtime-validated by
 - `1593dc5cbb6d1c299c05e61c8d38d51b3ce5151d` — add the deterministic eight-way SQLite upload-completion race test; run #32 reproduced five canonical identities.
 - `1a336f6164d8b360c82ec79a6e4be6339c731b56` — serialize SQLite canonical claims with `BEGIN IMMEDIATE` and remove losing object bytes.
 - `36207dd376607e019aa81d1b4443bda658a5b6a4` — extend SQLite race certification to direct `register()` calls.
+
+## WEB-015 browser multi-file slice commits
+
+- `9e60ecf0f51f39b3847cc89c70a015dbc0092457` — add real threaded-HTTP Chromium multi-file import trace with `requestfailed` and upload-response capture.
+- `38a9a952dddec655e4a41cb10125332cce1af87c` — add the dedicated `Fieldora browser multi import certification` workflow.
+- `72ce70a3ceb9f0c4531e758745a2cd6ed0e861ed` — remove the later single-file compatibility override so the browser-functionality multi-file handler remains authoritative.
+- `e5a81aefb3681fe9da6b40f8cbddb9ccd0cf9f2d` — verify every imported file retains its Project association in the real-HTTP browser trace.
 
 ## WEB-011 project-association slice commits
 
@@ -146,6 +153,17 @@ Result: SUCCESS (run `32900762824`, job `97973835207`).
 - Eight simultaneous SQLite direct registrations also converge to one canonical media ID and one object file.
 - PostgreSQL and browser Project-association coverage remained green.
 - This closes WEB-012 across both reference/SQLite entry paths and the managed PostgreSQL path.
+
+### Fieldora browser multi import certification — run #13
+
+Result: SUCCESS (run `32906526462`, job `97991753859`).
+
+- Ruff passed for the browser multi-import test, browser compatibility patch and threaded HTTP adapter.
+- Chromium exercised the shipped browser JavaScript against a real `ThreadingHTTPServer` and actual `BrowserFunctionalityFieldoraApi`/`GovernedMediaStore`.
+- Three selected evidence files completed with no browser `requestfailed` events and six successful upload responses (POST + PUT for each file).
+- Exactly three governed media records remained, covering image, text document and audio evidence.
+- Every resulting media record retained the selected Project association.
+- This closes WEB-015 and proves the earlier failure was the later single-file compatibility-handler override, not the 4 MiB chunk size or the HTTP adapter body path.
 
 ### Fieldora Platform server certification — run #522
 

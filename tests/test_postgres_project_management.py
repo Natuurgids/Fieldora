@@ -238,3 +238,115 @@ def test_managed_project_update_validates_dates_and_organization() -> None:
     current = next(item for item in service.projects(organization_id) if item.project_id == project_id)
     assert current.name == "Validated Project"
     assert current.revision == project.revision
+
+
+@pytest.mark.integration
+def test_managed_project_children_match_desktop_hierarchy_contract() -> None:
+    service = PostgresProjectManagementService(_connect_factory())
+    organization_id = f"org-children-{uuid4()}"
+    actor = f"user-{uuid4()}"
+    project_id = service.create_project(
+        "Hierarchy Project",
+        organization_id=organization_id,
+        owner_id=actor,
+        actor_id=actor,
+    )
+
+    phase_id = service.create_phase(
+        project_id,
+        "Field season",
+        organization_id=organization_id,
+        actor_id=actor,
+        description="Primary survey phase",
+        planned_budget=800,
+    )
+    sprint_id = service.create_sprint(
+        project_id,
+        "September sprint",
+        organization_id=organization_id,
+        actor_id=actor,
+        start_date="2026-09-01",
+        end_date="2026-09-14",
+        goal="Complete first transects",
+    )
+    task_id = service.create_task(
+        project_id,
+        "Survey transect A",
+        organization_id=organization_id,
+        actor_id=actor,
+        phase_id=phase_id,
+        sprint_id=sprint_id,
+        owner_id=actor,
+        description="Record all observations",
+        estimate_hours=6.5,
+    )
+    subtask_id = service.create_task(
+        project_id,
+        "Photograph voucher specimens",
+        organization_id=organization_id,
+        actor_id=actor,
+        parent_task_id=task_id,
+        phase_id=phase_id,
+        owner_id=actor,
+        estimate_hours=1.5,
+    )
+    allocation_id = service.create_allocation(
+        project_id,
+        actor,
+        organization_id=organization_id,
+        actor_id=actor,
+        start_date="2026-09-01",
+        end_date="2026-09-30",
+        hours_per_week=24,
+        allocation_percent=60,
+        role="field lead",
+        phase_id=phase_id,
+    )
+
+    phases = service.phases(organization_id)
+    sprints = service.sprints(organization_id)
+    tasks = service.tasks(organization_id)
+    allocations = service.allocations(organization_id)
+    assert [item["id"] for item in phases] == [phase_id]
+    assert phases[0]["project_id"] == project_id
+    assert phases[0]["planned_budget"] == 800
+    assert [item["id"] for item in sprints] == [sprint_id]
+    assert sprints[0]["status"] == "planned"
+    assert sprints[0]["goal"] == "Complete first transects"
+    assert [item["id"] for item in tasks] == [task_id, subtask_id]
+    assert tasks[0]["status"] == "To Do"
+    assert tasks[0]["phase_id"] == phase_id
+    assert tasks[0]["sprint_id"] == sprint_id
+    assert tasks[0]["manual_estimate"] == 6.5
+    assert tasks[1]["parent_task_id"] == task_id
+    assert [item["id"] for item in allocations] == [allocation_id]
+    assert allocations[0]["hours_per_week"] == 24
+    assert allocations[0]["allocation_percent"] == 60
+    assert allocations[0]["phase_id"] == phase_id
+
+    with pytest.raises(KeyError):
+        service.create_phase(
+            project_id,
+            "Cross organization",
+            organization_id=f"other-{uuid4()}",
+            actor_id=actor,
+        )
+    with pytest.raises(ValueError, match="cannot be before"):
+        service.create_sprint(
+            project_id,
+            "Impossible sprint",
+            organization_id=organization_id,
+            actor_id=actor,
+            start_date="2026-10-02",
+            end_date="2026-10-01",
+        )
+
+    events = [item["event_type"] for item in service.activity(project_id)]
+    assert events == [
+        "project.created",
+        "phase.created",
+        "sprint.created",
+        "task.created",
+        "task.created",
+        "allocation.updated",
+    ]

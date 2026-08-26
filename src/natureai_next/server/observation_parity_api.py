@@ -1,6 +1,6 @@
 """Managed observation mutations aligned with the desktop evidence-first contract.
 
-Desktop observations are owned by an existing evidence asset.  This mixin keeps that
+Desktop observations are owned by an existing evidence asset. This mixin keeps that
 invariant at the managed HTTP boundary: creation links an existing governed media
 record, never uploads/copies evidence, generates the observation identifier server
 side, and stores the same core observation fields used by the desktop schema.
@@ -10,8 +10,8 @@ from __future__ import annotations
 
 import json
 import time
-from uuid import uuid4
 from urllib.parse import urlsplit
+from uuid import uuid4
 
 from natureai_next.application.authentication import AuthenticationFailed
 from natureai_next.domain.access_control import AccessRequest
@@ -62,7 +62,9 @@ class ObservationParityApiMixin:
             data = self._json_object(body)
             project_id = self._required_text(data, "project_id")
             asset_id = self._required_text(data, "asset_id")
-            observation_type = self._observation_type(data.get("observation_type", "unknown"))
+            observation_type = self._observation_type(
+                data.get("observation_type", "unknown")
+            )
             count = self._count(data.get("count"))
             taxon_id = self._optional_identifier(data.get("taxon_id"))
             user_taxon_id = self._optional_identifier(data.get("user_taxon_id"))
@@ -103,6 +105,7 @@ class ObservationParityApiMixin:
             ),
             "created_at_us": now_us,
             "updated_at_us": now_us,
+            "revision": 1,
         }
         try:
             revision = self._science.put("server_observations", record, 0)
@@ -164,7 +167,9 @@ class ObservationParityApiMixin:
             )
             if updated["taxon_id"] is not None and updated["user_taxon_id"] is not None:
                 raise ValueError("taxon identifiers are mutually exclusive")
-            confirmation = str(updated.get("confirmation_state", "unconfirmed")).strip()
+            confirmation = str(
+                updated.get("confirmation_state", "unconfirmed")
+            ).strip()
             if confirmation not in _CONFIRMATION_STATES:
                 raise ValueError("invalid confirmation state")
             updated["confirmation_state"] = confirmation
@@ -176,6 +181,7 @@ class ObservationParityApiMixin:
         except (TypeError, ValueError):
             return ApiResponse.json(400, {"error": "invalid_observation"})
         updated["updated_at_us"] = int(time.time() * 1_000_000)
+        updated["revision"] = expected_revision + 1
         try:
             revision = self._science.put(
                 "server_observations", updated, expected_revision
@@ -212,7 +218,12 @@ class ObservationParityApiMixin:
         return identity
 
     def _observation_allowed(
-        self, identity, headers: dict[str, str], action: str, resource_id: str, project_id: str
+        self,
+        identity,
+        headers: dict[str, str],
+        action: str,
+        resource_id: str,
+        project_id: str,
     ) -> bool:
         return self._decisions.decide(
             AccessRequest(

@@ -147,9 +147,14 @@ def test_create_project_click_persists_authoritative_postgres_project(tmp_path: 
         page.locator("#portfolio-new-project").click()
         page.locator("#portfolio-project-editor").wait_for(state="visible")
         page.locator("#portfolio-project-name").fill("Managed Browser Project")
+        page.locator("#portfolio-project-start-date").fill("2026-09-01")
+        page.locator("#portfolio-project-due-date").fill("2026-12-31")
+        page.locator("#portfolio-project-budget").fill("1250.50")
+        page.locator("#portfolio-project-currency").fill("EUR")
         page.locator("#portfolio-project-description").fill(
             "Created through the real managed browser click path"
         )
+        assert page.locator("#portfolio-project-status").count() == 0
 
         with page.expect_response(
             lambda response: response.request.method == "POST"
@@ -167,14 +172,23 @@ def test_create_project_click_persists_authoritative_postgres_project(tmp_path: 
         assert response.status == 201
         assert canonical_id
         assert canonical_id != request_payload["id"]
+        assert "status" not in request_payload
         assert response_payload["item"]["status"] == "active"
         assert response_payload["item"]["owner_id"] == "browser-project-user"
+        assert response_payload["item"]["start_date"] == "2026-09-01"
+        assert response_payload["item"]["due_date"] == "2026-12-31"
+        assert response_payload["item"]["budget"] == 1250.5
+        assert response_payload["item"]["currency"] == "EUR"
         assert failed_requests == []
 
         projects = project_management.projects(organization_id)
         assert [item.project_id for item in projects] == [canonical_id]
         assert projects[0].name == "Managed Browser Project"
         assert projects[0].description == "Created through the real managed browser click path"
+        assert projects[0].start_date == "2026-09-01"
+        assert projects[0].due_date == "2026-12-31"
+        assert projects[0].budget == 1250.5
+        assert projects[0].currency == "EUR"
         assert project_management.member_role(canonical_id, "browser-project-user") == "admin"
         assert [item["name"] for item in project_management.statuses(canonical_id)] == [
             "To Do",

@@ -59,7 +59,7 @@ jobs:
 
       - name: Ruff governed media identity and project associations
         run: >-
-          python -m ruff check --diff
+          python -m ruff check
           src/natureai_next/server/media.py
           src/natureai_next/server/media_links.py
           src/natureai_next/server/postgres_media.py

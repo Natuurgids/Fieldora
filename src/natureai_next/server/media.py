@@ -17,10 +17,22 @@ from natureai_next.server.media_links import (
 from natureai_next.server.object_storage import FileObjectStore, ObjectStore
 
 
+_INSTANCE_AVAILABILITY = {
+    "available",
+    "offline",
+    "missing",
+    "changed",
+    "corrupt",
+    "permission_denied",
+    "cloud_placeholder",
+    "unverified",
+}
+
+
 @dataclass(frozen=True, slots=True)
 class MediaRecord:
     media_id: str
-    relative_path: str
+    relative_path: str | None
     organization_id: str
     project_id: str
     mime_type: str
@@ -37,6 +49,7 @@ class MediaInstanceRecord:
     availability: str
     size_bytes: int
     sha256: str
+    source_ref: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,6 +76,17 @@ class MediaMetadataRepository(Protocol):
     def complete_upload(
         self, upload_id: str, record: MediaRecord
     ) -> MediaRecord | None: ...
+    def attach_referenced(
+        self,
+        *,
+        organization_id: str,
+        project_id: str,
+        mime_type: str,
+        size_bytes: int,
+        sha256: str,
+        source_ref: str,
+        availability: str = "available",
+    ) -> MediaRecord: ...
     def record(self, media_id: str) -> MediaRecord | None: ...
     def records(
         self, organization_id: str, project_id: str = "", limit: int = 200
@@ -98,57 +122,92 @@ class GovernedMediaStore:
             return
         connection = sqlite3.connect(database_path)
         try:
+            self._bootstrap_sqlite_schema(connection)
+            connection.commit()
+        finally:
+            connection.close()
+
+    @staticmethod
+    def _bootstrap_sqlite_schema(connection: sqlite3.Connection) -> None:
+        connection.execute(
+            "CREATE TABLE IF NOT EXISTS governed_media("
+            "media_id TEXT PRIMARY KEY,relative_path TEXT UNIQUE,"
+            "organization_id TEXT NOT NULL,project_id TEXT NOT NULL,"
+            "mime_type TEXT NOT NULL,size_bytes INTEGER NOT NULL,sha256 TEXT NOT NULL)"
+        )
+        columns = connection.execute("PRAGMA table_info(governed_media)").fetchall()
+        relative_column = next((row for row in columns if row[1] == "relative_path"), None)
+        if relative_column is not None and int(relative_column[3]) == 1:
             connection.execute(
-                "CREATE TABLE IF NOT EXISTS governed_media("
-                "media_id TEXT PRIMARY KEY,relative_path TEXT NOT NULL UNIQUE,"
+                "CREATE TABLE governed_media_nullable("
+                "media_id TEXT PRIMARY KEY,relative_path TEXT UNIQUE,"
                 "organization_id TEXT NOT NULL,project_id TEXT NOT NULL,"
                 "mime_type TEXT NOT NULL,size_bytes INTEGER NOT NULL,sha256 TEXT NOT NULL)"
             )
             connection.execute(
-                "CREATE TABLE IF NOT EXISTS governed_media_instances("
-                "instance_id TEXT PRIMARY KEY,media_id TEXT NOT NULL,"
-                "organization_id TEXT NOT NULL,storage_kind TEXT NOT NULL,"
-                "availability TEXT NOT NULL,size_bytes INTEGER NOT NULL,"
-                "sha256 TEXT NOT NULL,"
-                "FOREIGN KEY(media_id) REFERENCES governed_media(media_id) ON DELETE CASCADE)"
+                "INSERT INTO governed_media_nullable SELECT * FROM governed_media"
             )
-            connection.execute(
-                "CREATE UNIQUE INDEX IF NOT EXISTS ux_governed_media_managed_instance "
-                "ON governed_media_instances(media_id) WHERE storage_kind='managed'"
-            )
-            connection.execute(
-                "CREATE INDEX IF NOT EXISTS ix_governed_media_instances_scope "
-                "ON governed_media_instances(organization_id,media_id,storage_kind)"
-            )
-            connection.execute(
-                "CREATE TABLE IF NOT EXISTS governed_uploads("
-                "upload_id TEXT PRIMARY KEY,subject_id TEXT NOT NULL,"
-                "organization_id TEXT NOT NULL,project_id TEXT NOT NULL,"
-                "filename TEXT NOT NULL,mime_type TEXT NOT NULL,"
-                "expected_size INTEGER NOT NULL,expected_sha256 TEXT NOT NULL,"
-                "received_bytes INTEGER NOT NULL)"
-            )
-            connection.execute(
-                "CREATE INDEX IF NOT EXISTS ix_governed_media_content "
-                "ON governed_media(organization_id,sha256,size_bytes)"
-            )
-            missing_instances = connection.execute(
-                "SELECT media_id,organization_id,size_bytes,sha256 FROM governed_media "
-                "WHERE NOT EXISTS(SELECT 1 FROM governed_media_instances i "
-                "WHERE i.media_id=governed_media.media_id AND i.storage_kind='managed')"
+            connection.execute("DROP TABLE governed_media")
+            connection.execute("ALTER TABLE governed_media_nullable RENAME TO governed_media")
+        connection.execute(
+            "CREATE TABLE IF NOT EXISTS governed_media_instances("
+            "instance_id TEXT PRIMARY KEY,media_id TEXT NOT NULL,"
+            "organization_id TEXT NOT NULL,storage_kind TEXT NOT NULL,"
+            "availability TEXT NOT NULL,size_bytes INTEGER NOT NULL,"
+            "sha256 TEXT NOT NULL,source_ref TEXT NOT NULL DEFAULT '',"
+            "FOREIGN KEY(media_id) REFERENCES governed_media(media_id) ON DELETE CASCADE)"
+        )
+        instance_columns = {
+            str(row[1]) for row in connection.execute(
+                "PRAGMA table_info(governed_media_instances)"
             ).fetchall()
-            connection.executemany(
-                "INSERT INTO governed_media_instances("
-                "instance_id,media_id,organization_id,storage_kind,availability,"
-                "size_bytes,sha256) VALUES(?,?,?,'managed','available',?,?)",
-                [
-                    (str(uuid4()), media_id, organization_id, size_bytes, sha256)
-                    for media_id, organization_id, size_bytes, sha256 in missing_instances
-                ],
+        }
+        if "source_ref" not in instance_columns:
+            connection.execute(
+                "ALTER TABLE governed_media_instances "
+                "ADD COLUMN source_ref TEXT NOT NULL DEFAULT ''"
             )
-            connection.commit()
-        finally:
-            connection.close()
+        connection.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS ux_governed_media_managed_instance "
+            "ON governed_media_instances(media_id) WHERE storage_kind='managed'"
+        )
+        connection.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS ux_governed_media_referenced_source "
+            "ON governed_media_instances(organization_id,source_ref) "
+            "WHERE storage_kind='referenced' AND source_ref<>''"
+        )
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS ix_governed_media_instances_scope "
+            "ON governed_media_instances(organization_id,media_id,storage_kind)"
+        )
+        connection.execute(
+            "CREATE TABLE IF NOT EXISTS governed_uploads("
+            "upload_id TEXT PRIMARY KEY,subject_id TEXT NOT NULL,"
+            "organization_id TEXT NOT NULL,project_id TEXT NOT NULL,"
+            "filename TEXT NOT NULL,mime_type TEXT NOT NULL,"
+            "expected_size INTEGER NOT NULL,expected_sha256 TEXT NOT NULL,"
+            "received_bytes INTEGER NOT NULL)"
+        )
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS ix_governed_media_content "
+            "ON governed_media(organization_id,sha256,size_bytes)"
+        )
+        missing_instances = connection.execute(
+            "SELECT media_id,organization_id,size_bytes,sha256 FROM governed_media "
+            "WHERE relative_path IS NOT NULL AND NOT EXISTS("
+            "SELECT 1 FROM governed_media_instances i "
+            "WHERE i.media_id=governed_media.media_id AND i.storage_kind='managed')"
+        ).fetchall()
+        connection.executemany(
+            "INSERT INTO governed_media_instances("
+            "instance_id,media_id,organization_id,storage_kind,availability,"
+            "size_bytes,sha256,source_ref) "
+            "VALUES(?,?,?,'managed','available',?,?,'')",
+            [
+                (str(uuid4()), media_id, organization_id, size_bytes, sha256)
+                for media_id, organization_id, size_bytes, sha256 in missing_instances
+            ],
+        )
 
     @property
     def associations(self) -> MediaAssociationRepository:
@@ -169,7 +228,7 @@ class GovernedMediaStore:
             existing = self._sqlite_content_record(
                 organization_id, sha256, size_bytes
             )
-            if existing is not None:
+            if existing is not None and existing.relative_path is not None:
                 return existing
         media_id = str(uuid4())
         relative = f"{media_id[:2]}/{media_id}{suffix}"
@@ -187,16 +246,115 @@ class GovernedMediaStore:
         try:
             if self._metadata is not None:
                 canonical = self._metadata.insert_media(record) or record
-                if canonical.media_id != record.media_id:
+                if canonical.relative_path != relative:
                     self._objects.delete(relative)
                 return canonical
             canonical = self._sqlite_claim_content(record)
-            if canonical.media_id != record.media_id:
+            if canonical.relative_path != relative:
                 self._objects.delete(relative)
             return canonical
         except BaseException:
             self._objects.delete(relative)
             raise
+
+    def attach_referenced(
+        self,
+        *,
+        organization_id: str,
+        project_id: str,
+        mime_type: str,
+        size_bytes: int,
+        sha256: str,
+        source_ref: str,
+        availability: str = "available",
+    ) -> MediaRecord:
+        digest = _validated_sha256(sha256)
+        if size_bytes <= 0:
+            raise ValueError("invalid referenced media size")
+        source_ref = source_ref.strip()
+        if not source_ref:
+            raise ValueError("referenced source identity is required")
+        if availability not in _INSTANCE_AVAILABILITY:
+            raise ValueError("invalid media instance availability")
+        if self._metadata is not None:
+            return self._metadata.attach_referenced(
+                organization_id=organization_id,
+                project_id=project_id,
+                mime_type=mime_type,
+                size_bytes=size_bytes,
+                sha256=digest,
+                source_ref=source_ref,
+                availability=availability,
+            )
+        connection = sqlite3.connect(self._database_path, timeout=30)
+        try:
+            connection.execute("BEGIN IMMEDIATE")
+            source_row = connection.execute(
+                "SELECT media_id,size_bytes,sha256 FROM governed_media_instances "
+                "WHERE organization_id=? AND storage_kind='referenced' AND source_ref=?",
+                (organization_id, source_ref),
+            ).fetchone()
+            if source_row is not None:
+                if int(source_row[1]) != size_bytes or str(source_row[2]) != digest:
+                    raise ValueError("referenced source identity changed content")
+                row = connection.execute(
+                    "SELECT * FROM governed_media WHERE media_id=?", (str(source_row[0]),)
+                ).fetchone()
+                if row is None:
+                    raise RuntimeError("referenced instance lost canonical media")
+                connection.commit()
+                return MediaRecord(*row)
+            row = connection.execute(
+                "SELECT * FROM governed_media WHERE organization_id=? "
+                "AND sha256=? AND size_bytes=? ORDER BY media_id LIMIT 1",
+                (organization_id, digest, size_bytes),
+            ).fetchone()
+            if row is None:
+                canonical = MediaRecord(
+                    str(uuid4()),
+                    None,
+                    organization_id,
+                    project_id,
+                    mime_type[:200] or "application/octet-stream",
+                    size_bytes,
+                    digest,
+                )
+                connection.execute(
+                    "INSERT INTO governed_media VALUES(?,?,?,?,?,?,?)",
+                    (
+                        canonical.media_id,
+                        canonical.relative_path,
+                        canonical.organization_id,
+                        canonical.project_id,
+                        canonical.mime_type,
+                        canonical.size_bytes,
+                        canonical.sha256,
+                    ),
+                )
+            else:
+                canonical = MediaRecord(*row)
+            connection.execute(
+                "INSERT INTO governed_media_instances("
+                "instance_id,media_id,organization_id,storage_kind,availability,"
+                "size_bytes,sha256,source_ref) "
+                "VALUES(?,?,?,'referenced',?,?,?,?)",
+                (
+                    str(uuid4()),
+                    canonical.media_id,
+                    organization_id,
+                    availability,
+                    size_bytes,
+                    digest,
+                    source_ref,
+                ),
+            )
+            connection.commit()
+            return canonical
+        except BaseException:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
 
     def begin_upload(
         self,
@@ -210,11 +368,7 @@ class GovernedMediaStore:
     ) -> UploadSession:
         if expected_size <= 0 or expected_size > 100 * 1024**3:
             raise ValueError("invalid upload size")
-        digest = expected_sha256.casefold()
-        if len(digest) != 64 or any(
-            char not in "0123456789abcdef" for char in digest
-        ):
-            raise ValueError("invalid sha256")
+        digest = _validated_sha256(expected_sha256)
         upload = UploadSession(
             str(uuid4()),
             subject_id,
@@ -334,7 +488,7 @@ class GovernedMediaStore:
                 digest,
                 current.expected_size,
             )
-            if existing is not None:
+            if existing is not None and existing.relative_path is not None:
                 connection = sqlite3.connect(self._database_path)
                 try:
                     connection.execute(
@@ -364,12 +518,12 @@ class GovernedMediaStore:
                 canonical = (
                     self._metadata.complete_upload(current.upload_id, record) or record
                 )
-                if canonical.media_id != record.media_id:
+                if canonical.relative_path != relative:
                     self._objects.delete(relative)
                 record = canonical
             else:
                 canonical = self._sqlite_claim_content(record, current.upload_id)
-                if canonical.media_id != record.media_id:
+                if canonical.relative_path != relative:
                     self._objects.delete(relative)
                 record = canonical
         except BaseException:
@@ -423,7 +577,7 @@ class GovernedMediaStore:
         try:
             rows = connection.execute(
                 "SELECT instance_id,media_id,organization_id,storage_kind,availability,"
-                "size_bytes,sha256 FROM governed_media_instances "
+                "size_bytes,sha256,source_ref FROM governed_media_instances "
                 "WHERE media_id=? AND organization_id=? ORDER BY storage_kind,instance_id",
                 (media_id, organization_id),
             ).fetchall()
@@ -434,6 +588,8 @@ class GovernedMediaStore:
     def read_range(self, record: MediaRecord, start: int, end: int) -> bytes:
         if start < 0 or end < start or end >= record.size_bytes:
             raise ValueError("invalid range")
+        if record.relative_path is None:
+            raise FileNotFoundError("media has no managed byte instance")
         return self._objects.read_range(record.relative_path, start, end)
 
     def _sqlite_content_record(
@@ -453,6 +609,8 @@ class GovernedMediaStore:
     def _sqlite_claim_content(
         self, record: MediaRecord, upload_id: str | None = None
     ) -> MediaRecord:
+        if record.relative_path is None:
+            raise ValueError("managed media requires an object-store path")
         connection = sqlite3.connect(self._database_path, timeout=30)
         try:
             connection.execute("BEGIN IMMEDIATE")
@@ -475,18 +633,33 @@ class GovernedMediaStore:
                         record.sha256,
                     ),
                 )
+            elif canonical.relative_path is None:
                 connection.execute(
-                    "INSERT INTO governed_media_instances("
-                    "instance_id,media_id,organization_id,storage_kind,availability,"
-                    "size_bytes,sha256) VALUES(?,?,?,'managed','available',?,?)",
-                    (
-                        str(uuid4()),
-                        record.media_id,
-                        record.organization_id,
-                        record.size_bytes,
-                        record.sha256,
-                    ),
+                    "UPDATE governed_media SET relative_path=? WHERE media_id=?",
+                    (record.relative_path, canonical.media_id),
                 )
+                canonical = MediaRecord(
+                    canonical.media_id,
+                    record.relative_path,
+                    canonical.organization_id,
+                    canonical.project_id,
+                    canonical.mime_type,
+                    canonical.size_bytes,
+                    canonical.sha256,
+                )
+            connection.execute(
+                "INSERT OR IGNORE INTO governed_media_instances("
+                "instance_id,media_id,organization_id,storage_kind,availability,"
+                "size_bytes,sha256,source_ref) "
+                "VALUES(?,?,?,'managed','available',?,?,'')",
+                (
+                    str(uuid4()),
+                    canonical.media_id,
+                    canonical.organization_id,
+                    canonical.size_bytes,
+                    canonical.sha256,
+                ),
+            )
             if upload_id is not None:
                 connection.execute(
                     "DELETE FROM governed_uploads WHERE upload_id=?", (upload_id,)
@@ -509,3 +682,10 @@ class GovernedMediaStore:
 
     def _upload_path(self, upload_id: str) -> Path:
         return self._contained(f".uploads/{upload_id}.part")
+
+
+def _validated_sha256(value: str) -> str:
+    digest = value.casefold()
+    if len(digest) != 64 or any(char not in "0123456789abcdef" for char in digest):
+        raise ValueError("invalid sha256")
+    return digest

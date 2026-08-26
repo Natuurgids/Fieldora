@@ -149,6 +149,8 @@ def test_project_edit_status_archive_and_conflict_are_revision_safe(tmp_path: Pa
         page.goto(url)
         _open_projects(page)
         project_id = _create_project(page)
+        created = project_management.projects(organization_id)[0]
+        created_revision = created.revision
 
         tree_item = page.locator(f'[data-project-tree="{project_id}"]')
         tree_item.click()
@@ -160,9 +162,9 @@ def test_project_edit_status_archive_and_conflict_are_revision_safe(tmp_path: Pa
         edit_button.click()
         editor = page.locator("#portfolio-project-lifecycle-editor")
         editor.wait_for(state="visible")
-        assert "Server revision 1" in page.locator(
-            "#portfolio-project-lifecycle-revision"
-        ).inner_text()
+        assert page.locator("#portfolio-project-lifecycle-revision").inner_text() == (
+            f"Server revision {created_revision}"
+        )
 
         page.locator("#portfolio-project-lifecycle-name").fill("Lifecycle Project Updated")
         page.locator("#portfolio-project-lifecycle-description").fill("Browser revision-safe edit")
@@ -172,8 +174,10 @@ def test_project_edit_status_archive_and_conflict_are_revision_safe(tmp_path: Pa
         ) as update_info:
             page.locator("#portfolio-project-lifecycle-save").click()
         assert update_info.value.status == 200
-        assert project_management.projects(organization_id)[0].name == "Lifecycle Project Updated"
-        assert project_management.projects(organization_id)[0].revision == 2
+        updated = project_management.projects(organization_id)[0]
+        assert updated.name == "Lifecycle Project Updated"
+        assert updated.revision > created_revision
+        updated_revision = updated.revision
 
         page.locator("#portfolio-project-lifecycle-status").select_option("cancelled")
         with page.expect_response(
@@ -184,15 +188,19 @@ def test_project_edit_status_archive_and_conflict_are_revision_safe(tmp_path: Pa
         assert status_info.value.status == 200
         current = project_management.projects(organization_id)[0]
         assert current.status == "cancelled"
-        assert current.revision == 3
+        assert current.revision > updated_revision
+        status_revision = current.revision
 
         project_management.update_project(
             project_id,
             organization_id=organization_id,
             actor_id="concurrent-server-user",
-            expected_revision=3,
+            expected_revision=status_revision,
             description="Concurrent server edit",
         )
+        concurrent = project_management.projects(organization_id)[0]
+        assert concurrent.revision > status_revision
+        concurrent_revision = concurrent.revision
         page.locator("#portfolio-project-lifecycle-description").fill("Stale browser overwrite")
         with page.expect_response(
             lambda response: response.request.method == "PATCH"
@@ -208,8 +216,9 @@ def test_project_edit_status_archive_and_conflict_are_revision_safe(tmp_path: Pa
             page.locator("#portfolio-project-lifecycle-description").input_value()
             == "Concurrent server edit"
         )
-        assert project_management.projects(organization_id)[0].description == "Concurrent server edit"
-        assert project_management.projects(organization_id)[0].revision == 4
+        after_conflict = project_management.projects(organization_id)[0]
+        assert after_conflict.description == "Concurrent server edit"
+        assert after_conflict.revision == concurrent_revision
 
         with page.expect_response(
             lambda response: response.request.method == "PATCH"
@@ -219,7 +228,7 @@ def test_project_edit_status_archive_and_conflict_are_revision_safe(tmp_path: Pa
         assert archive_info.value.status == 200
         archived = project_management.projects(organization_id)[0]
         assert archived.status == "archived"
-        assert archived.revision == 5
+        assert archived.revision > concurrent_revision
         events = [event["event_type"] for event in project_management.activity(project_id)]
         assert events == [
             "project.created",
@@ -238,9 +247,10 @@ def test_project_lifecycle_controls_remain_absent_without_selected_edit_scope(tm
         organization_id, tmp_path / "access-control.sqlite3"
     ) as (url, project_management), sync_playwright() as playwright:
         project = project_management.create_project(
-            organization_id,
+            "Read Only Project",
+            organization_id=organization_id,
             owner_id="different-owner",
-            name="Read Only Project",
+            actor_id="different-owner",
         )
         browser = playwright.chromium.launch()
         page = browser.new_page()

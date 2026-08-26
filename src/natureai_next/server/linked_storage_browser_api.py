@@ -36,7 +36,27 @@ class LinkedStorageBrowserFieldoraApi(ProjectLifecycleFieldoraApi):
                 method, route.path, routed_headers, cookie_token, response
             )
 
-        response = super().dispatch(method, target, headers, body)
+        direct_media_id = self._managed_media_id(route.path)
+        try:
+            response = super().dispatch(method, target, headers, body)
+        except FileNotFoundError:
+            if direct_media_id and method in {"GET", "HEAD"}:
+                return ApiResponse.json(404, {"error": "not_found"})
+            raise
+        if (
+            direct_media_id
+            and method in {"GET", "HEAD"}
+            and response.status < 400
+            and self._media is not None
+            and not any(
+                instance.storage_kind == "managed"
+                for instance in self._media.instances(
+                    direct_media_id,
+                    (self._media.record(direct_media_id) or _MissingMedia()).organization_id,
+                )
+            )
+        ):
+            response = ApiResponse.json(404, {"error": "not_found"})
         response = patch_linked_storage_web_response(target, response)
         response = patch_linked_storage_operator_web_response(target, response)
         return patch_media_detail_response(target, response)
@@ -48,6 +68,14 @@ class LinkedStorageBrowserFieldoraApi(ProjectLifecycleFieldoraApi):
         if not path.startswith(prefix) or not path.endswith(suffix):
             return ""
         media_id = unquote(path[len(prefix) : -len(suffix)]).strip("/")
+        return media_id if media_id and "/" not in media_id else ""
+
+    @staticmethod
+    def _managed_media_id(path: str) -> str:
+        prefix = "/api/v1/media/"
+        if not path.startswith(prefix):
+            return ""
+        media_id = unquote(path[len(prefix) :]).strip("/")
         return media_id if media_id and "/" not in media_id else ""
 
     def _media_detail_response(
@@ -158,3 +186,7 @@ class LinkedStorageBrowserFieldoraApi(ProjectLifecycleFieldoraApi):
                 "associations": associations,
             },
         )
+
+
+class _MissingMedia:
+    organization_id = ""

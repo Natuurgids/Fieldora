@@ -5,8 +5,9 @@ from __future__ import annotations
 import hashlib
 from collections.abc import Callable
 from typing import Any
+from uuid import uuid4
 
-from natureai_next.server.media import MediaRecord, UploadSession
+from natureai_next.server.media import MediaInstanceRecord, MediaRecord, UploadSession
 from natureai_next.server.media_links import PostgresMediaAssociationRepository
 
 
@@ -37,6 +38,33 @@ class PostgresMediaMetadataRepository:
                 )
                 cursor.execute(
                     """
+                    CREATE TABLE IF NOT EXISTS governed_media_instances(
+                        instance_id TEXT PRIMARY KEY,
+                        media_id TEXT NOT NULL REFERENCES governed_media(media_id)
+                            ON DELETE CASCADE,
+                        organization_id TEXT NOT NULL,
+                        storage_kind TEXT NOT NULL
+                            CHECK(storage_kind IN ('managed','referenced')),
+                        availability TEXT NOT NULL
+                            CHECK(availability IN (
+                                'available','offline','missing','changed','corrupt',
+                                'permission_denied','cloud_placeholder','unverified'
+                            )),
+                        size_bytes BIGINT NOT NULL CHECK(size_bytes > 0),
+                        sha256 TEXT NOT NULL CHECK(length(sha256) = 64)
+                    )
+                    """
+                )
+                cursor.execute(
+                    "CREATE UNIQUE INDEX IF NOT EXISTS ux_governed_media_managed_instance_pg "
+                    "ON governed_media_instances(media_id) WHERE storage_kind='managed'"
+                )
+                cursor.execute(
+                    "CREATE INDEX IF NOT EXISTS ix_governed_media_instances_scope_pg "
+                    "ON governed_media_instances(organization_id,media_id,storage_kind)"
+                )
+                cursor.execute(
+                    """
                     CREATE TABLE IF NOT EXISTS governed_uploads(
                         upload_id TEXT PRIMARY KEY,
                         subject_id TEXT NOT NULL,
@@ -60,6 +88,24 @@ class PostgresMediaMetadataRepository:
                     "CREATE INDEX IF NOT EXISTS ix_governed_media_content_pg "
                     "ON governed_media(organization_id,sha256,size_bytes)"
                 )
+                cursor.execute(
+                    "SELECT media_id,organization_id,size_bytes,sha256 FROM governed_media m "
+                    "WHERE NOT EXISTS(SELECT 1 FROM governed_media_instances i "
+                    "WHERE i.media_id=m.media_id AND i.storage_kind='managed')"
+                )
+                for media_id, organization_id, size_bytes, sha256 in cursor.fetchall():
+                    cursor.execute(
+                        "INSERT INTO governed_media_instances("
+                        "instance_id,media_id,organization_id,storage_kind,availability,"
+                        "size_bytes,sha256) VALUES(%s,%s,%s,'managed','available',%s,%s)",
+                        (
+                            str(uuid4()),
+                            media_id,
+                            organization_id,
+                            size_bytes,
+                            sha256,
+                        ),
+                    )
                 PostgresMediaAssociationRepository.bootstrap_schema(cursor)
         self.associations = PostgresMediaAssociationRepository(connect, initialize=False)
 
@@ -69,8 +115,10 @@ class PostgresMediaMetadataRepository:
                 self._lock_content_identity(cursor, record)
                 existing = self._find_content(cursor, record)
                 if existing is not None:
+                    self._ensure_managed_instance(cursor, existing)
                     return existing
                 self._insert_media(cursor, record)
+                self._ensure_managed_instance(cursor, record)
         return record
 
     def insert_upload(self, upload: UploadSession) -> None:
@@ -149,6 +197,7 @@ class PostgresMediaMetadataRepository:
                 if canonical is None:
                     self._insert_media(cursor, record)
                     canonical = record
+                self._ensure_managed_instance(cursor, canonical)
                 cursor.execute(
                     "DELETE FROM governed_uploads WHERE upload_id=%s", (upload_id,)
                 )
@@ -187,6 +236,21 @@ class PostgresMediaMetadataRepository:
                     )
                 rows = cursor.fetchall()
         return tuple(MediaRecord(*row) for row in rows)
+
+    def instances(
+        self, media_id: str, organization_id: str
+    ) -> tuple[MediaInstanceRecord, ...]:
+        with self._connect() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT instance_id,media_id,organization_id,storage_kind,availability,"
+                    "size_bytes,sha256 FROM governed_media_instances "
+                    "WHERE media_id=%s AND organization_id=%s "
+                    "ORDER BY storage_kind,instance_id",
+                    (media_id, organization_id),
+                )
+                rows = cursor.fetchall()
+        return tuple(MediaInstanceRecord(*row) for row in rows)
 
     @staticmethod
     def _lock_content_identity(cursor: Any, record: MediaRecord) -> None:
@@ -228,6 +292,22 @@ class PostgresMediaMetadataRepository:
                 record.organization_id,
                 record.project_id,
                 record.mime_type,
+                record.size_bytes,
+                record.sha256,
+            ),
+        )
+
+    @staticmethod
+    def _ensure_managed_instance(cursor: Any, record: MediaRecord) -> None:
+        cursor.execute(
+            "INSERT INTO governed_media_instances("
+            "instance_id,media_id,organization_id,storage_kind,availability,size_bytes,sha256"
+            ") VALUES(%s,%s,%s,'managed','available',%s,%s) "
+            "ON CONFLICT (media_id) WHERE storage_kind='managed' DO NOTHING",
+            (
+                str(uuid4()),
+                record.media_id,
+                record.organization_id,
                 record.size_bytes,
                 record.sha256,
             ),

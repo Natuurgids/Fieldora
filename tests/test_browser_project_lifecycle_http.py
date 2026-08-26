@@ -96,6 +96,21 @@ def _access_repository(path: Path, organization_id: str) -> SqliteAccessControlR
             purposes=("research",),
         )
     )
+    repository.put_policy(
+        Policy(
+            policy_id="browser-lifecycle-view-allocation",
+            name="Browser lifecycle allocation view scope",
+            effect=PolicyEffect.ALLOW,
+            source=PolicySource.DIRECT,
+            source_id="browser-project-child-test",
+            subject_id="browser-lifecycle-user",
+            role_id="",
+            actions=("view",),
+            resource_types=("allocation",),
+            organization_id=organization_id,
+            purposes=("research",),
+        )
+    )
     return repository
 
 

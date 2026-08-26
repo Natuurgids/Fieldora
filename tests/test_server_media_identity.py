@@ -195,3 +195,82 @@ def test_existing_sqlite_governed_media_is_backfilled_as_managed(tmp_path: Path)
 
     assert record is not None
     _assert_one_managed_instance(store, record)
+
+
+def test_referenced_content_has_canonical_identity_without_managed_object(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    payload = b"referenced-only evidence"
+    digest = hashlib.sha256(payload).hexdigest()
+    source_ref = f"linked:storage-1:object-1:{digest}"
+
+    first = store.attach_referenced(
+        organization_id="organization-1",
+        project_id="project-1",
+        mime_type="application/octet-stream",
+        size_bytes=len(payload),
+        sha256=digest,
+        source_ref=source_ref,
+    )
+    repeated = store.attach_referenced(
+        organization_id="organization-1",
+        project_id="project-1",
+        mime_type="application/octet-stream",
+        size_bytes=len(payload),
+        sha256=digest,
+        source_ref=source_ref,
+    )
+
+    assert repeated.media_id == first.media_id
+    assert first.relative_path is None
+    assert len(store.records("organization-1")) == 1
+    assert _object_files(tmp_path) == []
+    instances = store.instances(first.media_id, "organization-1")
+    assert len(instances) == 1
+    assert instances[0].storage_kind == "referenced"
+    assert instances[0].availability == "available"
+    assert instances[0].source_ref == source_ref
+
+
+def test_referenced_then_managed_bytes_upgrade_same_canonical_identity(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    payload = b"referenced evidence later managed"
+    digest = hashlib.sha256(payload).hexdigest()
+    referenced = store.attach_referenced(
+        organization_id="organization-1",
+        project_id="project-1",
+        mime_type="application/octet-stream",
+        size_bytes=len(payload),
+        sha256=digest,
+        source_ref=f"linked:storage-1:object-2:{digest}",
+    )
+    source = tmp_path / "later-managed.bin"
+    source.write_bytes(payload)
+
+    managed = store.register(source, "organization-1", "project-1")
+
+    assert managed.media_id == referenced.media_id
+    assert managed.relative_path is not None
+    assert len(store.records("organization-1")) == 1
+    assert len(_object_files(tmp_path)) == 1
+    instances = store.instances(managed.media_id, "organization-1")
+    assert [instance.storage_kind for instance in instances] == ["managed", "referenced"]
+
+
+def test_managed_then_referenced_bytes_keep_same_canonical_identity(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    payload = b"managed evidence later referenced"
+    managed = _upload(store, payload)
+    referenced = store.attach_referenced(
+        organization_id="organization-1",
+        project_id="project-1",
+        mime_type=managed.mime_type,
+        size_bytes=managed.size_bytes,
+        sha256=managed.sha256,
+        source_ref=f"linked:storage-2:object-1:{managed.sha256}",
+    )
+
+    assert referenced.media_id == managed.media_id
+    assert referenced.relative_path == managed.relative_path
+    assert len(store.records("organization-1")) == 1
+    instances = store.instances(managed.media_id, "organization-1")
+    assert [instance.storage_kind for instance in instances] == ["managed", "referenced"]

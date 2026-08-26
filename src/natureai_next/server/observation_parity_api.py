@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import time
+from http.cookies import SimpleCookie
 from urllib.parse import urlsplit
 from uuid import uuid4
 
@@ -40,22 +41,38 @@ class ObservationParityApiMixin:
         self, method: str, target: str, headers: dict[str, str], body: bytes
     ) -> ApiResponse:
         path = urlsplit(target).path
-        if path == "/api/v1/observations" and method == "POST":
-            return self._create_observation(headers, body)
+        create = path == "/api/v1/observations" and method == "POST"
         prefix = "/api/v1/observations/"
-        if path.startswith(prefix) and method in {"PATCH", "PUT"}:
-            observation_id = path.removeprefix(prefix).strip("/")
-            if observation_id:
-                return self._edit_observation(observation_id, headers, body)
-        return super().dispatch(method, target, headers, body)
+        edit = path.startswith(prefix) and method in {"PATCH", "PUT"}
+        if not create and not edit:
+            return super().dispatch(method, target, headers, body)
+
+        routed_headers = self._observation_headers(headers)
+        # Run a deliberately unsupported verb through the established managed API.
+        # This performs the existing service-lifecycle, authentication, tenant-quota,
+        # and browser-session gates without invoking the legacy generic POST route.
+        gate = super().dispatch("DELETE", path, routed_headers, b"")
+        if gate.status != 404:
+            return gate
+        try:
+            _token, identity = self._identity(routed_headers)
+        except AuthenticationFailed as exc:
+            return ApiResponse.json(
+                401, {"error": "unauthorized", "detail": str(exc)}
+            )
+
+        if create:
+            return self._create_observation(identity, routed_headers, body)
+        observation_id = path.removeprefix(prefix).strip("/")
+        if not observation_id:
+            return ApiResponse.json(404, {"error": "not_found"})
+        return self._edit_observation(
+            observation_id, identity, routed_headers, body
+        )
 
     def _create_observation(
-        self, headers: dict[str, str], body: bytes
+        self, identity, headers: dict[str, str], body: bytes
     ) -> ApiResponse:
-        auth = self._observation_identity(headers)
-        if isinstance(auth, ApiResponse):
-            return auth
-        identity = auth
         if len(body) > 1_048_576:
             return ApiResponse.json(413, {"error": "request_too_large"})
         try:
@@ -116,13 +133,10 @@ class ObservationParityApiMixin:
     def _edit_observation(
         self,
         observation_id: str,
+        identity,
         headers: dict[str, str],
         body: bytes,
     ) -> ApiResponse:
-        auth = self._observation_identity(headers)
-        if isinstance(auth, ApiResponse):
-            return auth
-        identity = auth
         if len(body) > 1_048_576:
             return ApiResponse.json(413, {"error": "request_too_large"})
         expected = headers.get("if-match")
@@ -190,33 +204,6 @@ class ObservationParityApiMixin:
             return ApiResponse.json(409, {"error": "revision_conflict"})
         return ApiResponse.json(200, {"item": updated, "revision": revision})
 
-    def _observation_identity(self, headers: dict[str, str]):
-        try:
-            _token, identity = self._identity(headers)
-        except AuthenticationFailed as exc:
-            return ApiResponse.json(
-                401, {"error": "unauthorized", "detail": str(exc)}
-            )
-        if self._governance is not None:
-            quota = self._governance.consume(identity.organization_id, "api_requests")
-            if not quota.allowed:
-                retry_after = max(1, quota.resets_at_epoch - int(time.time()))
-                return ApiResponse(
-                    429,
-                    json.dumps(
-                        {
-                            "error": "tenant_quota_exceeded",
-                            "metric": quota.metric,
-                            "limit": quota.limit,
-                            "used": quota.used,
-                        },
-                        separators=(",", ":"),
-                    ).encode(),
-                    "application/json; charset=utf-8",
-                    headers=(("Retry-After", str(retry_after)),),
-                )
-        return identity
-
     def _observation_allowed(
         self,
         identity,
@@ -248,6 +235,21 @@ class ObservationParityApiMixin:
         if record.project_id and record.project_id != project_id:
             return ApiResponse.json(409, {"error": "evidence_project_mismatch"})
         return None
+
+    @staticmethod
+    def _observation_headers(headers: dict[str, str]) -> dict[str, str]:
+        routed = dict(headers)
+        if routed.get("authorization"):
+            return routed
+        cookie = SimpleCookie()
+        try:
+            cookie.load(routed.get("cookie", ""))
+        except Exception:
+            return routed
+        morsel = cookie.get("fieldora_session")
+        if morsel is not None and morsel.value:
+            routed["authorization"] = f"Bearer {morsel.value}"
+        return routed
 
     @staticmethod
     def _json_object(body: bytes) -> dict:

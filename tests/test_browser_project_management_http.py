@@ -9,7 +9,7 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import Page, sync_playwright
 
 from natureai_next.domain.access_control import (
     AccessDecision,
@@ -115,6 +115,19 @@ def _managed_browser_server(organization_id: str, access_database: Path):
         thread.join(timeout=5)
 
 
+def _open_project_editor(page: Page, url: str) -> None:
+    page.add_init_script("sessionStorage.setItem('fieldora-session','browser-token')")
+    page.goto(url)
+    page.wait_for_function("document.body.dataset.fieldoraCapabilities === 'ready'")
+    page.locator("#workspace").wait_for(state="visible")
+    page.locator('[data-page="research"]').click()
+    page.locator("#page-research").wait_for(state="visible")
+    page.locator('#page-research [data-workspace-target="projects"]').click()
+    page.locator("#page-projects").wait_for(state="visible")
+    page.locator("#portfolio-new-project").click()
+    page.locator("#portfolio-project-editor").wait_for(state="visible")
+
+
 @pytest.mark.integration
 def test_create_project_click_persists_authoritative_postgres_project(tmp_path: Path) -> None:
     organization_id = f"browser-org-{uuid4()}"
@@ -134,18 +147,7 @@ def test_create_project_click_persists_authoritative_postgres_project(tmp_path: 
                 (request.method, request.url, request.failure or "unknown")
             ),
         )
-        page.add_init_script(
-            "sessionStorage.setItem('fieldora-session','browser-token')"
-        )
-        page.goto(url)
-        page.wait_for_function("document.body.dataset.fieldoraCapabilities === 'ready'")
-        page.locator("#workspace").wait_for(state="visible")
-        page.locator('[data-page="research"]').click()
-        page.locator("#page-research").wait_for(state="visible")
-        page.locator('#page-research [data-workspace-target="projects"]').click()
-        page.locator("#page-projects").wait_for(state="visible")
-        page.locator("#portfolio-new-project").click()
-        page.locator("#portfolio-project-editor").wait_for(state="visible")
+        _open_project_editor(page, url)
         page.locator("#portfolio-project-name").fill("Managed Browser Project")
         page.locator("#portfolio-project-start-date").fill("2026-09-01")
         page.locator("#portfolio-project-due-date").fill("2026-12-31")
@@ -173,6 +175,7 @@ def test_create_project_click_persists_authoritative_postgres_project(tmp_path: 
         assert canonical_id
         assert canonical_id != request_payload["id"]
         assert "status" not in request_payload
+        assert "owner_id" not in request_payload
         assert response_payload["item"]["status"] == "active"
         assert response_payload["item"]["owner_id"] == "browser-project-user"
         assert response_payload["item"]["start_date"] == "2026-09-01"
@@ -208,4 +211,45 @@ def test_create_project_click_persists_authoritative_postgres_project(tmp_path: 
             and request.organization_id == organization_id
             for request in decisions.requests
         )
+        browser.close()
+
+
+@pytest.mark.integration
+def test_invalid_project_schedule_is_rejected_by_shared_service(tmp_path: Path) -> None:
+    organization_id = f"browser-invalid-org-{uuid4()}"
+    with _managed_browser_server(
+        organization_id, tmp_path / "access-control-invalid.sqlite3"
+    ) as (
+        url,
+        project_management,
+        _decisions,
+    ), sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        page = browser.new_page()
+        failed_requests: list[tuple[str, str, str]] = []
+        page.on(
+            "requestfailed",
+            lambda request: failed_requests.append(
+                (request.method, request.url, request.failure or "unknown")
+            ),
+        )
+        _open_project_editor(page, url)
+        page.locator("#portfolio-project-name").fill("Impossible Schedule")
+        page.locator("#portfolio-project-start-date").fill("2026-12-31")
+        page.locator("#portfolio-project-due-date").fill("2026-01-01")
+
+        with page.expect_response(
+            lambda response: response.request.method == "POST"
+            and response.url.endswith("/api/v1/projects")
+        ) as response_info:
+            page.locator("#portfolio-project-save").click()
+        response = response_info.value
+        payload = response.json()
+
+        assert response.status == 400
+        assert payload["error"] == "invalid_request"
+        assert "cannot be before" in payload["detail"]
+        page.locator("#portfolio-project-editor").wait_for(state="visible")
+        assert project_management.projects(organization_id) == ()
+        assert failed_requests == []
         browser.close()

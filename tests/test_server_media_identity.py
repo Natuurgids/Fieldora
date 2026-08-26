@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import sqlite3
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -45,6 +46,18 @@ def _object_files(tmp_path: Path) -> list[Path]:
     ]
 
 
+def _assert_one_managed_instance(store: GovernedMediaStore, record: MediaRecord) -> None:
+    instances = store.instances(record.media_id, record.organization_id)
+    assert len(instances) == 1
+    instance = instances[0]
+    assert instance.media_id == record.media_id
+    assert instance.organization_id == record.organization_id
+    assert instance.storage_kind == "managed"
+    assert instance.availability == "available"
+    assert instance.size_bytes == record.size_bytes
+    assert instance.sha256 == record.sha256
+
+
 def test_repeated_verified_upload_returns_existing_evidence_identity(tmp_path: Path) -> None:
     store = _store(tmp_path)
     payload = b"the same governed evidence bytes"
@@ -56,6 +69,7 @@ def test_repeated_verified_upload_returns_existing_evidence_identity(tmp_path: P
     assert repeated.relative_path == first.relative_path
     assert repeated.sha256 == first.sha256
     assert store.records("organization-1", "project-1") == (first,)
+    _assert_one_managed_instance(store, first)
 
 
 def test_registering_same_bytes_twice_is_idempotent_in_same_context(tmp_path: Path) -> None:
@@ -70,6 +84,7 @@ def test_registering_same_bytes_twice_is_idempotent_in_same_context(tmp_path: Pa
 
     assert repeated.media_id == first.media_id
     assert store.records("organization-1", "project-1") == (first,)
+    _assert_one_managed_instance(store, first)
 
 
 def test_same_bytes_in_another_project_use_one_organization_evidence_identity(
@@ -84,6 +99,7 @@ def test_same_bytes_in_another_project_use_one_organization_evidence_identity(
     assert second.media_id == first.media_id
     assert second.relative_path == first.relative_path
     assert len(store.records("organization-1")) == 1
+    _assert_one_managed_instance(store, first)
 
 
 def test_concurrent_verified_uploads_converge_to_one_sqlite_evidence_identity(
@@ -120,6 +136,7 @@ def test_concurrent_verified_uploads_converge_to_one_sqlite_evidence_identity(
     assert len({record.media_id for record in records}) == 1
     assert len(store.records("organization-1")) == 1
     assert len(_object_files(tmp_path)) == 1
+    _assert_one_managed_instance(store, records[0])
 
 
 def test_concurrent_registers_converge_to_one_sqlite_evidence_identity(
@@ -145,3 +162,36 @@ def test_concurrent_registers_converge_to_one_sqlite_evidence_identity(
     assert len({record.media_id for record in records}) == 1
     assert len(store.records("organization-1")) == 1
     assert len(_object_files(tmp_path)) == 1
+    _assert_one_managed_instance(store, records[0])
+
+
+def test_existing_sqlite_governed_media_is_backfilled_as_managed(tmp_path: Path) -> None:
+    database = tmp_path / "media.sqlite3"
+    media_id = "legacy-media"
+    payload = b"legacy managed bytes"
+    digest = hashlib.sha256(payload).hexdigest()
+    with sqlite3.connect(database) as connection:
+        connection.execute(
+            "CREATE TABLE governed_media("
+            "media_id TEXT PRIMARY KEY,relative_path TEXT NOT NULL UNIQUE,"
+            "organization_id TEXT NOT NULL,project_id TEXT NOT NULL,"
+            "mime_type TEXT NOT NULL,size_bytes INTEGER NOT NULL,sha256 TEXT NOT NULL)"
+        )
+        connection.execute(
+            "INSERT INTO governed_media VALUES(?,?,?,?,?,?,?)",
+            (
+                media_id,
+                "legacy/object.bin",
+                "organization-1",
+                "project-1",
+                "application/octet-stream",
+                len(payload),
+                digest,
+            ),
+        )
+
+    store = GovernedMediaStore(database, tmp_path / "objects")
+    record = store.record(media_id)
+
+    assert record is not None
+    _assert_one_managed_instance(store, record)

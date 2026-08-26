@@ -142,7 +142,7 @@ def test_create_project_click_persists_authoritative_postgres_project(tmp_path: 
         page.locator("#workspace").wait_for(state="visible")
         page.locator('[data-page="research"]').click()
         page.locator("#page-research").wait_for(state="visible")
-        page.locator('[data-workspace-target="projects"]').click()
+        page.locator('#page-research [data-workspace-target="projects"]').click()
         page.locator("#page-projects").wait_for(state="visible")
         page.locator("#portfolio-new-project").click()
         page.locator("#portfolio-project-editor").wait_for(state="visible")

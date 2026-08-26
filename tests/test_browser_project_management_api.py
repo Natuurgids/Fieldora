@@ -118,6 +118,29 @@ def test_managed_project_create_ignores_browser_supplied_identity() -> None:
     assert request.organization_id == "organization-1"
 
 
+def test_managed_project_create_uses_creator_owner_and_service_status() -> None:
+    service = _ProjectService()
+    api = _ManagedApi(service)
+
+    response = api._create_project(
+        {"x-fieldora-purpose": "research"},
+        json.dumps(
+            {
+                "name": "Creator-owned Project",
+                "owner_id": "other-user-must-not-win",
+                "status": "archived",
+            }
+        ).encode("utf-8"),
+    )
+
+    assert response.status == 201
+    payload = json.loads(response.body)
+    assert service.created[0].owner_id == "user-1"
+    assert service.created[0].status == "active"
+    assert payload["item"]["owner_id"] == "user-1"
+    assert payload["item"]["status"] == "active"
+
+
 def test_managed_project_create_denial_persists_nothing() -> None:
     service = _ProjectService()
     api = _ManagedApi(service, allowed=False)

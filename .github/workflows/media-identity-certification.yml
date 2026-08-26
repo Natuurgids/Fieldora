@@ -5,11 +5,13 @@ on:
     paths:
       - "src/natureai_next/server/media.py"
       - "src/natureai_next/server/media_links.py"
+      - "src/natureai_next/server/linked_media_convergence.py"
       - "src/natureai_next/server/postgres_media.py"
       - "src/natureai_next/server/browser_functionality_api.py"
       - "src/natureai_next/server/linked_storage_browser_api.py"
       - "src/natureai_next/server/media_detail_web.py"
       - "tests/test_server_media_identity.py"
+      - "tests/test_linked_media_convergence.py"
       - "tests/test_postgres_media_identity.py"
       - "tests/test_postgres_media_concurrency.py"
       - "tests/test_browser_functionality_api.py"
@@ -62,11 +64,13 @@ jobs:
           python -m ruff check
           src/natureai_next/server/media.py
           src/natureai_next/server/media_links.py
+          src/natureai_next/server/linked_media_convergence.py
           src/natureai_next/server/postgres_media.py
           src/natureai_next/server/browser_functionality_api.py
           src/natureai_next/server/linked_storage_browser_api.py
           src/natureai_next/server/media_detail_web.py
           tests/test_server_media_identity.py
+          tests/test_linked_media_convergence.py
           tests/test_postgres_media_identity.py
           tests/test_postgres_media_concurrency.py
           tests/test_browser_functionality_api.py
@@ -76,6 +80,7 @@ jobs:
         run: >-
           pytest -q
           tests/test_server_media_identity.py
+          tests/test_linked_media_convergence.py
           tests/test_postgres_media_identity.py
           tests/test_postgres_media_concurrency.py
           tests/test_browser_functionality_api.py

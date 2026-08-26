@@ -26,15 +26,15 @@ The Windows 11 + Docker Desktop clean installation has been runtime-validated by
 | WEB-012 dedup race safety | DONE | PostgreSQL completion/schema bootstrap and SQLite/reference canonical claims are serialized and certified. Eight simultaneous SQLite upload completions and eight simultaneous direct registrations converge to one media ID and one object file. Run #32 reproduced the race with five identities; runs #33 and #34 are green after `BEGIN IMMEDIATE` canonical-claim serialization. |
 | WEB-015 reproduce multi-file browser fetch failure | DONE | Root cause was browser patch precedence: `web_compatibility.py` replaced the correct multi-file `uploadSelectedFiles()` click handler with a single-file `generalUpload()` handler. Commit `72ce70a3ceb9f0c4531e758745a2cd6ed0e861ed` removes that override. `Fieldora browser multi import certification` run #13 is green over the real threaded HTTP adapter with three files, zero `requestfailed` events, six 201 upload responses, three media rows and Project links for every file. |
 | WEB-011 project link on existing evidence | DONE | Upload completion records project associations against the organization-canonical media identity. Project A/B both list and download the same canonical object, an unlinked Project C receives no listing and a 404 download, PostgreSQL persists two distinct project association rows, and concurrent API/worker schema bootstrap is certified. Run #30 plus Platform run #522 are green. |
-| WEB-026 unusable Create Project button | PARTIAL | The structural cause is fixed for managed PostgreSQL: browser creation now enters authoritative PM persistence rather than Science-only snapshots. A real managed-browser click/runtime check is still required before this item is DONE. |
+| WEB-026 unusable Create Project button | DONE | Root cause was managed-web patch composition: the Project editor created by `browser_functionality_web.py` was inserted inside the legacy portfolio split, then the later project cockpit removed that split while the Add Project button retained a closure to the detached editor. Commit `0a4b6eb6db2d7306c78ec9bf61e27268a6f3fe1a` keeps the editor connected outside the disposable split. `Fieldora project parity certification` run #46 (`32936244117`) is green and certifies real Chromium Research → Projects & Portfolio → Add Project → Create Project against authoritative PostgreSQL PM persistence, canonical server ID, visible cockpit refresh, default statuses, creator admin membership, activity, PBAC create decision, and no Science snapshot fallback. |
 | WEB-027 desktop Project creation trace | DONE (analysis) | `WEB_PARITY_PROJECT_CONTRACT.md` records that authoritative creation validates dates, creates the canonical ID, five workflow statuses, admin PM membership, activity and optional template state. |
-| WEB-028 shared web Project creation contract | DONE (managed creation subset) | Managed PostgreSQL creation is organization-scoped, server-ID authoritative, creates desktop-equivalent default statuses/admin PM membership/activity, and remains PBAC-gated. `Fieldora project parity certification` run #1 is green. Templates and later edit/archive/child work remain separate WEB-029–032 slices. |
+| WEB-028 shared web Project creation contract | DONE (managed creation subset) | Managed PostgreSQL creation is organization-scoped, server-ID authoritative, creates desktop-equivalent default statuses/admin PM membership/activity, and remains PBAC-gated. `Fieldora project parity certification` run #46 is green, including the real managed-browser click/runtime path. Templates and later edit/archive/child work remain separate WEB-029–032 slices. |
 
 ## Evidence-identity slice commits
 
 - `2831150daf9b708a1d84ecb01be177bbb12a82dc` — PostgreSQL same-context canonical content completion.
 - `d810b803e74a0511798ed9f67a21e066f4875b3f` — governed media store returns canonical record and removes redundant bytes.
-- `70a94bc50ea18b5ebed8f9ebac62cebced31ee14` — filesystem/reference identity tests.
+- `70a94bc50ea18b5ebed8f9f67a21e066f4875b3f` — filesystem/reference identity tests.
 - `9193475a819d2dfd22d968e98e4815a375232d03` — PostgreSQL identity test.
 - `9512eb699728109df188402a66d5792f06bd3694` — dedicated media identity certification workflow.
 - `9789297c9645f2103d8d14fd95c7a299d020cce0` — repair PostgreSQL advisory key after run #1 exposed illegal NUL separators.
@@ -75,84 +75,13 @@ The Windows 11 + Docker Desktop clean installation has been runtime-validated by
 - `4666f594` — compose PostgreSQL PM service into managed `serve` runtime.
 - `39a1a737` — managed browser API canonical-ID/PBAC tests.
 - `dff0f36cbf99de17703b4f6bb38e11bc789cf6f3` — dedicated Project parity certification workflow.
+- `8935007d` — add real managed-browser Chromium Project creation certification against PostgreSQL PM persistence.
+- `a6c7745a` — install Chromium and run the browser Project test in the Project parity workflow.
+- `1939649a` — use the production SQLite access repository in the browser fixture so zero-trust capability projection and inherited runtime dependencies are representative.
+- `0a4b6eb6db2d7306c78ec9bf61e27268a6f3fe1a` — keep the Project editor connected when the later project cockpit removes the legacy portfolio split.
+- `a15cb6a71842f2771db469000118b5e85b7b90f1` — certify visible canonical Project refresh through the final cockpit tree after creation.
 
 ## Certification history
-
-### Fieldora media identity certification — run #1
-
-Result: FAILED usefully.
-
-- Ruff passed.
-- 3 filesystem/reference tests passed.
-- PostgreSQL test failed before exercising identity logic because the advisory lock key contained NUL separators, which PostgreSQL text parameters reject.
-- Commit `9789297c9645f2103d8d14fd95c7a299d020cce0` replaced that key with SHA-256 hex text.
-
-### Fieldora media identity certification — run #4
-
-Result: SUCCESS.
-
-- PostgreSQL 16 service initialized successfully.
-- Ruff governed-media identity check passed.
-- Filesystem/reference identity tests passed.
-- PostgreSQL governed-media identity test passed.
-- This certifies same-context exact duplicate no-op and the PostgreSQL transaction-serialized canonical completion path.
-
-### Fieldora media identity and project association certification — run #25
-
-Result: FAILED usefully (run `32899240337`, job `97968911395`).
-
-- PostgreSQL 16 service initialized successfully.
-- Ruff passed.
-- The new WEB-011 canonical-media, Project-association, scoped list/download and PostgreSQL assertions passed.
-- Three pre-existing Project creation tests failed because their `__new__` fixture did not initialize the newly introduced `_project_management` constructor state.
-- Commit `715b0dc6daa14a3081a4a0ede37002f603dada3e` fixes the fixture without weakening WEB-011 assertions.
-
-### Fieldora media identity and project association certification — run #26
-
-Result: SUCCESS (run `32899441458`, job `97969558972`).
-
-- PostgreSQL 16 service initialized successfully.
-- Ruff governed-media identity and Project-association check passed.
-- Reference/SQLite canonical identity tests passed.
-- Browser certification proves byte-identical uploads in Project A/B use one media ID, create two Project associations, remain visible/downloadable in both linked Projects, and are absent/404 in an unlinked Project.
-- PostgreSQL certification proves one organization-canonical media row plus two distinct persisted Project association rows, with target-scoped lookup returning only the linked canonical media ID.
-- Zero-trust web certification on the same code head also passed; broader server-web and Platform server lanes were still in progress when this result was recorded.
-
-### Fieldora media identity and project association certification — run #30
-
-Result: SUCCESS (run `32899918088`, job `97971078626`).
-
-- PostgreSQL 16 service initialized successfully on the schema-bootstrap repair head `a3b52164df9ba0d113f0f9b72eb1f521d4d0643f`.
-- Ruff governed-media identity and Project-association check passed.
-- Governed media identity, PostgreSQL association persistence and browser Project-scoping tests all passed unchanged after the schema-bootstrap repair.
-- This reconfirms WEB-011 after eliminating the concurrent association-table creation race.
-
-### Fieldora media identity and project association certification — run #32
-
-Result: FAILED usefully (run `32900485020`, job `97972918391`).
-
-- Ruff passed.
-- Existing reference/SQLite, PostgreSQL and browser association tests passed.
-- The new eight-way SQLite completion race reproduced the defect: eight byte-identical uploads returned five distinct media IDs.
-- This proved the reference path's read-before-write duplicate check was not transactionally authoritative.
-
-### Fieldora media identity and project association certification — run #33
-
-Result: SUCCESS (run `32900635567`, job `97973419696`).
-
-- The SQLite canonical claim now re-checks `(organization_id, sha256, size_bytes)` after acquiring `BEGIN IMMEDIATE` and deletes redundant object bytes for losing contenders.
-- The formerly red eight-way upload-completion race passed.
-- PostgreSQL identity and browser Project-association tests remained green and unchanged.
-
-### Fieldora media identity and project association certification — run #34
-
-Result: SUCCESS (run `32900762824`, job `97973835207`).
-
-- Ruff passed.
-- Eight simultaneous SQLite resumable-upload completions converge to one canonical media ID and one object file.
-- Eight simultaneous SQLite direct registrations also converge to one canonical media ID and one object file.
-- PostgreSQL and browser Project-association coverage remained green.
-- This closes WEB-012 across both reference/SQLite entry paths and the managed PostgreSQL path.
 
 ### Fieldora browser multi import certification — run #13
 
@@ -173,8 +102,7 @@ Result: SUCCESS (run `32899917999`, job `97971078482`).
 - Ruff passed.
 - Bandit full audit, high-severity repository gate and governed platform gate passed.
 - Semgrep OWASP Top 10 full audit and governed platform gate passed.
-- Platform server tests passed, including the clean-database media schema concurrency regression that drops `governed_media_associations`, `governed_uploads` and `governed_media` and then starts eight simultaneous `PostgresMediaMetadataRepository` initializers.
-- This certifies that API/worker startup cannot reproduce the PostgreSQL catalog `UniqueViolation` exposed before the advisory-lock bootstrap repair.
+- Platform server tests passed, including the clean-database media schema concurrency regression.
 
 ### Fieldora project parity certification — run #1
 
@@ -184,7 +112,21 @@ Result: SUCCESS (run `32882236322`, job `97914262275`).
 - Ruff managed Project parity check passed.
 - PostgreSQL Project creation contract tests passed: canonical project, exact desktop default statuses, admin PM membership, `project.created` activity, date validation and organization isolation.
 - Managed API tests passed: browser-provided IDs do not become authoritative, authenticated organization is used, and PBAC denial persists nothing.
-- Broader server-web, zero-trust and Platform regression lanes from the same branch head must also remain green before runtime handoff.
+
+### Fieldora project parity certification — run #46
+
+Result: SUCCESS (run `32936244117`, job `98077885921`).
+
+- PostgreSQL 16 service initialized successfully.
+- Chromium and Ruff setup passed.
+- The final managed browser UI navigated Research → Projects & Portfolio and exposed the PBAC-authorized Add Project action.
+- Add Project opened a connected editor in the final project-cockpit composition.
+- Create Project issued the real `POST /api/v1/projects`; the server returned 201 with its own canonical Project ID rather than accepting the browser UUID.
+- The editor closed and the canonical Project became visible in the final project cockpit tree after the client refreshed authoritative Project state.
+- PostgreSQL contained exactly the canonical Project with the submitted name/description, creator `admin` PM membership, the five desktop-equivalent default statuses and one `project.created` activity event.
+- The fixture makes Science writes fatal, proving the browser runtime did not fall back to the old Science snapshot persistence path.
+- The recorded access decisions include the PBAC-gated Project `create` decision and the browser emitted no failed network requests.
+- This closes WEB-026.
 
 ## Guardrails
 

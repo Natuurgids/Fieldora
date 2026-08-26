@@ -425,7 +425,7 @@ class BrowserFunctionalityFieldoraApi(ProjectOwnerContractFieldoraApi):
                 project_id = self._project_management.create_project(
                     name,
                     organization_id=identity.organization_id,
-                    owner_id=str(record.get("owner_id") or identity.identity_id),
+                    owner_id=identity.identity_id,
                     actor_id=identity.identity_id,
                     start_date=str(record.get("start_date") or ""),
                     due_date=str(record.get("due_date") or ""),

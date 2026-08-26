@@ -29,6 +29,17 @@ class MediaRecord:
 
 
 @dataclass(frozen=True, slots=True)
+class MediaInstanceRecord:
+    instance_id: str
+    media_id: str
+    organization_id: str
+    storage_kind: str
+    availability: str
+    size_bytes: int
+    sha256: str
+
+
+@dataclass(frozen=True, slots=True)
 class UploadSession:
     upload_id: str
     subject_id: str
@@ -56,6 +67,9 @@ class MediaMetadataRepository(Protocol):
     def records(
         self, organization_id: str, project_id: str = "", limit: int = 200
     ) -> tuple[MediaRecord, ...]: ...
+    def instances(
+        self, media_id: str, organization_id: str
+    ) -> tuple[MediaInstanceRecord, ...]: ...
 
 
 class GovernedMediaStore:
@@ -91,6 +105,22 @@ class GovernedMediaStore:
                 "mime_type TEXT NOT NULL,size_bytes INTEGER NOT NULL,sha256 TEXT NOT NULL)"
             )
             connection.execute(
+                "CREATE TABLE IF NOT EXISTS governed_media_instances("
+                "instance_id TEXT PRIMARY KEY,media_id TEXT NOT NULL,"
+                "organization_id TEXT NOT NULL,storage_kind TEXT NOT NULL,"
+                "availability TEXT NOT NULL,size_bytes INTEGER NOT NULL,"
+                "sha256 TEXT NOT NULL,"
+                "FOREIGN KEY(media_id) REFERENCES governed_media(media_id) ON DELETE CASCADE)"
+            )
+            connection.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS ux_governed_media_managed_instance "
+                "ON governed_media_instances(media_id) WHERE storage_kind='managed'"
+            )
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS ix_governed_media_instances_scope "
+                "ON governed_media_instances(organization_id,media_id,storage_kind)"
+            )
+            connection.execute(
                 "CREATE TABLE IF NOT EXISTS governed_uploads("
                 "upload_id TEXT PRIMARY KEY,subject_id TEXT NOT NULL,"
                 "organization_id TEXT NOT NULL,project_id TEXT NOT NULL,"
@@ -101,6 +131,20 @@ class GovernedMediaStore:
             connection.execute(
                 "CREATE INDEX IF NOT EXISTS ix_governed_media_content "
                 "ON governed_media(organization_id,sha256,size_bytes)"
+            )
+            missing_instances = connection.execute(
+                "SELECT media_id,organization_id,size_bytes,sha256 FROM governed_media "
+                "WHERE NOT EXISTS(SELECT 1 FROM governed_media_instances i "
+                "WHERE i.media_id=governed_media.media_id AND i.storage_kind='managed')"
+            ).fetchall()
+            connection.executemany(
+                "INSERT INTO governed_media_instances("
+                "instance_id,media_id,organization_id,storage_kind,availability,"
+                "size_bytes,sha256) VALUES(?,?,?,'managed','available',?,?)",
+                [
+                    (str(uuid4()), media_id, organization_id, size_bytes, sha256)
+                    for media_id, organization_id, size_bytes, sha256 in missing_instances
+                ],
             )
             connection.commit()
         finally:
@@ -370,6 +414,23 @@ class GovernedMediaStore:
             connection.close()
         return tuple(MediaRecord(*row) for row in rows)
 
+    def instances(
+        self, media_id: str, organization_id: str
+    ) -> tuple[MediaInstanceRecord, ...]:
+        if self._metadata is not None:
+            return self._metadata.instances(media_id, organization_id)
+        connection = sqlite3.connect(self._database_path)
+        try:
+            rows = connection.execute(
+                "SELECT instance_id,media_id,organization_id,storage_kind,availability,"
+                "size_bytes,sha256 FROM governed_media_instances "
+                "WHERE media_id=? AND organization_id=? ORDER BY storage_kind,instance_id",
+                (media_id, organization_id),
+            ).fetchall()
+        finally:
+            connection.close()
+        return tuple(MediaInstanceRecord(*row) for row in rows)
+
     def read_range(self, record: MediaRecord, start: int, end: int) -> bytes:
         if start < 0 or end < start or end >= record.size_bytes:
             raise ValueError("invalid range")
@@ -410,6 +471,18 @@ class GovernedMediaStore:
                         record.organization_id,
                         record.project_id,
                         record.mime_type,
+                        record.size_bytes,
+                        record.sha256,
+                    ),
+                )
+                connection.execute(
+                    "INSERT INTO governed_media_instances("
+                    "instance_id,media_id,organization_id,storage_kind,availability,"
+                    "size_bytes,sha256) VALUES(?,?,?,'managed','available',?,?)",
+                    (
+                        str(uuid4()),
+                        record.media_id,
+                        record.organization_id,
                         record.size_bytes,
                         record.sha256,
                     ),

@@ -16,7 +16,6 @@ from natureai_next.server.media_links import (
 )
 from natureai_next.server.object_storage import FileObjectStore, ObjectStore
 
-
 _INSTANCE_AVAILABILITY = {
     "available",
     "offline",
@@ -138,6 +137,26 @@ class GovernedMediaStore:
         columns = connection.execute("PRAGMA table_info(governed_media)").fetchall()
         relative_column = next((row for row in columns if row[1] == "relative_path"), None)
         if relative_column is not None and int(relative_column[3]) == 1:
+            instance_table_exists = connection.execute(
+                "SELECT 1 FROM sqlite_master "
+                "WHERE type='table' AND name='governed_media_instances'"
+            ).fetchone()
+            preserved_instances: list[tuple[object, ...]] = []
+            if instance_table_exists is not None:
+                instance_columns = {
+                    str(row[1])
+                    for row in connection.execute(
+                        "PRAGMA table_info(governed_media_instances)"
+                    ).fetchall()
+                }
+                source_expression = "source_ref" if "source_ref" in instance_columns else "''"
+                preserved_instances = connection.execute(
+                    "SELECT instance_id,media_id,organization_id,storage_kind,availability,"
+                    f"size_bytes,sha256,{source_expression} FROM governed_media_instances"
+                ).fetchall()
+                # Drop the child before rebuilding the parent. With foreign keys enabled,
+                # dropping governed_media first would cascade-delete existing instances.
+                connection.execute("DROP TABLE governed_media_instances")
             connection.execute(
                 "CREATE TABLE governed_media_nullable("
                 "media_id TEXT PRIMARY KEY,relative_path TEXT UNIQUE,"
@@ -149,6 +168,21 @@ class GovernedMediaStore:
             )
             connection.execute("DROP TABLE governed_media")
             connection.execute("ALTER TABLE governed_media_nullable RENAME TO governed_media")
+            if preserved_instances:
+                connection.execute(
+                    "CREATE TABLE governed_media_instances("
+                    "instance_id TEXT PRIMARY KEY,media_id TEXT NOT NULL,"
+                    "organization_id TEXT NOT NULL,storage_kind TEXT NOT NULL,"
+                    "availability TEXT NOT NULL,size_bytes INTEGER NOT NULL,"
+                    "sha256 TEXT NOT NULL,source_ref TEXT NOT NULL DEFAULT '',"
+                    "FOREIGN KEY(media_id) REFERENCES governed_media(media_id) ON DELETE CASCADE)"
+                )
+                connection.executemany(
+                    "INSERT INTO governed_media_instances("
+                    "instance_id,media_id,organization_id,storage_kind,availability,"
+                    "size_bytes,sha256,source_ref) VALUES(?,?,?,?,?,?,?,?)",
+                    preserved_instances,
+                )
         connection.execute(
             "CREATE TABLE IF NOT EXISTS governed_media_instances("
             "instance_id TEXT PRIMARY KEY,media_id TEXT NOT NULL,"
@@ -158,7 +192,8 @@ class GovernedMediaStore:
             "FOREIGN KEY(media_id) REFERENCES governed_media(media_id) ON DELETE CASCADE)"
         )
         instance_columns = {
-            str(row[1]) for row in connection.execute(
+            str(row[1])
+            for row in connection.execute(
                 "PRAGMA table_info(governed_media_instances)"
             ).fetchall()
         }
@@ -225,9 +260,7 @@ class GovernedMediaStore:
         sha256 = digest.hexdigest()
         size_bytes = source.stat().st_size
         if self._metadata is None:
-            existing = self._sqlite_content_record(
-                organization_id, sha256, size_bytes
-            )
+            existing = self._sqlite_content_record(organization_id, sha256, size_bytes)
             if existing is not None and existing.relative_path is not None:
                 return existing
         media_id = str(uuid4())
@@ -515,9 +548,7 @@ class GovernedMediaStore:
         self._objects.put(relative, part, record.mime_type, record.sha256)
         try:
             if self._metadata is not None:
-                canonical = (
-                    self._metadata.complete_upload(current.upload_id, record) or record
-                )
+                canonical = self._metadata.complete_upload(current.upload_id, record) or record
                 if canonical.relative_path != relative:
                     self._objects.delete(relative)
                 record = canonical

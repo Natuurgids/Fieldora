@@ -149,7 +149,8 @@ def test_functional_library_and_project_controls(tmp_path: Path, browser_name: s
             page.locator("#portfolio-project-save").click()
         sent = json.loads(request_info.value.post_data or "{}")
         assert sent["name"] == "Browser Created Project"
-        assert sent["owner_id"] == "admin-1"
+        assert "owner_id" not in sent
+        assert "status" not in sent
 
         page.locator('[data-portfolio-view="kanban"]').click()
         assert "Kanban view" in page.locator("#portfolio-view-indicator").inner_text()

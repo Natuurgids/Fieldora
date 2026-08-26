@@ -131,7 +131,8 @@ _BROWSER_FUNCTIONALITY_PATCH = bytes(
   button.id="portfolio-new-project";button.className="primary";button.textContent="＋ Add project";top?.appendChild(button);
   const editor=document.createElement("section");editor.id="portfolio-project-editor";editor.className="card section";editor.hidden=true;
   editor.innerHTML='<h2>Add project</h2><div class="form-grid"><label>Name<input id="portfolio-project-name"></label><label>Status<select id="portfolio-project-status"><option value="active">active</option><option value="planned">planned</option></select></label></div><label class="section">Description<textarea id="portfolio-project-description"></textarea></label><div class="actions section"><button id="portfolio-project-save" class="primary">Create project</button><button id="portfolio-project-cancel">Cancel</button></div><p id="portfolio-project-status-message" class="status"></p>';
-  const first=projectsPage.querySelector(".card");if(first)first.before(editor);else projectsPage.appendChild(editor);
+  const first=projectsPage.querySelector(".card"),legacySplit=first?.closest(".split");
+  if(legacySplit)legacySplit.before(editor);else if(first)first.before(editor);else projectsPage.appendChild(editor);
   button.onclick=()=>{editor.hidden=false;byId("portfolio-project-name").focus()};
   byId("portfolio-project-cancel").onclick=()=>{editor.hidden=true};
   byId("portfolio-project-save").onclick=async()=>{

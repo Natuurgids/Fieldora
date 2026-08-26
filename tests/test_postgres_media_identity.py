@@ -42,6 +42,18 @@ def _upload(
     return result
 
 
+def _assert_one_managed_instance(store: GovernedMediaStore, record: MediaRecord) -> None:
+    instances = store.instances(record.media_id, record.organization_id)
+    assert len(instances) == 1
+    instance = instances[0]
+    assert instance.media_id == record.media_id
+    assert instance.organization_id == record.organization_id
+    assert instance.storage_kind == "managed"
+    assert instance.availability == "available"
+    assert instance.size_bytes == record.size_bytes
+    assert instance.sha256 == record.sha256
+
+
 @pytest.mark.integration
 def test_postgres_repeated_upload_returns_canonical_media_identity(tmp_path: Path) -> None:
     connect = _connect_factory()
@@ -71,6 +83,7 @@ def test_postgres_repeated_upload_returns_canonical_media_identity(tmp_path: Pat
     assert repeated.media_id == first.media_id
     assert repeated.relative_path == first.relative_path
     assert store.records(organization_id, project_id) == (first,)
+    _assert_one_managed_instance(store, first)
 
     with connect() as connection:
         with connection.cursor() as cursor:
@@ -78,6 +91,12 @@ def test_postgres_repeated_upload_returns_canonical_media_identity(tmp_path: Pat
                 "SELECT count(*) FROM governed_media WHERE organization_id=%s "
                 "AND project_id=%s AND sha256=%s AND size_bytes=%s",
                 (organization_id, project_id, first.sha256, first.size_bytes),
+            )
+            assert cursor.fetchone()[0] == 1
+            cursor.execute(
+                "SELECT count(*) FROM governed_media_instances WHERE media_id=%s "
+                "AND organization_id=%s AND storage_kind='managed'",
+                (first.media_id, organization_id),
             )
             assert cursor.fetchone()[0] == 1
 
@@ -112,6 +131,7 @@ def test_postgres_canonical_media_has_two_project_associations(tmp_path: Path) -
 
     assert second.media_id == first.media_id
     assert len(store.records(organization_id)) == 1
+    _assert_one_managed_instance(store, first)
 
     for project_id in (project_a, project_b):
         repository.associations.link(
@@ -152,3 +172,38 @@ def test_postgres_canonical_media_has_two_project_associations(tmp_path: Path) -
                 (first.media_id, organization_id),
             )
             assert cursor.fetchone() == (2, 2)
+
+
+@pytest.mark.integration
+def test_postgres_existing_governed_media_is_backfilled_as_managed(tmp_path: Path) -> None:
+    connect = _connect_factory()
+    repository = PostgresMediaMetadataRepository(connect)
+    store = GovernedMediaStore(
+        tmp_path / "unused-backfill.sqlite3",
+        tmp_path / "backfill-objects",
+        metadata=repository,
+    )
+    organization_id = f"org-{uuid4()}"
+    project_id = f"project-{uuid4()}"
+    record = _upload(
+        store,
+        b"postgres legacy managed evidence",
+        organization_id=organization_id,
+        project_id=project_id,
+    )
+
+    with connect() as connection:
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "DELETE FROM governed_media_instances WHERE media_id=%s",
+                (record.media_id,),
+            )
+
+    reloaded_repository = PostgresMediaMetadataRepository(connect)
+    reloaded_store = GovernedMediaStore(
+        tmp_path / "unused-backfill-reload.sqlite3",
+        tmp_path / "backfill-reload-objects",
+        metadata=reloaded_repository,
+    )
+
+    _assert_one_managed_instance(reloaded_store, record)

@@ -20,6 +20,7 @@ from natureai_next.domain.access_control import (
     PolicyEffect,
     PolicySource,
 )
+from natureai_next.infrastructure.database.access_control import SqliteAccessControlRepository
 from natureai_next.server.browser_functionality_api import BrowserFunctionalityFieldoraApi
 from natureai_next.server.http import handler_for
 from natureai_next.server.postgres_project_management import PostgresProjectManagementService
@@ -49,31 +50,6 @@ class _Decisions:
         return AccessDecision(True, "test")
 
 
-class _AccessRepository:
-    def __init__(self, organization_id: str) -> None:
-        self.saved_policies = [
-            Policy(
-                policy_id="browser-project-scope",
-                name="Browser Project creator scope",
-                effect=PolicyEffect.ALLOW,
-                source=PolicySource.DIRECT,
-                source_id="browser-project-test",
-                subject_id="browser-project-user",
-                role_id="",
-                actions=("view", "create"),
-                resource_types=("project",),
-                organization_id=organization_id,
-                purposes=("research",),
-            )
-        ]
-
-    def policies(self) -> tuple[Policy, ...]:
-        return tuple(self.saved_policies)
-
-    def put_policy(self, policy: Policy) -> None:
-        self.saved_policies.append(policy)
-
-
 class _Science:
     def records(self, _collection: str) -> tuple[dict, ...]:
         return ()
@@ -90,16 +66,37 @@ def _connect_factory():
     return lambda: psycopg.connect(dsn, connect_timeout=10)
 
 
+def _access_repository(database_path: Path, organization_id: str) -> SqliteAccessControlRepository:
+    repository = SqliteAccessControlRepository(database_path)
+    repository.put_policy(
+        Policy(
+            policy_id="browser-project-scope",
+            name="Browser Project creator scope",
+            effect=PolicyEffect.ALLOW,
+            source=PolicySource.DIRECT,
+            source_id="browser-project-test",
+            subject_id="browser-project-user",
+            role_id="",
+            actions=("view", "create"),
+            resource_types=("project",),
+            organization_id=organization_id,
+            purposes=("research",),
+        )
+    )
+    return repository
+
+
 @contextlib.contextmanager
-def _managed_browser_server(organization_id: str):
+def _managed_browser_server(organization_id: str, access_database: Path):
     project_management = PostgresProjectManagementService(_connect_factory())
     decisions = _Decisions()
+    access_repository = _access_repository(access_database, organization_id)
     api = BrowserFunctionalityFieldoraApi(
         _Authentication(organization_id),
         decisions,
         _Science(),
         Path("src/natureai_next/resources/server_web"),
-        audit_repository=_AccessRepository(organization_id),
+        audit_repository=access_repository,
     )
     api._project_management = project_management
     server = ThreadingHTTPServer(("127.0.0.1", 0), handler_for(api))
@@ -119,9 +116,11 @@ def _managed_browser_server(organization_id: str):
 
 
 @pytest.mark.integration
-def test_create_project_click_persists_authoritative_postgres_project() -> None:
+def test_create_project_click_persists_authoritative_postgres_project(tmp_path: Path) -> None:
     organization_id = f"browser-org-{uuid4()}"
-    with _managed_browser_server(organization_id) as (
+    with _managed_browser_server(
+        organization_id, tmp_path / "access-control.sqlite3"
+    ) as (
         url,
         project_management,
         decisions,

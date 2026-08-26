@@ -10,7 +10,6 @@ from uuid import uuid4
 from natureai_next.server.media import MediaInstanceRecord, MediaRecord, UploadSession
 from natureai_next.server.media_links import PostgresMediaAssociationRepository
 
-
 _INSTANCE_AVAILABILITY = {
     "available",
     "offline",

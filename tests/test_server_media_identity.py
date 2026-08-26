@@ -197,6 +197,78 @@ def test_existing_sqlite_governed_media_is_backfilled_as_managed(tmp_path: Path)
     _assert_one_managed_instance(store, record)
 
 
+def test_nullable_path_migration_preserves_existing_instances_with_foreign_keys_on(
+    tmp_path: Path,
+) -> None:
+    database = tmp_path / "legacy-instances.sqlite3"
+    payload = b"legacy instance survives parent rebuild"
+    digest = hashlib.sha256(payload).hexdigest()
+    with sqlite3.connect(database) as connection:
+        connection.execute("PRAGMA foreign_keys=ON")
+        connection.execute(
+            "CREATE TABLE governed_media("
+            "media_id TEXT PRIMARY KEY,relative_path TEXT NOT NULL UNIQUE,"
+            "organization_id TEXT NOT NULL,project_id TEXT NOT NULL,"
+            "mime_type TEXT NOT NULL,size_bytes INTEGER NOT NULL,sha256 TEXT NOT NULL)"
+        )
+        connection.execute(
+            "CREATE TABLE governed_media_instances("
+            "instance_id TEXT PRIMARY KEY,media_id TEXT NOT NULL,"
+            "organization_id TEXT NOT NULL,storage_kind TEXT NOT NULL,"
+            "availability TEXT NOT NULL,size_bytes INTEGER NOT NULL,sha256 TEXT NOT NULL,"
+            "FOREIGN KEY(media_id) REFERENCES governed_media(media_id) ON DELETE CASCADE)"
+        )
+        connection.execute(
+            "INSERT INTO governed_media VALUES(?,?,?,?,?,?,?)",
+            (
+                "legacy-media",
+                "legacy/object.bin",
+                "organization-1",
+                "project-1",
+                "application/octet-stream",
+                len(payload),
+                digest,
+            ),
+        )
+        connection.execute(
+            "INSERT INTO governed_media_instances VALUES(?,?,?,?,?,?,?)",
+            (
+                "legacy-instance",
+                "legacy-media",
+                "organization-1",
+                "managed",
+                "available",
+                len(payload),
+                digest,
+            ),
+        )
+        GovernedMediaStore._bootstrap_sqlite_schema(connection)
+        rows = connection.execute(
+            "SELECT instance_id,media_id,storage_kind,availability,size_bytes,sha256,source_ref "
+            "FROM governed_media_instances"
+        ).fetchall()
+        foreign_key_errors = connection.execute("PRAGMA foreign_key_check").fetchall()
+        relative_path_not_null = next(
+            row[3]
+            for row in connection.execute("PRAGMA table_info(governed_media)").fetchall()
+            if row[1] == "relative_path"
+        )
+
+    assert rows == [
+        (
+            "legacy-instance",
+            "legacy-media",
+            "managed",
+            "available",
+            len(payload),
+            digest,
+            "",
+        )
+    ]
+    assert foreign_key_errors == []
+    assert relative_path_not_null == 0
+
+
 def test_referenced_content_has_canonical_identity_without_managed_object(tmp_path: Path) -> None:
     store = _store(tmp_path)
     payload = b"referenced-only evidence"

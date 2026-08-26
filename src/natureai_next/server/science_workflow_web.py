@@ -72,7 +72,7 @@ _SCIENCE_WORKFLOW_PATCH = bytes(
     ?"Inspect field observations, filter review states, and make explicit governed decisions."
     :editingObservation
       ?"Edit the observation fields while preserving its existing evidence link and revision history."
-      :"Create an observation from existing governed evidence; Fieldora keeps the evidence object canonical and links it without cloning.";
+      :"Create a field observation from existing governed evidence; Fieldora keeps the evidence object canonical and links it without cloning.";
    if(view==="create")q("obs-asset")?.focus();
   }
 
@@ -103,7 +103,7 @@ _SCIENCE_WORKFLOW_PATCH = bytes(
    editingObservation=null;clearObservationForm();
    if(q("observation-editor-title"))q("observation-editor-title").textContent="New observation";
    const project=selectedProject||projects[0]?.id||"";
-   if(q("obs-project"))q("obs-project").value=project;
+   if(q("obs-project")){q("obs-project").disabled=false;q("obs-project").value=project}
    await refreshObservationEvidence();
    setObservationView("create");
   }

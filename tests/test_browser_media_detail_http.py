@@ -73,7 +73,7 @@ def _access_repository(tmp_path: Path) -> SqliteAccessControlRepository:
             "test",
             "media-user",
             "",
-            ("view",),
+            ("view", "download"),
             ("asset",),
             organization_id="local",
             purposes=("research",),
@@ -258,6 +258,19 @@ def test_library_detail_exposes_only_authorized_governed_identity_and_provenance
             assert download_button.count() == 0
         else:
             assert download_button.is_visible()
+        direct_status = page.evaluate(
+            """async mediaId => {
+                const response = await fetch(`/api/v1/media/${encodeURIComponent(mediaId)}`, {
+                    headers: {
+                        Authorization: "Bearer media-token",
+                        "X-Fieldora-Purpose": "research"
+                    }
+                });
+                return response.status;
+            }""",
+            record.media_id,
+        )
+        assert direct_status == (404 if storage_policy == "referenced" else 200)
         rendered = page.locator("#media-detail").inner_text()
         assert "dossier-hidden" not in rendered
         assert "private-storage-provider-route" not in rendered

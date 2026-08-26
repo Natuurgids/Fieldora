@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import contextlib
 import hashlib
+import json
 import threading
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 
+import pytest
 from playwright.sync_api import sync_playwright
 
 from natureai_next.application.access_control import PolicyDecisionService
@@ -109,19 +111,40 @@ def _access_repository(tmp_path: Path) -> SqliteAccessControlRepository:
     return repository
 
 
-def _seed_media(store: GovernedMediaStore) -> MediaRecord:
+def _seed_media(store: GovernedMediaStore, storage_policy: str) -> MediaRecord:
     payload = b"governed evidence detail payload"
-    upload = store.begin_upload(
-        "media-user",
-        "local",
-        "project-1",
-        "private-source-name.txt",
-        "text/plain",
-        len(payload),
-        hashlib.sha256(payload).hexdigest(),
-    )
-    record = store.append_upload(upload, 0, payload)
-    assert isinstance(record, MediaRecord)
+    digest = hashlib.sha256(payload).hexdigest()
+    if storage_policy == "referenced":
+        record = store.attach_referenced(
+            organization_id="local",
+            project_id="project-1",
+            mime_type="text/plain",
+            size_bytes=len(payload),
+            sha256=digest,
+            source_ref="private-storage-provider-route",
+        )
+    else:
+        upload = store.begin_upload(
+            "media-user",
+            "local",
+            "project-1",
+            "private-source-name.txt",
+            "text/plain",
+            len(payload),
+            digest,
+        )
+        record = store.append_upload(upload, 0, payload)
+        assert isinstance(record, MediaRecord)
+        if storage_policy == "hybrid":
+            attached = store.attach_referenced(
+                organization_id="local",
+                project_id="project-1",
+                mime_type="text/plain",
+                size_bytes=len(payload),
+                sha256=digest,
+                source_ref="private-storage-provider-route",
+            )
+            assert attached.media_id == record.media_id
     for association_type, target_id in (
         ("project", "project-1"),
         ("collection", "collection-visible"),
@@ -141,9 +164,9 @@ def _seed_media(store: GovernedMediaStore) -> MediaRecord:
 
 
 @contextlib.contextmanager
-def _live_server(tmp_path: Path):
+def _live_server(tmp_path: Path, storage_policy: str):
     store = GovernedMediaStore(tmp_path / "media.sqlite3", tmp_path / "objects")
-    record = _seed_media(store)
+    record = _seed_media(store, storage_policy)
     access = _access_repository(tmp_path)
     api = LinkedStorageBrowserFieldoraApi(
         _Authentication(),
@@ -165,10 +188,20 @@ def _live_server(tmp_path: Path):
         thread.join(timeout=5)
 
 
+@pytest.mark.parametrize(
+    ("storage_policy", "expected_counts"),
+    [
+        ("managed", (1, 0, 1)),
+        ("referenced", (0, 1, 1)),
+        ("hybrid", (1, 1, 2)),
+    ],
+)
 def test_library_detail_exposes_only_authorized_governed_identity_and_provenance(
     tmp_path: Path,
+    storage_policy: str,
+    expected_counts: tuple[int, int, int],
 ) -> None:
-    with _live_server(tmp_path) as (url, record), sync_playwright() as playwright:
+    with _live_server(tmp_path, storage_policy) as (url, record), sync_playwright() as playwright:
         browser = playwright.chromium.launch()
         page = browser.new_page()
         page.add_init_script("sessionStorage.setItem('fieldora-session','media-token')")
@@ -191,20 +224,39 @@ def test_library_detail_exposes_only_authorized_governed_identity_and_provenance
         assert set(payload["item"]) == {"media_id", "mime_type", "size_bytes", "sha256"}
         assert payload["item"]["media_id"] == record.media_id
         assert payload["item"]["sha256"] == record.sha256
+        managed, referenced, available = expected_counts
+        assert payload["storage"] == {
+            "storage_policy": storage_policy,
+            "managed_instances": managed,
+            "referenced_instances": referenced,
+            "available_instances": available,
+        }
         assert [item["association_type"] for item in payload["associations"]] == [
             "collection",
             "project",
         ]
         assert all("organization_id" not in item for item in payload["associations"])
+        serialized = json.dumps(payload)
+        assert "private-storage-provider-route" not in serialized
+        assert "private-source-name.txt" not in serialized
+        assert "relative_path" not in serialized
+        assert "source_ref" not in serialized
+        assert "organization_id" not in serialized
 
         detail = page.locator("#media-governed-detail")
         detail.get_by_text("Governed identity", exact=True).wait_for(state="visible")
+        assert detail.get_by_text("File instances", exact=True).is_visible()
+        assert detail.get_by_text("Storage policy", exact=True).is_visible()
+        assert detail.get_by_text(storage_policy.title(), exact=True).is_visible()
         assert detail.get_by_text("Relationships & provenance", exact=True).is_visible()
         assert detail.get_by_text("Collection / dataset", exact=True).is_visible()
         assert detail.get_by_text("collection-visible", exact=True).is_visible()
         assert detail.get_by_text("Project", exact=True).is_visible()
         assert detail.get_by_text("project-1", exact=True).is_visible()
-        assert "dossier-hidden" not in detail.inner_text()
-        assert record.relative_path not in page.locator("#media-detail").inner_text()
-        assert "private-source-name.txt" not in page.locator("#media-detail").inner_text()
+        rendered = page.locator("#media-detail").inner_text()
+        assert "dossier-hidden" not in rendered
+        assert "private-storage-provider-route" not in rendered
+        assert "private-source-name.txt" not in rendered
+        if record.relative_path is not None:
+            assert record.relative_path not in rendered
         browser.close()

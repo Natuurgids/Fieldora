@@ -11,6 +11,7 @@ on:
       - "src/natureai_next/server/media_detail_web.py"
       - "tests/test_server_media_identity.py"
       - "tests/test_postgres_media_identity.py"
+      - "tests/test_postgres_media_concurrency.py"
       - "tests/test_browser_functionality_api.py"
       - "tests/test_browser_media_detail_http.py"
       - ".github/workflows/media-identity-certification.yml"
@@ -67,6 +68,7 @@ jobs:
           src/natureai_next/server/media_detail_web.py
           tests/test_server_media_identity.py
           tests/test_postgres_media_identity.py
+          tests/test_postgres_media_concurrency.py
           tests/test_browser_functionality_api.py
           tests/test_browser_media_detail_http.py
 
@@ -75,5 +77,6 @@ jobs:
           pytest -q
           tests/test_server_media_identity.py
           tests/test_postgres_media_identity.py
+          tests/test_postgres_media_concurrency.py
           tests/test_browser_functionality_api.py
           tests/test_browser_media_detail_http.py

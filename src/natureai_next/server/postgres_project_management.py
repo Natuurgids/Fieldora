@@ -1,9 +1,8 @@
-"""PostgreSQL Project Management creation/listing adapter for managed Fieldora.
+"""PostgreSQL Project Management adapter for managed Fieldora.
 
-This is intentionally the first narrow parity slice. It mirrors the authoritative
-ProjectManagementService project-creation transaction while adding the organization
-boundary required by a shared managed server. Later WEB-031/032 slices extend this
-adapter for the rest of the Project Management lifecycle.
+The managed adapter preserves the authoritative Project Management creation and
+lifecycle invariants while adding the organization boundary required by a shared
+server. Browser/API adapters are transport and authorization layers only.
 """
 
 from __future__ import annotations
@@ -29,10 +28,15 @@ class ManagedProjectSummary:
     budget: float
     currency: str
     description: str = ""
+    revision: int = 0
 
 
 def _now_us() -> int:
     return time.time_ns() // 1_000
+
+
+def _next_revision(previous: int) -> int:
+    return max(_now_us(), int(previous) + 1)
 
 
 def _id() -> str:
@@ -47,8 +51,15 @@ def _validate_date(value: str, label: str) -> None:
             raise ValueError(f"{label} must use YYYY-MM-DD") from exc
 
 
+def _validate_project_dates(start_date: str, due_date: str) -> None:
+    _validate_date(start_date, "project start date")
+    _validate_date(due_date, "project due date")
+    if start_date and due_date and due_date < start_date:
+        raise ValueError("project due date cannot be before its start date")
+
+
 class PostgresProjectManagementService:
-    """Managed-server adapter preserving desktop project-creation semantics."""
+    """Managed-server Project service with organization-scoped lifecycle updates."""
 
     def __init__(self, connect: Callable[[], Any]) -> None:
         self._connect = connect
@@ -148,10 +159,7 @@ class PostgresProjectManagementService:
             raise ValueError("organization is required")
         if not name.strip():
             raise ValueError("project name is required")
-        _validate_date(start_date, "project start date")
-        _validate_date(due_date, "project due date")
-        if start_date and due_date and due_date < start_date:
-            raise ValueError("project due date cannot be before its start date")
+        _validate_project_dates(start_date, due_date)
         if template_id:
             raise ValueError(
                 "project templates are not yet available in the managed PostgreSQL adapter"
@@ -221,7 +229,7 @@ class PostgresProjectManagementService:
                 cursor.execute(
                     """
                     SELECT project_id,organization_id,name,status,owner_id,start_date,
-                           due_date,budget,currency,description
+                           due_date,budget,currency,description,updated_at_us
                     FROM pm_projects WHERE organization_id=%s
                     ORDER BY updated_at_us DESC,project_id
                     """,
@@ -240,8 +248,157 @@ class PostgresProjectManagementService:
                 float(row[7]),
                 str(row[8]),
                 str(row[9]),
+                int(row[10]),
             )
             for row in rows
+        )
+
+    def update_project(
+        self,
+        project_id: str,
+        *,
+        organization_id: str,
+        actor_id: str,
+        expected_revision: int,
+        name: str | None = None,
+        description: str | None = None,
+        start_date: str | None = None,
+        due_date: str | None = None,
+        budget: float | None = None,
+        currency: str | None = None,
+    ) -> int:
+        with self._connect() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT name,description,start_date,due_date,budget,currency,status,
+                           updated_at_us
+                    FROM pm_projects
+                    WHERE project_id=%s AND organization_id=%s
+                    FOR UPDATE
+                    """,
+                    (project_id, organization_id),
+                )
+                row = cursor.fetchone()
+                if row is None:
+                    raise KeyError(project_id)
+                current_revision = int(row[7])
+                if int(expected_revision) != current_revision:
+                    raise ValueError("project revision conflict")
+                next_name = str(row[0]) if name is None else str(name).strip()
+                next_description = str(row[1]) if description is None else str(description).strip()
+                next_start = str(row[2]) if start_date is None else str(start_date)
+                next_due = str(row[3]) if due_date is None else str(due_date)
+                next_budget = float(row[4]) if budget is None else float(budget)
+                next_currency = str(row[5]) if currency is None else str(currency).strip() or "EUR"
+                if not next_name:
+                    raise ValueError("project name is required")
+                _validate_project_dates(next_start, next_due)
+                revision = _next_revision(current_revision)
+                cursor.execute(
+                    """
+                    UPDATE pm_projects
+                    SET name=%s,description=%s,start_date=%s,due_date=%s,budget=%s,
+                        currency=%s,updated_at_us=%s
+                    WHERE project_id=%s AND organization_id=%s
+                    """,
+                    (
+                        next_name,
+                        next_description,
+                        next_start,
+                        next_due,
+                        next_budget,
+                        next_currency,
+                        revision,
+                        project_id,
+                        organization_id,
+                    ),
+                )
+                details = {
+                    "name": next_name,
+                    "description": next_description,
+                    "start_date": next_start,
+                    "due_date": next_due,
+                    "budget": next_budget,
+                    "currency": next_currency,
+                }
+                cursor.execute(
+                    """
+                    INSERT INTO pm_activity(
+                        project_id,task_id,actor_id,event_type,details_json,created_at_us
+                    ) VALUES(%s,NULL,%s,'project.updated',%s,%s)
+                    """,
+                    (project_id, actor_id, json.dumps(details), revision),
+                )
+        return revision
+
+    def set_project_status(
+        self,
+        project_id: str,
+        status: str,
+        *,
+        organization_id: str,
+        actor_id: str,
+        expected_revision: int,
+    ) -> int:
+        normalized = status.strip().lower()
+        if normalized not in {"active", "archived", "cancelled"}:
+            raise ValueError("invalid project status")
+        with self._connect() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT status,updated_at_us FROM pm_projects
+                    WHERE project_id=%s AND organization_id=%s
+                    FOR UPDATE
+                    """,
+                    (project_id, organization_id),
+                )
+                row = cursor.fetchone()
+                if row is None:
+                    raise KeyError(project_id)
+                current_revision = int(row[1])
+                if int(expected_revision) != current_revision:
+                    raise ValueError("project revision conflict")
+                revision = _next_revision(current_revision)
+                cursor.execute(
+                    """
+                    UPDATE pm_projects SET status=%s,updated_at_us=%s
+                    WHERE project_id=%s AND organization_id=%s
+                    """,
+                    (normalized, revision, project_id, organization_id),
+                )
+                event_type = "project.archived" if normalized == "archived" else "project.status_changed"
+                cursor.execute(
+                    """
+                    INSERT INTO pm_activity(
+                        project_id,task_id,actor_id,event_type,details_json,created_at_us
+                    ) VALUES(%s,NULL,%s,%s,%s,%s)
+                    """,
+                    (
+                        project_id,
+                        actor_id,
+                        event_type,
+                        json.dumps({"status": normalized}),
+                        revision,
+                    ),
+                )
+        return revision
+
+    def archive_project(
+        self,
+        project_id: str,
+        *,
+        organization_id: str,
+        actor_id: str,
+        expected_revision: int,
+    ) -> int:
+        return self.set_project_status(
+            project_id,
+            "archived",
+            organization_id=organization_id,
+            actor_id=actor_id,
+            expected_revision=expected_revision,
         )
 
     def statuses(self, project_id: str) -> tuple[dict[str, object], ...]:

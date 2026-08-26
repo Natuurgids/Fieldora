@@ -11,7 +11,12 @@ from uuid import uuid4
 import pytest
 from playwright.sync_api import sync_playwright
 
-from natureai_next.domain.access_control import AccessDecision, AccessRequest, Identity, IdentityKind
+from natureai_next.domain.access_control import (
+    AccessDecision,
+    AccessRequest,
+    Identity,
+    IdentityKind,
+)
 from natureai_next.server.browser_functionality_api import BrowserFunctionalityFieldoraApi
 from natureai_next.server.http import handler_for
 from natureai_next.server.postgres_project_management import PostgresProjectManagementService

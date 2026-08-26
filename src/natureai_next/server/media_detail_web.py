@@ -18,6 +18,7 @@ _MEDIA_DETAIL_PATCH = bytes(
  const legacy=grid.onclick;
  const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
  const labels={project:"Project",collection:"Collection / dataset",dossier:"Dossier",submission:"Submission",review_case:"Review case"};
+ const policies={managed:"Managed",referenced:"Referenced",hybrid:"Hybrid"};
  grid.onclick=async e=>{
   legacy?.call(grid,e);
   const card=e.target.closest("[data-media]");if(!card)return;
@@ -28,9 +29,10 @@ _MEDIA_DETAIL_PATCH = bytes(
   try{
    const context=selected.project_id?`?project_id=${encodeURIComponent(selected.project_id)}`:"";
    const payload=await api(`/api/v1/media/${encodeURIComponent(selected.media_id)}/detail${context}`,{purpose:"research"});
-   const item=payload.item||{},links=payload.associations||[];
+   const item=payload.item||{},storage=payload.storage||{},links=payload.associations||[];
    const relationshipRows=links.length?links.map(link=>`<div class="row"><strong>${esc(labels[link.association_type]||link.association_type)}</strong><span><code>${esc(link.target_id)}</code></span><span>${esc(link.purpose||"research")}</span><span class="muted">linked by ${esc(link.linked_by||"—")} · ${esc(link.linked_at_epoch||"—")}</span></div>`).join(""):'<p class="muted">No additional authorized relationships are disclosed.</p>';
-   section.innerHTML=`<h3>Governed identity</h3><p><strong>Media ID</strong><br><code>${esc(item.media_id)}</code></p><p><strong>Content type</strong><br>${esc(item.mime_type||"application/octet-stream")}</p><p><strong>File size</strong><br>${Number(item.size_bytes||0).toLocaleString()} bytes</p><p><strong>SHA-256</strong><br><code>${esc(item.sha256)}</code></p><h3 class="section">Relationships &amp; provenance</h3><div id="media-association-detail">${relationshipRows}</div>`;
+   const policy=policies[storage.storage_policy]||"Unavailable";
+   section.innerHTML=`<h3>Governed identity</h3><p><strong>Media ID</strong><br><code>${esc(item.media_id)}</code></p><p><strong>Content type</strong><br>${esc(item.mime_type||"application/octet-stream")}</p><p><strong>File size</strong><br>${Number(item.size_bytes||0).toLocaleString()} bytes</p><p><strong>SHA-256</strong><br><code>${esc(item.sha256)}</code></p><h3 class="section">File instances</h3><p><strong>Storage policy</strong><br>${esc(policy)}</p><div class="row"><span>Managed: ${Number(storage.managed_instances||0)}</span><span>Referenced: ${Number(storage.referenced_instances||0)}</span><span>Available: ${Number(storage.available_instances||0)}</span></div><p class="muted">File instances describe byte availability; project relationships do not create new evidence or storage ownership.</p><h3 class="section">Relationships &amp; provenance</h3><div id="media-association-detail">${relationshipRows}</div>`;
   }catch(error){
    section.innerHTML=`<p class="status" style="color:var(--danger)">${esc(error?.message||"Governed detail unavailable")}</p>`;
   }

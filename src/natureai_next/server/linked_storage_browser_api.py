@@ -48,15 +48,15 @@ class LinkedStorageBrowserFieldoraApi(ProjectLifecycleFieldoraApi):
             and method in {"GET", "HEAD"}
             and response.status < 400
             and self._media is not None
-            and not any(
+        ):
+            record = self._media.record(direct_media_id)
+            if record is not None and not any(
                 instance.storage_kind == "managed"
                 for instance in self._media.instances(
-                    direct_media_id,
-                    (self._media.record(direct_media_id) or _MissingMedia()).organization_id,
+                    direct_media_id, record.organization_id
                 )
-            )
-        ):
-            response = ApiResponse.json(404, {"error": "not_found"})
+            ):
+                response = ApiResponse.json(404, {"error": "not_found"})
         response = patch_linked_storage_web_response(target, response)
         response = patch_linked_storage_operator_web_response(target, response)
         return patch_media_detail_response(target, response)
@@ -186,7 +186,3 @@ class LinkedStorageBrowserFieldoraApi(ProjectLifecycleFieldoraApi):
                 "associations": associations,
             },
         )
-
-
-class _MissingMedia:
-    organization_id = ""

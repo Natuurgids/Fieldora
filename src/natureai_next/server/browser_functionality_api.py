@@ -58,6 +58,7 @@ class ProjectSummaryLike(Protocol):
     budget: float
     currency: str
     description: str
+    revision: int
 
 
 class ManagedProjectService(Protocol):
@@ -78,9 +79,33 @@ class ManagedProjectService(Protocol):
 
     def projects(self, organization_id: str) -> tuple[ProjectSummaryLike, ...]: ...
 
+    def update_project(
+        self,
+        project_id: str,
+        *,
+        organization_id: str,
+        actor_id: str,
+        expected_revision: int,
+        name: str | None = None,
+        description: str | None = None,
+        start_date: str | None = None,
+        due_date: str | None = None,
+        budget: float | None = None,
+        currency: str | None = None,
+    ) -> int: ...
+
+    def archive_project(
+        self,
+        project_id: str,
+        *,
+        organization_id: str,
+        actor_id: str,
+        expected_revision: int,
+    ) -> int: ...
+
 
 class BrowserFunctionalityFieldoraApi(ProjectOwnerContractFieldoraApi):
-    """Add secure same-origin browser sessions and explicit project creation."""
+    """Add secure same-origin browser sessions and governed Project lifecycle APIs."""
 
     _project_management_factory: Callable[[], ManagedProjectService] | None = None
 
@@ -105,6 +130,7 @@ class BrowserFunctionalityFieldoraApi(ProjectOwnerContractFieldoraApi):
 
         route = urlsplit(target)
         upload_context = self._upload_context(method, route.path)
+        project_lifecycle = self._project_lifecycle_route(route.path)
         if route.path == "/api/v1/web/capabilities" and method == "GET":
             response = self._web_capabilities(routed_headers)
         elif (
@@ -115,6 +141,14 @@ class BrowserFunctionalityFieldoraApi(ProjectOwnerContractFieldoraApi):
             response = self._managed_projects(routed_headers)
         elif route.path == "/api/v1/projects" and method == "POST":
             response = self._create_project(routed_headers, body)
+        elif project_lifecycle is not None and method == "PATCH":
+            project_id, action = project_lifecycle
+            if action == "archive":
+                response = self._archive_project(project_id, routed_headers, body)
+            elif action == "project":
+                response = self._update_project(project_id, routed_headers, body)
+            else:
+                response = ApiResponse.json(404, {"error": "not_found"})
         elif (
             route.path == "/api/v1/media"
             and method == "GET"
@@ -144,6 +178,24 @@ class BrowserFunctionalityFieldoraApi(ProjectOwnerContractFieldoraApi):
         )
         response = patch_browser_functionality_response(target, response)
         return patch_directory_intake_response(target, response)
+
+    @staticmethod
+    def _project_lifecycle_route(path: str) -> tuple[str, str] | None:
+        prefix = "/api/v1/projects/"
+        if not path.startswith(prefix):
+            return None
+        suffix = path[len(prefix):].strip("/")
+        if not suffix:
+            return None
+        parts = suffix.split("/")
+        project_id = unquote(parts[0]).strip()
+        if not project_id:
+            return None
+        if len(parts) == 1:
+            return project_id, "project"
+        if len(parts) == 2 and parts[1] == "archive":
+            return project_id, "archive"
+        return project_id, "unknown"
 
     def _upload_context(self, method: str, path: str):
         if self._media is None or method != "PUT":
@@ -321,6 +373,35 @@ class BrowserFunctionalityFieldoraApi(ProjectOwnerContractFieldoraApi):
         pages["administration"] = pages.get("administration") is True or audit
         return ApiResponse.json(200, payload)
 
+    @staticmethod
+    def _project_item(project: ProjectSummaryLike) -> dict[str, object]:
+        return {
+            "id": project.project_id,
+            "name": project.name,
+            "description": project.description,
+            "status": project.status,
+            "owner_id": project.owner_id,
+            "start_date": project.start_date,
+            "due_date": project.due_date,
+            "budget": project.budget,
+            "currency": project.currency,
+            "revision": project.revision,
+        }
+
+    def _project_for_organization(
+        self, organization_id: str, project_id: str
+    ) -> ProjectSummaryLike | None:
+        if self._project_management is None:
+            return None
+        return next(
+            (
+                project
+                for project in self._project_management.projects(organization_id)
+                if project.project_id == project_id
+            ),
+            None,
+        )
+
     def _managed_projects(self, headers: dict[str, str]) -> ApiResponse:
         try:
             _token, identity = self._identity(headers)
@@ -340,21 +421,8 @@ class BrowserFunctionalityFieldoraApi(ProjectOwnerContractFieldoraApi):
                     "research",
                 )
             )
-            if not decision.allowed:
-                continue
-            items.append(
-                {
-                    "id": project.project_id,
-                    "name": project.name,
-                    "description": project.description,
-                    "status": project.status,
-                    "owner_id": project.owner_id,
-                    "start_date": project.start_date,
-                    "due_date": project.due_date,
-                    "budget": project.budget,
-                    "currency": project.currency,
-                }
-            )
+            if decision.allowed:
+                items.append(self._project_item(project))
         return ApiResponse.json(200, {"items": items})
 
     def _browser_session_response(
@@ -448,27 +516,11 @@ class BrowserFunctionalityFieldoraApi(ProjectOwnerContractFieldoraApi):
                 project_id,
                 name,
             )
-            item = next(
-                project
-                for project in self._project_management.projects(identity.organization_id)
-                if project.project_id == project_id
-            )
+            item = self._project_for_organization(identity.organization_id, project_id)
+            assert item is not None
             return ApiResponse.json(
                 201,
-                {
-                    "item": {
-                        "id": item.project_id,
-                        "name": item.name,
-                        "description": item.description,
-                        "status": item.status,
-                        "owner_id": item.owner_id,
-                        "start_date": item.start_date,
-                        "due_date": item.due_date,
-                        "budget": item.budget,
-                        "currency": item.currency,
-                    },
-                    "revision": 1,
-                },
+                {"item": self._project_item(item), "revision": item.revision},
             )
 
         # Temporary compatibility fallback for the one-node reference API. Managed
@@ -514,6 +566,140 @@ class BrowserFunctionalityFieldoraApi(ProjectOwnerContractFieldoraApi):
             name,
         )
         return ApiResponse.json(201, {"item": record, "revision": revision})
+
+    def _update_project(
+        self, project_id: str, headers: dict[str, str], body: bytes
+    ) -> ApiResponse:
+        if self._project_management is None:
+            return ApiResponse.json(404, {"error": "not_found"})
+        if len(body) > 1_048_576:
+            return ApiResponse.json(413, {"error": "request_too_large"})
+        try:
+            _token, identity = self._identity(headers)
+        except AuthenticationFailed as exc:
+            return ApiResponse.json(
+                401, {"error": "unauthorized", "detail": str(exc)}
+            )
+        try:
+            record = json.loads(body)
+            if not isinstance(record, dict) or "expected_revision" not in record:
+                raise ValueError
+            expected_revision = int(record["expected_revision"])
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return ApiResponse.json(400, {"error": "invalid_request"})
+        current = self._project_for_organization(identity.organization_id, project_id)
+        if current is None:
+            return ApiResponse.json(404, {"error": "not_found"})
+        decision = self._decisions.decide(
+            AccessRequest(
+                identity.identity_id,
+                "edit",
+                "project",
+                project_id,
+                identity.organization_id,
+                project_id,
+                headers.get("x-fieldora-purpose", "research"),
+            )
+        )
+        if not decision.allowed:
+            return ApiResponse.json(403, {"error": "forbidden"})
+        try:
+            self._project_management.update_project(
+                project_id,
+                organization_id=identity.organization_id,
+                actor_id=identity.identity_id,
+                expected_revision=expected_revision,
+                name=(str(record["name"]) if "name" in record else None),
+                description=(
+                    str(record["description"]) if "description" in record else None
+                ),
+                start_date=(
+                    str(record["start_date"]) if "start_date" in record else None
+                ),
+                due_date=(str(record["due_date"]) if "due_date" in record else None),
+                budget=(float(record["budget"]) if "budget" in record else None),
+                currency=(str(record["currency"]) if "currency" in record else None),
+            )
+        except KeyError:
+            return ApiResponse.json(404, {"error": "not_found"})
+        except (TypeError, ValueError) as exc:
+            if "revision conflict" in str(exc).lower():
+                latest = self._project_for_organization(identity.organization_id, project_id)
+                return ApiResponse.json(
+                    409,
+                    {
+                        "error": "revision_conflict",
+                        "current": None if latest is None else self._project_item(latest),
+                    },
+                )
+            return ApiResponse.json(
+                400, {"error": "invalid_request", "detail": str(exc)}
+            )
+        item = self._project_for_organization(identity.organization_id, project_id)
+        assert item is not None
+        return ApiResponse.json(200, {"item": self._project_item(item), "revision": item.revision})
+
+    def _archive_project(
+        self, project_id: str, headers: dict[str, str], body: bytes
+    ) -> ApiResponse:
+        if self._project_management is None:
+            return ApiResponse.json(404, {"error": "not_found"})
+        if len(body) > 1_048_576:
+            return ApiResponse.json(413, {"error": "request_too_large"})
+        try:
+            _token, identity = self._identity(headers)
+        except AuthenticationFailed as exc:
+            return ApiResponse.json(
+                401, {"error": "unauthorized", "detail": str(exc)}
+            )
+        try:
+            record = json.loads(body)
+            if not isinstance(record, dict) or "expected_revision" not in record:
+                raise ValueError
+            expected_revision = int(record["expected_revision"])
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return ApiResponse.json(400, {"error": "invalid_request"})
+        current = self._project_for_organization(identity.organization_id, project_id)
+        if current is None:
+            return ApiResponse.json(404, {"error": "not_found"})
+        decision = self._decisions.decide(
+            AccessRequest(
+                identity.identity_id,
+                "edit",
+                "project",
+                project_id,
+                identity.organization_id,
+                project_id,
+                headers.get("x-fieldora-purpose", "research"),
+            )
+        )
+        if not decision.allowed:
+            return ApiResponse.json(403, {"error": "forbidden"})
+        try:
+            self._project_management.archive_project(
+                project_id,
+                organization_id=identity.organization_id,
+                actor_id=identity.identity_id,
+                expected_revision=expected_revision,
+            )
+        except KeyError:
+            return ApiResponse.json(404, {"error": "not_found"})
+        except ValueError as exc:
+            if "revision conflict" in str(exc).lower():
+                latest = self._project_for_organization(identity.organization_id, project_id)
+                return ApiResponse.json(
+                    409,
+                    {
+                        "error": "revision_conflict",
+                        "current": None if latest is None else self._project_item(latest),
+                    },
+                )
+            return ApiResponse.json(
+                400, {"error": "invalid_request", "detail": str(exc)}
+            )
+        item = self._project_for_organization(identity.organization_id, project_id)
+        assert item is not None
+        return ApiResponse.json(200, {"item": self._project_item(item), "revision": item.revision})
 
     def _grant_project_owner(
         self,

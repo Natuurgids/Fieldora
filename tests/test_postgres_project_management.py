@@ -46,6 +46,7 @@ def test_managed_project_creation_matches_desktop_contract() -> None:
     assert project.budget == 1250.5
     assert project.currency == "EUR"
     assert project.description == "Seasonal field survey"
+    assert project.revision > 0
 
     statuses = service.statuses(project_id)
     assert [item["name"] for item in statuses] == [
@@ -122,3 +123,118 @@ def test_invalid_project_dates_create_no_project() -> None:
 
     after = {item.project_id for item in service.projects(organization_id)}
     assert after == before
+
+
+@pytest.mark.integration
+def test_managed_project_update_archive_and_revision_conflict() -> None:
+    service = PostgresProjectManagementService(_connect_factory())
+    organization_id = f"org-lifecycle-{uuid4()}"
+    actor = f"user-{uuid4()}"
+    project_id = service.create_project(
+        "Lifecycle Project",
+        organization_id=organization_id,
+        owner_id=actor,
+        actor_id=actor,
+        start_date="2026-09-01",
+        due_date="2026-12-31",
+        description="Before edit",
+        budget=100,
+        currency="EUR",
+    )
+    created = next(item for item in service.projects(organization_id) if item.project_id == project_id)
+
+    edited_revision = service.update_project(
+        project_id,
+        organization_id=organization_id,
+        actor_id=actor,
+        expected_revision=created.revision,
+        name="Lifecycle Project Updated",
+        description="After edit",
+        start_date="2026-09-15",
+        due_date="2027-01-31",
+        budget=250.75,
+        currency="USD",
+    )
+    edited = next(item for item in service.projects(organization_id) if item.project_id == project_id)
+    assert edited.revision == edited_revision
+    assert edited.revision > created.revision
+    assert edited.name == "Lifecycle Project Updated"
+    assert edited.description == "After edit"
+    assert edited.start_date == "2026-09-15"
+    assert edited.due_date == "2027-01-31"
+    assert edited.budget == 250.75
+    assert edited.currency == "USD"
+    assert edited.status == "active"
+
+    with pytest.raises(ValueError, match="revision conflict"):
+        service.update_project(
+            project_id,
+            organization_id=organization_id,
+            actor_id=actor,
+            expected_revision=created.revision,
+            name="Stale overwrite",
+        )
+    after_conflict = next(
+        item for item in service.projects(organization_id) if item.project_id == project_id
+    )
+    assert after_conflict.name == "Lifecycle Project Updated"
+    assert after_conflict.revision == edited_revision
+
+    archived_revision = service.archive_project(
+        project_id,
+        organization_id=organization_id,
+        actor_id=actor,
+        expected_revision=edited_revision,
+    )
+    archived = next(item for item in service.projects(organization_id) if item.project_id == project_id)
+    assert archived.status == "archived"
+    assert archived.revision == archived_revision
+    assert archived.revision > edited_revision
+
+    events = service.activity(project_id)
+    assert [item["event_type"] for item in events] == [
+        "project.created",
+        "project.updated",
+        "project.archived",
+    ]
+    assert events[1]["details"]["name"] == "Lifecycle Project Updated"
+    assert events[2]["details"] == {"status": "archived"}
+
+
+@pytest.mark.integration
+def test_managed_project_update_validates_dates_and_organization() -> None:
+    service = PostgresProjectManagementService(_connect_factory())
+    organization_id = f"org-update-{uuid4()}"
+    other_organization = f"org-other-{uuid4()}"
+    actor = f"user-{uuid4()}"
+    project_id = service.create_project(
+        "Validated Project",
+        organization_id=organization_id,
+        owner_id=actor,
+        actor_id=actor,
+        start_date="2026-09-01",
+        due_date="2026-12-31",
+    )
+    project = next(item for item in service.projects(organization_id) if item.project_id == project_id)
+
+    with pytest.raises(ValueError, match="cannot be before"):
+        service.update_project(
+            project_id,
+            organization_id=organization_id,
+            actor_id=actor,
+            expected_revision=project.revision,
+            start_date="2027-01-01",
+            due_date="2026-12-31",
+        )
+    with pytest.raises(KeyError):
+        service.update_project(
+            project_id,
+            organization_id=other_organization,
+            actor_id=actor,
+            expected_revision=project.revision,
+            name="Cross-org overwrite",
+        )
+
+    current = next(item for item in service.projects(organization_id) if item.project_id == project_id)
+    assert current.name == "Validated Project"
+    assert current.revision == project.revision

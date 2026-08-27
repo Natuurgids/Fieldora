@@ -33,3 +33,20 @@ def test_observation_browser_patch_is_evidence_first_and_revisioned() -> None:
     assert '"If-Match"' in script
     assert "links it without cloning" in script
     assert "crypto.randomUUID()" not in script
+
+
+def test_observation_browser_supports_revisioned_many_to_many_evidence_links() -> None:
+    response = patch_science_workflow_web_response(
+        "/app.js",
+        ApiResponse(200, b"", "text/javascript; charset=utf-8"),
+    )
+    script = response.body.decode("utf-8")
+
+    assert "Supporting evidence" in script
+    assert "Link evidence" in script
+    assert "supporting_asset_ids" in script
+    assert "/evidence`" in script
+    assert "/evidence/${encodeURIComponent(asset)}`" in script
+    assert 'method:"DELETE"' in script
+    assert '"If-Match":String(editingObservation.revision||1)' in script
+    assert "without changing or copying the primary evidence" in script

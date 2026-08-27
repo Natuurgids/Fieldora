@@ -67,13 +67,26 @@ class FacilityActionsApiMixin:
                 if isinstance(steps, list):
                     for step in steps:
                         if isinstance(step, dict):
-                            step.update(relocation_action_contract(str(step.get("state") or "pending")))
+                            step.update(
+                                relocation_action_contract(
+                                    str(step.get("state") or "pending")
+                                )
+                            )
                             changed = True
         elif path.startswith("/api/v1/facility-planning/steps/"):
             step = payload.get("step")
             if isinstance(step, dict):
-                step.update(relocation_action_contract(str(step.get("state") or "pending")))
+                step.update(
+                    relocation_action_contract(str(step.get("state") or "pending"))
+                )
                 changed = True
         if not changed:
             return response
-        return ApiResponse.json(response.status, payload, headers=response.headers)
+        return ApiResponse(
+            response.status,
+            json.dumps(
+                payload, ensure_ascii=False, separators=(",", ":")
+            ).encode(),
+            response.content_type,
+            response.headers,
+        )

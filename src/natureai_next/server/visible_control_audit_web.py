@@ -43,6 +43,7 @@ _VISIBLE_CONTROL_AUDIT_PATCH = bytes(
   "button[data-task-view]",
   "button[data-knowledge-review]",
   "button[data-research-domain]",
+  "button[data-research-record]",
   "button[data-portfolio-view]",
   "button[data-operations-domain]",
   "button[data-op][data-service]",

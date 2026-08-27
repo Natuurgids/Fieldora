@@ -6,6 +6,7 @@ import os
 from collections.abc import Callable
 
 from natureai_next.server.knowledge_parity_api import KnowledgeParityApiMixin
+from natureai_next.server.library_collections_api import LibraryCollectionsApiMixin
 from natureai_next.server.linked_storage_api import (
     LinkedStorageApiMixin,
     LinkedStorageRepository,
@@ -20,6 +21,7 @@ from natureai_next.server.offline_sync_api import OfflineSyncApiMixin, OfflineSy
 
 
 class OfflineFirstFieldoraApi(
+    LibraryCollectionsApiMixin,
     KnowledgeParityApiMixin,
     ObservationParityApiMixin,
     InstalledMapApiMixin,

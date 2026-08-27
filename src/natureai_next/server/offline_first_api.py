@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from collections.abc import Callable
 
+from natureai_next.server.administration_actions_api import AdministrationActionsApiMixin
 from natureai_next.server.facility_actions_api import FacilityActionsApiMixin
 from natureai_next.server.knowledge_parity_api import KnowledgeParityApiMixin
 from natureai_next.server.library_collections_api import LibraryCollectionsApiMixin
@@ -28,6 +29,7 @@ from natureai_next.server.visible_control_audit_api import VisibleControlAuditAp
 class OfflineFirstFieldoraApi(
     VisibleControlAuditApiMixin,
     ObservationActionsApiMixin,
+    AdministrationActionsApiMixin,
     FacilityActionsApiMixin,
     ResearchRecordsApiMixin,
     OriginalDerivativeApiMixin,

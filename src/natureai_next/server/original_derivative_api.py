@@ -26,7 +26,7 @@ _PROTECTED_FIELDS = {
     "derivative_id",
     "source_media_id",
     "organization_id",
-    "source_sha256",
+    "project_id",
     "created_by_identity_id",
     "created_at_us",
 }
@@ -194,7 +194,14 @@ class OriginalDerivativeApiMixin:
             "derivatives_replace_original": False,
             "lineage_hash": original.sha256,
         }
-        return ApiResponse.json(200, payload)
+        return ApiResponse(
+            response.status,
+            json.dumps(
+                payload, ensure_ascii=False, separators=(",", ":")
+            ).encode(),
+            response.content_type,
+            response.headers,
+        )
 
     def _derivatives_for(self, media_id: str, organization_id: str) -> list[dict]:
         return [

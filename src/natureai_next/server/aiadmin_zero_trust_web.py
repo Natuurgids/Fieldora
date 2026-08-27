@@ -9,13 +9,13 @@ from natureai_next.server.api import ApiResponse
 _ZERO_TRUST_OPTION_STATE = b"   option.disabled=!permitted;option.hidden=!permitted;"
 _AIADMIN_ATTRIBUTE_OPTION_STATE = (
     b"   const denied=!permitted;"
-    b"if(option.disabled!==denied)option.disabled=denied;"
-    b"if(option.hidden!==denied)option.hidden=denied;"
+    b"if(denied){option.setAttribute('disabled','');option.setAttribute('hidden','');}"
+    b"else{option.removeAttribute('disabled');option.removeAttribute('hidden');}"
 )
 
 
 def patch_aiadmin_zero_trust_response(target: str, response: ApiResponse) -> ApiResponse:
-    """Make authoritative AI option writes idempotent without adding observers."""
+    """Project AI option authority through explicit cross-engine HTML attributes."""
     if urlsplit(target).path != "/app.js" or response.status != 200:
         return response
     if (

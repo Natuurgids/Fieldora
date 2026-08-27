@@ -1,4 +1,4 @@
-"""Deterministic AI Administration zero-trust action reconciliation."""
+"""Deterministic AI Administration zero-trust option projection."""
 
 from __future__ import annotations
 
@@ -12,42 +12,24 @@ _AIADMIN_ATTRIBUTE_OPTION_STATE = (
     b"if(option.disabled!==denied)option.disabled=denied;"
     b"if(option.hidden!==denied)option.hidden=denied;"
 )
-_ZERO_TRUST_AI_LISTENER = (
-    b" const aiRecordType=document.getElementById('ai-record-type');\n"
-    b" if(aiRecordType)aiRecordType.addEventListener('change',applyAiAdministrationActions);"
-)
-_AIADMIN_RECONCILED_AI_LISTENER = (
-    b" const aiRecordType=document.getElementById('ai-record-type');\n"
-    b" if(aiRecordType){\n"
-    b"  aiRecordType.addEventListener('change',applyAiAdministrationActions);\n"
-    b"  const aiOptionObserver=new MutationObserver(()=>applyAiAdministrationActions());\n"
-    b"  aiOptionObserver.observe(aiRecordType,{childList:true,subtree:true,attributes:true,attributeFilter:['disabled','hidden']});\n"
-    b" }"
-)
 
 
 def patch_aiadmin_zero_trust_response(target: str, response: ApiResponse) -> ApiResponse:
-    """Keep AI Administration option authorization stable across async rendering."""
+    """Make authoritative AI option writes idempotent without adding observers."""
     if urlsplit(target).path != "/app.js" or response.status != 200:
         return response
-    body = response.body
-    if _AIADMIN_ATTRIBUTE_OPTION_STATE not in body and _ZERO_TRUST_OPTION_STATE in body:
-        body = body.replace(
-            _ZERO_TRUST_OPTION_STATE,
-            _AIADMIN_ATTRIBUTE_OPTION_STATE,
-            1,
-        )
-    if _AIADMIN_RECONCILED_AI_LISTENER not in body and _ZERO_TRUST_AI_LISTENER in body:
-        body = body.replace(
-            _ZERO_TRUST_AI_LISTENER,
-            _AIADMIN_RECONCILED_AI_LISTENER,
-            1,
-        )
-    if body == response.body:
+    if (
+        _AIADMIN_ATTRIBUTE_OPTION_STATE in response.body
+        or _ZERO_TRUST_OPTION_STATE not in response.body
+    ):
         return response
     return ApiResponse(
         response.status,
-        body,
+        response.body.replace(
+            _ZERO_TRUST_OPTION_STATE,
+            _AIADMIN_ATTRIBUTE_OPTION_STATE,
+            1,
+        ),
         response.content_type,
         response.headers,
     )

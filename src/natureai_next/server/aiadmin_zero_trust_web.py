@@ -25,13 +25,17 @@ _AIADMIN_ZERO_TRUST_RECONCILIATION_PATCH = br"""
   capture();
   const node=select();if(!captured||!node)return;
   [...node.options].forEach(option=>{
-   const blocked=denied.has(option.value);
-   if(blocked){option.disabled=true;option.hidden=true;}
+   if(!denied.has(option.value))return;
+   if(!option.disabled)option.disabled=true;
+   if(!option.hidden)option.hidden=true;
   });
   const available=[...node.options].filter(option=>!option.disabled);
   if(node.selectedOptions[0]?.disabled&&available[0])node.value=available[0].value;
   const save=document.getElementById('ai-record-save');
-  if(save)save.dataset.fieldoraAuthorizationHidden=available.length===0||denied.has(node.value)?'true':'false';
+  if(save){
+   const hidden=available.length===0||denied.has(node.value)?'true':'false';
+   if(save.dataset.fieldoraAuthorizationHidden!==hidden)save.dataset.fieldoraAuthorizationHidden=hidden;
+  }
  }
  const readiness=new MutationObserver(()=>{capture();reconcile()});
  readiness.observe(document.body,{attributes:true,attributeFilter:['data-fieldora-capabilities']});

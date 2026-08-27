@@ -19,9 +19,11 @@ from natureai_next.server.offline_map_store_api import InstalledMapApiMixin
 from natureai_next.server.offline_model_store_api import InstalledModelApiMixin
 from natureai_next.server.offline_sync_api import OfflineSyncApiMixin, OfflineSyncRepository
 from natureai_next.server.original_derivative_api import OriginalDerivativeApiMixin
+from natureai_next.server.visible_control_audit_api import VisibleControlAuditApiMixin
 
 
 class OfflineFirstFieldoraApi(
+    VisibleControlAuditApiMixin,
     OriginalDerivativeApiMixin,
     LibraryCollectionsApiMixin,
     KnowledgeParityApiMixin,

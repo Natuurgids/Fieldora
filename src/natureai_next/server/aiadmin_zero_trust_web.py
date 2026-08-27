@@ -21,7 +21,7 @@ _AIADMIN_RECONCILED_AI_LISTENER = (
     b" if(aiRecordType){\n"
     b"  aiRecordType.addEventListener('change',applyAiAdministrationActions);\n"
     b"  const aiOptionObserver=new MutationObserver(()=>applyAiAdministrationActions());\n"
-    b"  aiOptionObserver.observe(aiRecordType,{subtree:true,attributes:true,attributeFilter:['disabled','hidden']});\n"
+    b"  aiOptionObserver.observe(aiRecordType,{childList:true,subtree:true,attributes:true,attributeFilter:['disabled','hidden']});\n"
     b" }"
 )
 

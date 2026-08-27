@@ -15,23 +15,39 @@ _AIADMIN_RECONCILED_SHOW_PAGE = (
     b"if(target!==page&&location.hash===`#${page}`)"
     b"history.replaceState(null,'',`#${target}`);"
 )
+_ZERO_TRUST_BASE_API = b" const baseApi=api;"
+_AIADMIN_RECONCILED_BASE_API = (
+    b" const baseLoadAIAdministration=loadAIAdministration;"
+    b" loadAIAdministration=async function(){"
+    b"try{return await baseLoadAIAdministration();}"
+    b"finally{applyAiAdministrationActions();}"
+    b"};"
+    b" const baseApi=api;"
+)
 
 
 def patch_aiadmin_zero_trust_response(target: str, response: ApiResponse) -> ApiResponse:
-    """Reapply AI Administration action projection synchronously on page entry."""
+    """Reapply AI Administration action projection after page entry and loading."""
     if urlsplit(target).path != "/app.js" or response.status != 200:
         return response
-    if _AIADMIN_RECONCILED_SHOW_PAGE in response.body:
-        return response
-    if _ZERO_TRUST_SHOW_PAGE not in response.body:
-        return response
-    return ApiResponse(
-        response.status,
-        response.body.replace(
+    body = response.body
+    if _AIADMIN_RECONCILED_SHOW_PAGE not in body and _ZERO_TRUST_SHOW_PAGE in body:
+        body = body.replace(
             _ZERO_TRUST_SHOW_PAGE,
             _AIADMIN_RECONCILED_SHOW_PAGE,
             1,
-        ),
+        )
+    if _AIADMIN_RECONCILED_BASE_API not in body and _ZERO_TRUST_BASE_API in body:
+        body = body.replace(
+            _ZERO_TRUST_BASE_API,
+            _AIADMIN_RECONCILED_BASE_API,
+            1,
+        )
+    if body == response.body:
+        return response
+    return ApiResponse(
+        response.status,
+        body,
         response.content_type,
         response.headers,
     )

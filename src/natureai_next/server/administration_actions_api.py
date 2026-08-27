@@ -6,10 +6,10 @@ import json
 from urllib.parse import urlsplit
 
 from natureai_next.application.authentication import AuthenticationFailed
-from natureai_next.server.api import ApiResponse
 from natureai_next.server.administration_actions_web import (
     patch_administration_actions_response,
 )
+from natureai_next.server.api import ApiResponse
 from natureai_next.server.browser_functionality_api import _session_cookie
 from natureai_next.server.web_capabilities import _has_authority
 

@@ -11,12 +11,17 @@ import pytest
 from playwright.sync_api import Route, sync_playwright
 
 from natureai_next.application.access_control import PolicyDecisionService
-from natureai_next.domain.access_control import Identity, IdentityKind, Policy, PolicyEffect, PolicySource
+from natureai_next.domain.access_control import (
+    Identity,
+    IdentityKind,
+    Policy,
+    PolicyEffect,
+    PolicySource,
+)
 from natureai_next.server.api import ApiResponse
 from natureai_next.server.help import SERVER_HELP_TOPICS, help_catalogue, help_topic
 from natureai_next.server.http import patch_managed_web_response
 from natureai_next.server.web_capabilities import project_help_response
-
 
 ROOT = Path(__file__).parents[1]
 APP = (ROOT / "src/natureai_next/resources/server_web/app.js").read_text()

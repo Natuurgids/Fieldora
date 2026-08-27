@@ -123,6 +123,13 @@ def test_observation_workspace_actions_use_revisioned_governed_contracts(
                 },
                 "revision": 1,
             }
+        elif path.startswith("media?"):
+            payload = {
+                "items": [
+                    {"media_id": "asset-primary", "mime_type": "image/jpeg"},
+                    {"media_id": "asset-2", "mime_type": "image/jpeg"},
+                ]
+            }
         elif path_only == "media":
             payload = {"items": []}
         elif path_only == "observations/observation-1" and method == "PATCH":
@@ -143,13 +150,6 @@ def test_observation_workspace_actions_use_revisioned_governed_contracts(
             current["revision"] = int(current["revision"]) + 1
             state["item"] = current
             payload = {"item": current, "revision": current["revision"]}
-        elif path.startswith("media?"):
-            payload = {
-                "items": [
-                    {"media_id": "asset-primary", "mime_type": "image/jpeg"},
-                    {"media_id": "asset-2", "mime_type": "image/jpeg"},
-                ]
-            }
         else:
             payload = {"items": []}
         route.fulfill(status=status, content_type="application/json", body=json.dumps(payload))

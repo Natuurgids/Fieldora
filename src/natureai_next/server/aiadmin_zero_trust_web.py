@@ -8,15 +8,33 @@ from natureai_next.server.api import ApiResponse
 
 _AIADMIN_ZERO_TRUST_RECONCILIATION_PATCH = br"""
 
-/* Reconcile AI Administration action visibility synchronously on page entry and load. */
+/* Preserve the authoritative AI Administration option projection after bootstrap. */
 (()=>{
  if(window.__fieldoraAiAdminZeroTrustReconciliation)return;
  window.__fieldoraAiAdminZeroTrustReconciliation=true;
- const reconcile=()=>{
-  const select=document.getElementById('ai-record-type');
-  if(!select||document.body.dataset.fieldoraCapabilities!=='ready')return;
-  select.dispatchEvent(new Event('change'));
- };
+ const denied=new Set();
+ let captured=false;
+ const select=()=>document.getElementById('ai-record-type');
+ function capture(){
+  const node=select();
+  if(captured||!node||document.body.dataset.fieldoraCapabilities!=='ready')return;
+  [...node.options].forEach(option=>{if(option.disabled)denied.add(option.value)});
+  captured=true;
+ }
+ function reconcile(){
+  capture();
+  const node=select();if(!captured||!node)return;
+  [...node.options].forEach(option=>{
+   const blocked=denied.has(option.value);
+   if(blocked){option.disabled=true;option.hidden=true;}
+  });
+  const available=[...node.options].filter(option=>!option.disabled);
+  if(node.selectedOptions[0]?.disabled&&available[0])node.value=available[0].value;
+  const save=document.getElementById('ai-record-save');
+  if(save)save.dataset.fieldoraAuthorizationHidden=available.length===0||denied.has(node.value)?'true':'false';
+ }
+ const readiness=new MutationObserver(()=>{capture();reconcile()});
+ readiness.observe(document.body,{attributes:true,attributeFilter:['data-fieldora-capabilities']});
  const baseShowPage=showPage;
  showPage=function(page){
   baseShowPage(page);
@@ -27,7 +45,9 @@ _AIADMIN_ZERO_TRUST_RECONCILIATION_PATCH = br"""
   try{return await baseLoadAIAdministration();}
   finally{reconcile();}
  };
- reconcile();
+ const optionObserver=new MutationObserver(()=>reconcile());
+ const aiSelect=select();if(aiSelect)optionObserver.observe(aiSelect,{childList:true,subtree:true,attributes:true,attributeFilter:['disabled','hidden']});
+ queueMicrotask(()=>{capture();reconcile()});
 })();
 """
 

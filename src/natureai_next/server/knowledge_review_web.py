@@ -16,9 +16,9 @@ _KNOWLEDGE_REVIEW_PATCH = bytes(
  const page=document.getElementById("page-knowledge");if(!page)return;
  const byId=id=>document.getElementById(id);
  const html=value=>String(value??"").replace(/[&<>"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
- const candidateLabel=item=>item?.candidate?.scientific_name||item?.candidate?.display_name||item?.candidate?.label||item?.candidate?.name||"Identification proposal";
- const sourceLabel=item=>item?.source_snapshot?.producer_name||item?.source_snapshot?.provider_key||item?.provider_key||"unknown producer";
- const sourceDetail=item=>item?.source_snapshot?.source_uri||item?.source_snapshot?.model_version||item?.source_snapshot?.source_id||"source snapshot retained";
+ const candidateLabel=item=>item?.candidate?.value?.scientific_name||item?.candidate?.value?.label||item?.candidate?.scientific_name||item?.candidate?.label||"Identification proposal";
+ const sourceLabel=item=>item?.source_snapshot?.producer_name||item?.provider_key||"unknown producer";
+ const sourceDetail=item=>item?.source_snapshot?.source_name||item?.source_snapshot?.producer_version||item?.source_snapshot?.source_version||"source snapshot retained";
 
  let governedKnowledge=[];
  const legacyRender=typeof renderKnowledge==="function"?renderKnowledge:null;
@@ -38,7 +38,7 @@ _KNOWLEDGE_REVIEW_PATCH = bytes(
    return `<article class="card knowledge-governed-proposal" data-knowledge-proposal="${html(item.id)}">
     <div class="row"><strong>${html(candidateLabel(item))}</strong><span class="pill">${html(state)}</span></div>
     <p class="muted"><strong>Provenance</strong> · ${html(sourceLabel(item))} · ${html(sourceDetail(item))}</p>
-    <p class="muted">Proposal ${html(item.id)} · revision ${html(item.revision||1)}</p>
+    <p class="muted">Provider ${html(item.provider_key||"unknown")} · proposal ${html(item.id)} · revision ${html(item.revision||1)}</p>
     ${canonical?`<p><strong>Accepted conclusion</strong> · ${html(candidateLabel(canonical))}</p><p class="muted">Trace: proposal ${html(canonical.source_suggestion_public_id)} · acceptance action ${html(canonical.acceptance_action_public_id)}</p>`:""}
     ${reviewable?`<div class="actions"><button type="button" data-knowledge-review="accept">Accept</button><button type="button" data-knowledge-review="reject">Reject</button><button type="button" data-knowledge-review="defer">Defer</button></div>`:""}
    </article>`;
@@ -78,7 +78,7 @@ _KNOWLEDGE_REVIEW_PATCH = bytes(
  const addPanel=byId("knowledge-add-panel")||byId("knowledge-status")?.closest(".card");
  if(addPanel&&!byId("knowledge-governance-note")){
   const note=document.createElement("p");note.id="knowledge-governance-note";note.className="muted";
-  note.textContent="New identifications are proposals. Fieldora assigns identity and revision; acceptance is a separate governed review action.";
+  note.textContent="New identifications are proposals. Fieldora assigns identity, submitter and revision; acceptance is a separate governed review action.";
   addPanel.prepend(note);
  }
 })();

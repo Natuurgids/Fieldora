@@ -14,6 +14,7 @@ from natureai_next.server.linked_storage_api import (
 from natureai_next.server.linked_storage_browser_api import LinkedStorageBrowserFieldoraApi
 from natureai_next.server.linked_storage_operator_api import LinkedStorageOperatorApiMixin
 from natureai_next.server.linked_storage_sources_api import LinkedStorageSourcesApiMixin
+from natureai_next.server.observation_actions_api import ObservationActionsApiMixin
 from natureai_next.server.observation_parity_api import ObservationParityApiMixin
 from natureai_next.server.offline_map_store_api import InstalledMapApiMixin
 from natureai_next.server.offline_model_store_api import InstalledModelApiMixin
@@ -24,6 +25,7 @@ from natureai_next.server.visible_control_audit_api import VisibleControlAuditAp
 
 class OfflineFirstFieldoraApi(
     VisibleControlAuditApiMixin,
+    ObservationActionsApiMixin,
     OriginalDerivativeApiMixin,
     LibraryCollectionsApiMixin,
     KnowledgeParityApiMixin,

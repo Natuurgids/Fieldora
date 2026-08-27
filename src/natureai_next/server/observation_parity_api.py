@@ -1,9 +1,9 @@
 """Managed observation mutations aligned with the desktop evidence-first contract.
 
-Desktop observations are owned by an existing evidence asset. This mixin keeps that
-invariant at the managed HTTP boundary: creation links an existing governed media
-record, never uploads/copies evidence, generates the observation identifier server
-side, and stores the same core observation fields used by the desktop schema.
+Desktop observations retain one existing governed asset as primary evidence. Managed
+web observations preserve that compatible pointer while allowing additional governed
+evidence links. Linking never uploads, copies, or re-registers evidence; relationship
+changes are explicit and revision-safe.
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 import time
 from http.cookies import SimpleCookie
-from urllib.parse import urlsplit
+from urllib.parse import unquote, urlsplit
 from uuid import uuid4
 
 from natureai_next.application.authentication import AuthenticationFailed
@@ -32,10 +32,11 @@ _MUTABLE_FIELDS = {
     "confirmation_state",
     "region_of_interest_id",
 }
+_COLLECTION = "server_observations"
 
 
 class ObservationParityApiMixin:
-    """Own observation create/edit semantics before the legacy generic science route."""
+    """Own observation and evidence-link mutations before the generic science route."""
 
     def dispatch(
         self, method: str, target: str, headers: dict[str, str], body: bytes
@@ -43,14 +44,20 @@ class ObservationParityApiMixin:
         path = urlsplit(target).path
         create = path == "/api/v1/observations" and method == "POST"
         prefix = "/api/v1/observations/"
-        edit = path.startswith(prefix) and method in {"PATCH", "PUT"}
-        if not create and not edit:
+        tail = path.removeprefix(prefix).strip("/") if path.startswith(prefix) else ""
+        parts = tuple(part for part in tail.split("/") if part)
+        evidence_link = len(parts) == 2 and parts[1] == "evidence" and method == "POST"
+        evidence_unlink = (
+            len(parts) == 3 and parts[1] == "evidence" and method == "DELETE"
+        )
+        edit = len(parts) == 1 and method in {"PATCH", "PUT"}
+        if not create and not edit and not evidence_link and not evidence_unlink:
             return super().dispatch(method, target, headers, body)
 
         routed_headers = self._observation_headers(headers)
-        # Run a deliberately unsupported verb through the established managed API.
+        # Run a deliberately unsupported mutation through the established managed API.
         # This performs the existing service-lifecycle, authentication, tenant-quota,
-        # and browser-session gates without invoking the legacy generic POST route.
+        # and browser-session gates without invoking a legacy observation mutation.
         gate = super().dispatch("DELETE", path, routed_headers, b"")
         if gate.status != 404:
             return gate
@@ -63,9 +70,20 @@ class ObservationParityApiMixin:
 
         if create:
             return self._create_observation(identity, routed_headers, body)
-        observation_id = path.removeprefix(prefix).strip("/")
+        observation_id = unquote(parts[0]) if parts else ""
         if not observation_id:
             return ApiResponse.json(404, {"error": "not_found"})
+        if evidence_link:
+            return self._link_observation_evidence(
+                observation_id, identity, routed_headers, body
+            )
+        if evidence_unlink:
+            return self._unlink_observation_evidence(
+                observation_id,
+                unquote(parts[2]),
+                identity,
+                routed_headers,
+            )
         return self._edit_observation(
             observation_id, identity, routed_headers, body
         )
@@ -107,6 +125,7 @@ class ObservationParityApiMixin:
             "id": observation_id,
             "project_id": project_id,
             "asset_id": asset_id,
+            "supporting_asset_ids": [],
             "taxon_id": taxon_id,
             "user_taxon_id": user_taxon_id,
             "observation_type": observation_type,
@@ -125,7 +144,7 @@ class ObservationParityApiMixin:
             "revision": 1,
         }
         try:
-            revision = self._science.put("server_observations", record, 0)
+            revision = self._science.put(_COLLECTION, record, 0)
         except ValueError:
             return ApiResponse.json(409, {"error": "revision_conflict"})
         return ApiResponse.json(201, {"item": record, "revision": revision})
@@ -139,27 +158,17 @@ class ObservationParityApiMixin:
     ) -> ApiResponse:
         if len(body) > 1_048_576:
             return ApiResponse.json(413, {"error": "request_too_large"})
-        expected = headers.get("if-match")
-        if expected is None:
-            return ApiResponse.json(428, {"error": "revision_required"})
+        expected_revision = self._expected_revision(headers)
+        if isinstance(expected_revision, ApiResponse):
+            return expected_revision
         try:
-            expected_revision = int(expected)
-            if expected_revision < 1:
-                raise ValueError
             changes = self._json_object(body)
         except (TypeError, ValueError, json.JSONDecodeError):
             return ApiResponse.json(400, {"error": "invalid_observation"})
         if any(key not in _MUTABLE_FIELDS for key in changes):
             return ApiResponse.json(400, {"error": "immutable_observation_field"})
 
-        current = next(
-            (
-                item
-                for item in self._science.records("server_observations")
-                if str(item.get("id", "")) == observation_id
-            ),
-            None,
-        )
+        current = self._current_observation(observation_id)
         if current is None:
             return ApiResponse.json(404, {"error": "not_found"})
         project_id = str(current.get("project_id", ""))
@@ -194,15 +203,121 @@ class ObservationParityApiMixin:
             )
         except (TypeError, ValueError):
             return ApiResponse.json(400, {"error": "invalid_observation"})
+        return self._put_observation(updated, expected_revision)
+
+    def _link_observation_evidence(
+        self,
+        observation_id: str,
+        identity,
+        headers: dict[str, str],
+        body: bytes,
+    ) -> ApiResponse:
+        expected_revision = self._expected_revision(headers)
+        if isinstance(expected_revision, ApiResponse):
+            return expected_revision
+        try:
+            data = self._json_object(body)
+            asset_id = self._required_text(data, "asset_id")
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return ApiResponse.json(400, {"error": "invalid_evidence_link"})
+        current = self._current_observation(observation_id)
+        if current is None:
+            return ApiResponse.json(404, {"error": "not_found"})
+        authorization = self._authorize_evidence_change(
+            current, identity, headers, observation_id, expected_revision
+        )
+        if authorization is not None:
+            return authorization
+        if asset_id == str(current.get("asset_id", "")):
+            return ApiResponse.json(409, {"error": "evidence_already_primary"})
+        media_error = self._validate_observation_asset(
+            asset_id, identity.organization_id, str(current.get("project_id", ""))
+        )
+        if media_error is not None:
+            return media_error
+        supporting = self._supporting_asset_ids(current)
+        if asset_id in supporting:
+            return ApiResponse.json(
+                200, {"item": current, "revision": expected_revision}
+            )
+        updated = dict(current)
+        updated["supporting_asset_ids"] = [*supporting, asset_id]
+        return self._put_observation(updated, expected_revision)
+
+    def _unlink_observation_evidence(
+        self,
+        observation_id: str,
+        asset_id: str,
+        identity,
+        headers: dict[str, str],
+    ) -> ApiResponse:
+        expected_revision = self._expected_revision(headers)
+        if isinstance(expected_revision, ApiResponse):
+            return expected_revision
+        if not asset_id:
+            return ApiResponse.json(400, {"error": "invalid_evidence_link"})
+        current = self._current_observation(observation_id)
+        if current is None:
+            return ApiResponse.json(404, {"error": "not_found"})
+        authorization = self._authorize_evidence_change(
+            current, identity, headers, observation_id, expected_revision
+        )
+        if authorization is not None:
+            return authorization
+        if asset_id == str(current.get("asset_id", "")):
+            return ApiResponse.json(409, {"error": "cannot_unlink_primary_evidence"})
+        supporting = self._supporting_asset_ids(current)
+        if asset_id not in supporting:
+            return ApiResponse.json(
+                200, {"item": current, "revision": expected_revision}
+            )
+        updated = dict(current)
+        updated["supporting_asset_ids"] = [
+            linked_id for linked_id in supporting if linked_id != asset_id
+        ]
+        return self._put_observation(updated, expected_revision)
+
+    def _authorize_evidence_change(
+        self,
+        current: dict,
+        identity,
+        headers: dict[str, str],
+        observation_id: str,
+        expected_revision: int,
+    ) -> ApiResponse | None:
+        if int(current.get("revision", 0)) != expected_revision:
+            return ApiResponse.json(409, {"error": "revision_conflict"})
+        project_id = str(current.get("project_id", ""))
+        if not self._observation_allowed(
+            identity, headers, "edit", observation_id, project_id
+        ):
+            return ApiResponse.json(403, {"error": "forbidden"})
+        return None
+
+    def _put_observation(self, updated: dict, expected_revision: int) -> ApiResponse:
+        updated["supporting_asset_ids"] = list(self._supporting_asset_ids(updated))
         updated["updated_at_us"] = int(time.time() * 1_000_000)
         updated["revision"] = expected_revision + 1
         try:
-            revision = self._science.put(
-                "server_observations", updated, expected_revision
-            )
+            revision = self._science.put(_COLLECTION, updated, expected_revision)
         except ValueError:
             return ApiResponse.json(409, {"error": "revision_conflict"})
         return ApiResponse.json(200, {"item": updated, "revision": revision})
+
+    def _current_observation(self, observation_id: str) -> dict | None:
+        current = next(
+            (
+                item
+                for item in self._science.records(_COLLECTION)
+                if str(item.get("id", "")) == observation_id
+            ),
+            None,
+        )
+        if current is None:
+            return None
+        normalized = dict(current)
+        normalized["supporting_asset_ids"] = list(self._supporting_asset_ids(current))
+        return normalized
 
     def _observation_allowed(
         self,
@@ -235,6 +350,31 @@ class ObservationParityApiMixin:
         if record.project_id and record.project_id != project_id:
             return ApiResponse.json(409, {"error": "evidence_project_mismatch"})
         return None
+
+    @staticmethod
+    def _supporting_asset_ids(record: dict) -> tuple[str, ...]:
+        value = record.get("supporting_asset_ids", [])
+        if not isinstance(value, (list, tuple)):
+            return ()
+        result: list[str] = []
+        for item in value:
+            asset_id = str(item).strip()
+            if asset_id and asset_id not in result:
+                result.append(asset_id)
+        return tuple(result)
+
+    @staticmethod
+    def _expected_revision(headers: dict[str, str]) -> int | ApiResponse:
+        expected = headers.get("if-match")
+        if expected is None:
+            return ApiResponse.json(428, {"error": "revision_required"})
+        try:
+            revision = int(expected)
+            if revision < 1:
+                raise ValueError
+        except (TypeError, ValueError):
+            return ApiResponse.json(400, {"error": "invalid_observation"})
+        return revision
 
     @staticmethod
     def _observation_headers(headers: dict[str, str]) -> dict[str, str]:

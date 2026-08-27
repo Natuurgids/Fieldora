@@ -17,9 +17,7 @@ from uuid import uuid4
 from natureai_next.application.authentication import AuthenticationFailed
 from natureai_next.domain.access_control import AccessRequest
 from natureai_next.server.api import ApiResponse
-from natureai_next.server.knowledge_review_web import (
-    patch_knowledge_review_web_response,
-)
+from natureai_next.server.knowledge_review_web import patch_knowledge_review_web_response
 
 _PROPOSALS = "server_knowledge_proposals"
 _ACTIONS = "server_knowledge_review_actions"
@@ -34,6 +32,7 @@ _PROTECTED_CREATE_FIELDS = {
     "canonical_id",
     "source_suggestion_public_id",
     "acceptance_action_public_id",
+    "submitted_by_identity_id",
     "created_at_us",
     "updated_at_us",
 }
@@ -73,7 +72,9 @@ class KnowledgeParityApiMixin:
         try:
             _token, identity = self._identity(routed_headers)
         except AuthenticationFailed as exc:
-            return ApiResponse.json(401, {"error": "unauthorized", "detail": str(exc)})
+            return ApiResponse.json(
+                401, {"error": "unauthorized", "detail": str(exc)}
+            )
 
         if collection and method == "GET":
             return self._list_knowledge_proposals(identity, routed_headers)
@@ -83,7 +84,9 @@ class KnowledgeParityApiMixin:
         if item and method == "GET":
             return self._get_knowledge_proposal(proposal_id, identity, routed_headers)
         if item:
-            return ApiResponse.json(405, {"error": "knowledge_review_action_required"})
+            return ApiResponse.json(
+                405, {"error": "knowledge_review_action_required"}
+            )
         return self._review_knowledge_proposal(
             proposal_id, identity, routed_headers, body
         )
@@ -128,6 +131,7 @@ class KnowledgeParityApiMixin:
             if _PROTECTED_CREATE_FIELDS.intersection(data):
                 raise ValueError("protected field")
             project_id = self._required_text(data, "project_id")
+            provider_key = self._required_text(data, "provider_key")
             subject = data.get("subject")
             candidate = data.get("candidate")
             source_snapshot = data.get("source_snapshot")
@@ -135,7 +139,8 @@ class KnowledgeParityApiMixin:
                 raise ValueError("subject and candidate are required")
             if not isinstance(source_snapshot, dict):
                 raise ValueError("source snapshot is required")
-            provider_key = self._required_text(source_snapshot, "provider_key")
+            self._required_text(source_snapshot, "producer_name")
+            self._required_text(source_snapshot, "producer_version")
         except (TypeError, ValueError, json.JSONDecodeError):
             return ApiResponse.json(400, {"error": "invalid_knowledge_proposal"})
 
@@ -152,6 +157,7 @@ class KnowledgeParityApiMixin:
             "candidate": candidate,
             "source_snapshot": source_snapshot,
             "provider_key": provider_key,
+            "submitted_by_identity_id": identity.identity_id,
             "review_state": "pending",
             "review_actions": [],
             "canonical": None,

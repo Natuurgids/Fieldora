@@ -1,0 +1,65 @@
+name: Fieldora knowledge parity certification
+
+on:
+  pull_request:
+    paths:
+      - "src/natureai_next/server/knowledge_parity_api.py"
+      - "src/natureai_next/server/knowledge_review_web.py"
+      - "src/natureai_next/server/offline_first_api.py"
+      - "src/natureai_next/server/science_workflow_web.py"
+      - "tests/test_web037_knowledge_parity_api.py"
+      - "tests/test_web037_knowledge_workflow_web.py"
+      - "tests/test_web035_observation_parity_api.py"
+      - "tests/test_web035_observation_workflow_web.py"
+      - "tests/test_web036_observation_evidence_links.py"
+      - "tests/test_desktop_alignment_web.py"
+      - ".github/workflows/knowledge-parity-certification.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  knowledge-parity-certification:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install certification dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -e ".[dev]"
+
+      - name: Install browser engines
+        run: python -m playwright install --with-deps chromium firefox webkit
+
+      - name: Ruff WEB-037 Knowledge governance seam
+        run: >-
+          python -m ruff check
+          src/natureai_next/server/knowledge_parity_api.py
+          src/natureai_next/server/knowledge_review_web.py
+          src/natureai_next/server/offline_first_api.py
+          tests/test_web037_knowledge_parity_api.py
+          tests/test_web037_knowledge_workflow_web.py
+
+      - name: WEB-037 focused contract and browser tests
+        run: >-
+          python -m pytest -q
+          tests/test_web037_knowledge_parity_api.py
+          tests/test_web037_knowledge_workflow_web.py
+
+      - name: WEB-035 WEB-036 and WEB-037 parity regression suite
+        run: >-
+          python -m pytest -q
+          tests/test_web035_observation_parity_api.py
+          tests/test_web035_observation_workflow_web.py
+          tests/test_web036_observation_evidence_links.py
+          tests/test_web037_knowledge_parity_api.py
+          tests/test_web037_knowledge_workflow_web.py
+          tests/test_desktop_alignment_web.py

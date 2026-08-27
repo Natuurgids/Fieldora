@@ -1,0 +1,39 @@
+name: Fieldora administration actions certification
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  administration-actions-certification:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install certification dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -e ".[dev]"
+      - name: Install browser engines
+        run: python -m playwright install --with-deps chromium firefox webkit
+      - name: Ruff WEB-045 Administration actions
+        run: >-
+          python -m ruff check
+          src/natureai_next/server/administration_actions_api.py
+          src/natureai_next/server/administration_actions_web.py
+          src/natureai_next/server/offline_first_api.py
+          tests/test_web045_administration_actions.py
+      - name: WEB-045 exact Administration actions
+        run: pytest -q tests/test_web045_administration_actions.py
+      - name: Administration navigation and Audit regressions
+        run: pytest -q tests/test_administration_workspace_web.py
+      - name: AI Administration zero-trust regression
+        run: pytest -q tests/test_aiadmin_zero_trust_web.py
+      - name: WEB-040 final visible-control regression
+        run: pytest -q tests/test_web040_visible_control_audit.py

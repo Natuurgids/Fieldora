@@ -68,17 +68,24 @@ def _payload(response: ApiResponse) -> dict:
 def _proposal(**overrides) -> dict:
     payload = {
         "project_id": "project-1",
+        "provider_key": "fieldora-ai",
         "subject": {"subject_type": "observation", "public_id": "obs-1"},
         "candidate": {
-            "canonical_type": "taxon",
-            "scientific_name": "Bombus terrestris",
+            "shape": "taxonomy_candidate",
+            "value": {"scientific_name": "Bombus terrestris"},
             "confidence": 0.93,
+            "target": {},
+            "external_id": "taxon:123",
         },
         "source_snapshot": {
-            "provider_key": "fieldora-ai",
             "producer_name": "Local classifier",
-            "model_version": "v7",
-            "source_id": "suggestion-source-1",
+            "producer_version": "v7",
+            "source_name": "Fieldora offline model",
+            "source_version": "2026.08",
+            "checksum": "sha256:abc",
+            "attribution": "Fieldora",
+            "licence": "internal",
+            "created_at_us": 123456,
         },
     }
     payload.update(overrides)
@@ -108,6 +115,7 @@ def test_browser_cannot_post_accepted_knowledge_or_forge_governance_fields() -> 
                 review_state="accepted",
                 revision=99,
                 acceptance_action_public_id="forged-action",
+                submitted_by_identity_id="forged-producer",
             )
         ).encode(),
     )
@@ -132,6 +140,7 @@ def test_proposal_has_server_identity_pending_state_and_preserved_source_snapsho
     assert item["canonical"] is None
     assert item["source_snapshot"] == source_snapshot
     assert item["provider_key"] == "fieldora-ai"
+    assert item["submitted_by_identity_id"] == "researcher-1"
     assert payload["revision"] == 1
 
     listed = api.dispatch("GET", "/api/v1/knowledge", {}, b"")
@@ -177,6 +186,7 @@ def test_accept_is_explicit_revisioned_and_preserves_proposal_action_and_canonic
     assert canonical["source_suggestion_public_id"] == proposal_id
     assert canonical["acceptance_action_public_id"] == action["id"]
     assert canonical["source_snapshot"] == proposal["source_snapshot"]
+    assert canonical["provider_key"] == proposal["provider_key"]
     assert payload["revision"] == 2
 
     assert proposal_id in api._science.items["server_knowledge_proposals"]

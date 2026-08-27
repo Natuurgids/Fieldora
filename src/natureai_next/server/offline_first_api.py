@@ -18,9 +18,11 @@ from natureai_next.server.observation_parity_api import ObservationParityApiMixi
 from natureai_next.server.offline_map_store_api import InstalledMapApiMixin
 from natureai_next.server.offline_model_store_api import InstalledModelApiMixin
 from natureai_next.server.offline_sync_api import OfflineSyncApiMixin, OfflineSyncRepository
+from natureai_next.server.original_derivative_api import OriginalDerivativeApiMixin
 
 
 class OfflineFirstFieldoraApi(
+    OriginalDerivativeApiMixin,
     LibraryCollectionsApiMixin,
     KnowledgeParityApiMixin,
     ObservationParityApiMixin,

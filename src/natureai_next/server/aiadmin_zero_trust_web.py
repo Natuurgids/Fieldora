@@ -8,31 +8,26 @@ from natureai_next.server.api import ApiResponse
 
 _ZERO_TRUST_OPTION_STATE = b"   option.disabled=!permitted;option.hidden=!permitted;"
 _AIADMIN_ATTRIBUTE_OPTION_STATE = (
-    b"   option.toggleAttribute('disabled',!permitted);"
-    b"option.toggleAttribute('hidden',!permitted);"
+    b"   const denied=!permitted;"
+    b"if(option.disabled!==denied)option.disabled=denied;"
+    b"if(option.hidden!==denied)option.hidden=denied;"
 )
-_ZERO_TRUST_SHOW_PAGE = (
-    b"  baseShowPage(target);if(target!==page&&location.hash===`#${page}`)"
-    b"history.replaceState(null,'',`#${target}`);"
+_ZERO_TRUST_AI_LISTENER = (
+    b" const aiRecordType=document.getElementById('ai-record-type');\n"
+    b" if(aiRecordType)aiRecordType.addEventListener('change',applyAiAdministrationActions);"
 )
-_AIADMIN_RECONCILED_SHOW_PAGE = (
-    b"  baseShowPage(target);if(target==='aiadmin')applyAiAdministrationActions();"
-    b"if(target!==page&&location.hash===`#${page}`)"
-    b"history.replaceState(null,'',`#${target}`);"
-)
-_ZERO_TRUST_BASE_API = b" const baseApi=api;"
-_AIADMIN_RECONCILED_BASE_API = (
-    b" const baseLoadAIAdministration=loadAIAdministration;"
-    b" loadAIAdministration=async function(){"
-    b"try{return await baseLoadAIAdministration();}"
-    b"finally{applyAiAdministrationActions();}"
-    b"};"
-    b" const baseApi=api;"
+_AIADMIN_RECONCILED_AI_LISTENER = (
+    b" const aiRecordType=document.getElementById('ai-record-type');\n"
+    b" if(aiRecordType){\n"
+    b"  aiRecordType.addEventListener('change',applyAiAdministrationActions);\n"
+    b"  const aiOptionObserver=new MutationObserver(()=>applyAiAdministrationActions());\n"
+    b"  aiOptionObserver.observe(aiRecordType,{subtree:true,attributes:true,attributeFilter:['disabled','hidden']});\n"
+    b" }"
 )
 
 
 def patch_aiadmin_zero_trust_response(target: str, response: ApiResponse) -> ApiResponse:
-    """Project AI Administration permissions as stable browser-native state."""
+    """Keep AI Administration option authorization stable across async rendering."""
     if urlsplit(target).path != "/app.js" or response.status != 200:
         return response
     body = response.body
@@ -42,16 +37,10 @@ def patch_aiadmin_zero_trust_response(target: str, response: ApiResponse) -> Api
             _AIADMIN_ATTRIBUTE_OPTION_STATE,
             1,
         )
-    if _AIADMIN_RECONCILED_SHOW_PAGE not in body and _ZERO_TRUST_SHOW_PAGE in body:
+    if _AIADMIN_RECONCILED_AI_LISTENER not in body and _ZERO_TRUST_AI_LISTENER in body:
         body = body.replace(
-            _ZERO_TRUST_SHOW_PAGE,
-            _AIADMIN_RECONCILED_SHOW_PAGE,
-            1,
-        )
-    if _AIADMIN_RECONCILED_BASE_API not in body and _ZERO_TRUST_BASE_API in body:
-        body = body.replace(
-            _ZERO_TRUST_BASE_API,
-            _AIADMIN_RECONCILED_BASE_API,
+            _ZERO_TRUST_AI_LISTENER,
+            _AIADMIN_RECONCILED_AI_LISTENER,
             1,
         )
     if body == response.body:

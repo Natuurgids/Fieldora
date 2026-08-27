@@ -4,8 +4,11 @@ on:
   pull_request:
     paths:
       - "src/natureai_next/server/http.py"
+      - "src/natureai_next/server/help.py"
       - "src/natureai_next/server/browser_functionality_api.py"
       - "src/natureai_next/server/web_capabilities.py"
+      - "src/natureai_next/resources/help/**"
+      - "tests/test_web046_contextual_help.py"
       - "tests/test_web_capabilities.py"
       - "tests/test_zero_trust_web.py"
       - ".github/workflows/zero-trust-web-certification.yml"
@@ -32,10 +35,14 @@ jobs:
         run: >-
           python -m ruff check
           src/natureai_next/server/http.py
+          src/natureai_next/server/help.py
           src/natureai_next/server/browser_functionality_api.py
           src/natureai_next/server/web_capabilities.py
+          tests/test_web046_contextual_help.py
           tests/test_web_capabilities.py
           tests/test_zero_trust_web.py
+      - name: WEB-046 Help PBAC regression
+        run: python -m pytest -q tests/test_web046_contextual_help.py -k "catalogue or denied_workspace"
       - name: PBAC capability and HTTP runtime tests
         run: python -m pytest -q tests/test_web_capabilities.py
       - name: Browser zero trust tests across engines

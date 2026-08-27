@@ -6,6 +6,7 @@ on:
       - "pyproject.toml"
       - "src/natureai_next/application/platform_features.py"
       - "src/natureai_next/server/http.py"
+      - "src/natureai_next/server/help.py"
       - "src/natureai_next/server/web_compatibility.py"
       - "src/natureai_next/server/navigation_web_compatibility.py"
       - "src/natureai_next/server/desktop_alignment_web.py"
@@ -30,8 +31,11 @@ on:
       - "src/natureai_next/server/media_detail_web.py"
       - "src/natureai_next/server/media_links.py"
       - "src/natureai_next/server/offline_first_api.py"
+      - "src/natureai_next/resources/help/**"
       - "src/natureai_next/resources/server_web/**"
       - "tests/test_cross_client_parity_contract.py"
+      - "tests/test_server_help_wiring.py"
+      - "tests/test_web046_contextual_help.py"
       - "tests/test_server_web_compatibility.py"
       - "tests/test_server_web_browser_navigation.py"
       - "tests/test_desktop_alignment_web.py"
@@ -77,6 +81,7 @@ jobs:
           python -m ruff check
           src/natureai_next/application/platform_features.py
           src/natureai_next/server/http.py
+          src/natureai_next/server/help.py
           src/natureai_next/server/web_compatibility.py
           src/natureai_next/server/navigation_web_compatibility.py
           src/natureai_next/server/desktop_alignment_web.py
@@ -100,6 +105,8 @@ jobs:
           src/natureai_next/server/media_links.py
           src/natureai_next/server/offline_first_api.py
           tests/test_cross_client_parity_contract.py
+          tests/test_server_help_wiring.py
+          tests/test_web046_contextual_help.py
           tests/test_server_web_compatibility.py
           tests/test_server_web_browser_navigation.py
           tests/test_desktop_alignment_web.py
@@ -114,6 +121,9 @@ jobs:
           tests/test_linked_storage_web.py
           tests/test_linked_storage_sources_api.py
           tests/test_linked_storage_operator_api.py
+
+      - name: WEB-046 contextual Help regression across browser engines
+        run: python -m pytest -q tests/test_web046_contextual_help.py tests/test_server_help_wiring.py
 
       - name: Server web and parity compatibility tests across browser engines
         run: >-

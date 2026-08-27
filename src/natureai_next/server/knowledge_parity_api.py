@@ -17,6 +17,9 @@ from uuid import uuid4
 from natureai_next.application.authentication import AuthenticationFailed
 from natureai_next.domain.access_control import AccessRequest
 from natureai_next.server.api import ApiResponse
+from natureai_next.server.knowledge_review_web import (
+    patch_knowledge_review_web_response,
+)
 
 _PROPOSALS = "server_knowledge_proposals"
 _ACTIONS = "server_knowledge_review_actions"
@@ -34,10 +37,11 @@ _PROTECTED_CREATE_FIELDS = {
     "created_at_us",
     "updated_at_us",
 }
+_GATE_PATH = "/api/v1/__knowledge_governance_gate__"
 
 
 class KnowledgeParityApiMixin:
-    """Own managed Knowledge creation/review before the generic collection API."""
+    """Own managed Knowledge reads, creation, and review before the generic API."""
 
     def dispatch(
         self, method: str, target: str, headers: dict[str, str], body: bytes
@@ -50,19 +54,20 @@ class KnowledgeParityApiMixin:
         item = len(parts) == 1
         review = len(parts) == 2 and parts[1] == "review"
         governed = collection or item or review
-        if not governed:
-            return super().dispatch(method, target, headers, body)
-        if method == "GET":
-            return super().dispatch(method, target, headers, body)
-        if not (
-            (collection and method == "POST")
+        supported = (
+            (collection and method in {"GET", "POST"})
+            or (item and method in {"GET", "PUT", "PATCH", "DELETE"})
             or (review and method == "POST")
-            or (item and method in {"PUT", "PATCH", "DELETE"})
-        ):
-            return super().dispatch(method, target, headers, body)
+        )
+        if not governed or not supported:
+            response = super().dispatch(method, target, headers, body)
+            return patch_knowledge_review_web_response(target, response)
 
         routed_headers = self._knowledge_headers(headers)
-        gate = super().dispatch("DELETE", path, routed_headers, b"")
+        # Exercise the established managed lifecycle/session gates on a deliberately
+        # unsupported route. Never probe the real Knowledge path: the generic API
+        # owns that legacy path and a DELETE probe could mutate its collection.
+        gate = super().dispatch("DELETE", _GATE_PATH, routed_headers, b"")
         if gate.status != 404:
             return gate
         try:
@@ -70,13 +75,49 @@ class KnowledgeParityApiMixin:
         except AuthenticationFailed as exc:
             return ApiResponse.json(401, {"error": "unauthorized", "detail": str(exc)})
 
+        if collection and method == "GET":
+            return self._list_knowledge_proposals(identity, routed_headers)
         if collection and method == "POST":
             return self._create_knowledge_proposal(identity, routed_headers, body)
         proposal_id = unquote(parts[0]) if parts else ""
+        if item and method == "GET":
+            return self._get_knowledge_proposal(proposal_id, identity, routed_headers)
         if item:
             return ApiResponse.json(405, {"error": "knowledge_review_action_required"})
         return self._review_knowledge_proposal(
             proposal_id, identity, routed_headers, body
+        )
+
+    def _list_knowledge_proposals(self, identity, headers) -> ApiResponse:
+        items: list[dict] = []
+        for raw in self._science.records(_PROPOSALS):
+            item = dict(raw)
+            if self._knowledge_allowed(
+                identity,
+                headers,
+                "view",
+                str(item.get("id", "")),
+                str(item.get("project_id", "")),
+            ):
+                items.append(item)
+        return ApiResponse.json(200, {"items": items})
+
+    def _get_knowledge_proposal(
+        self, proposal_id: str, identity, headers
+    ) -> ApiResponse:
+        current = self._current_knowledge_proposal(proposal_id)
+        if current is None:
+            return ApiResponse.json(404, {"error": "not_found"})
+        if not self._knowledge_allowed(
+            identity,
+            headers,
+            "view",
+            proposal_id,
+            str(current.get("project_id", "")),
+        ):
+            return ApiResponse.json(404, {"error": "not_found"})
+        return ApiResponse.json(
+            200, {"item": current, "revision": int(current.get("revision", 1))}
         )
 
     def _create_knowledge_proposal(self, identity, headers, body: bytes) -> ApiResponse:
@@ -99,7 +140,9 @@ class KnowledgeParityApiMixin:
             return ApiResponse.json(400, {"error": "invalid_knowledge_proposal"})
 
         proposal_id = str(uuid4())
-        if not self._knowledge_allowed(identity, headers, "edit", proposal_id, project_id):
+        if not self._knowledge_allowed(
+            identity, headers, "edit", proposal_id, project_id
+        ):
             return ApiResponse.json(403, {"error": "forbidden"})
         now_us = int(time.time() * 1_000_000)
         record = {
@@ -144,15 +187,23 @@ class KnowledgeParityApiMixin:
         if int(current.get("revision", 0)) != expected:
             return ApiResponse.json(409, {"error": "revision_conflict"})
         project_id = str(current.get("project_id", ""))
-        if not self._knowledge_allowed(identity, headers, "edit", proposal_id, project_id):
+        if not self._knowledge_allowed(
+            identity, headers, "edit", proposal_id, project_id
+        ):
             return ApiResponse.json(403, {"error": "forbidden"})
         state = str(current.get("review_state", "pending"))
         if state not in {"pending", "deferred"}:
-            return ApiResponse.json(409, {"error": "knowledge_review_already_resolved"})
+            return ApiResponse.json(
+                409, {"error": "knowledge_review_already_resolved"}
+            )
 
         action_id = str(uuid4())
         now_us = int(time.time() * 1_000_000)
-        next_state = {"accept": "accepted", "reject": "rejected", "defer": "deferred"}[action]
+        next_state = {
+            "accept": "accepted",
+            "reject": "rejected",
+            "defer": "deferred",
+        }[action]
         action_record = {
             "id": action_id,
             "proposal_id": proposal_id,
@@ -170,7 +221,10 @@ class KnowledgeParityApiMixin:
 
         updated = dict(current)
         updated["review_state"] = next_state
-        updated["review_actions"] = [*list(current.get("review_actions", [])), action_record]
+        updated["review_actions"] = [
+            *list(current.get("review_actions", [])),
+            action_record,
+        ]
         canonical = None
         if action == "accept":
             canonical = {
@@ -198,7 +252,12 @@ class KnowledgeParityApiMixin:
             return ApiResponse.json(409, {"error": "revision_conflict"})
         return ApiResponse.json(
             200,
-            {"item": updated, "revision": revision, "action": action_record, "canonical": canonical},
+            {
+                "item": updated,
+                "revision": revision,
+                "action": action_record,
+                "canonical": canonical,
+            },
         )
 
     def _current_knowledge_proposal(self, proposal_id: str) -> dict | None:
@@ -211,7 +270,9 @@ class KnowledgeParityApiMixin:
             None,
         )
 
-    def _knowledge_allowed(self, identity, headers, action, resource_id, project_id) -> bool:
+    def _knowledge_allowed(
+        self, identity, headers, action, resource_id, project_id
+    ) -> bool:
         return self._decisions.decide(
             AccessRequest(
                 identity.identity_id,

@@ -15,6 +15,7 @@ _SCIENCE_WORKFLOW_PATCH = bytes(
   #observation-review-panel[hidden],#knowledge-review-panel[hidden],#knowledge-add-panel[hidden]{display:none!important}
   #observation-editor .observation-parity-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
   #observation-editor .observation-parity-grid .wide{grid-column:1/-1}
+  #obs-supporting-list{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
  `;
  document.head.appendChild(style);
 
@@ -57,6 +58,12 @@ _SCIENCE_WORKFLOW_PATCH = bytes(
      <label>Sex<input id="obs-sex" autocomplete="off"></label>
      <label class="wide">Behavior<input id="obs-behavior" autocomplete="off"></label>
      <label class="wide">Notes<textarea id="obs-notes" rows="4"></textarea></label>
+     <div id="obs-supporting-panel" class="wide" hidden>
+      <strong>Supporting evidence</strong>
+      <p class="muted">Link additional governed evidence without changing or copying the primary evidence.</p>
+      <div class="actions"><select id="obs-supporting-select"><option value="">Select supporting evidence…</option></select><button id="obs-supporting-link" type="button">Link evidence</button></div>
+      <div id="obs-supporting-list"></div>
+     </div>
     </div>
     <div class="actions"><button id="obs-save-aligned" type="button">Save observation</button><button id="obs-cancel-aligned" type="button">Cancel</button></div>
     <p id="obs-save-status" class="muted" aria-live="polite"></p>`;
@@ -71,22 +78,38 @@ _SCIENCE_WORKFLOW_PATCH = bytes(
    intro.textContent=view==="review"
     ?"Inspect field observations, filter review states, and make explicit governed decisions."
     :editingObservation
-      ?"Edit the observation fields while preserving its existing evidence link and revision history."
+      ?"Edit observation fields and supporting evidence while preserving primary evidence and revision history."
       :"Create a field observation from existing governed evidence; Fieldora keeps the evidence object canonical and links it without cloning.";
    if(view==="create")q("obs-asset")?.focus();
   }
 
+  function renderSupportingEvidence(){
+   const panel=q("obs-supporting-panel"),list=q("obs-supporting-list");
+   if(panel)panel.hidden=!editingObservation;
+   if(!list)return;
+   const linked=editingObservation?.supporting_asset_ids||[];
+   list.innerHTML=linked.length
+    ?linked.map(id=>`<span class="pill">${esc(id)} <button type="button" data-unlink-evidence="${esc(id)}" aria-label="Remove supporting evidence ${esc(id)}">×</button></span>`).join("")
+    :'<span class="muted">No supporting evidence linked.</span>';
+  }
+
   async function refreshObservationEvidence(preferred=""){
-   const select=q("obs-asset"),project=q("obs-project")?.value||"";
+   const select=q("obs-asset"),supporting=q("obs-supporting-select"),project=q("obs-project")?.value||"";
    if(!select)return;
    select.innerHTML='<option value="">Select governed evidence…</option>';
+   if(supporting)supporting.innerHTML='<option value="">Select supporting evidence…</option>';
    if(!project)return;
    try{
     const result=await api(`/api/v1/media?limit=500&project_id=${encodeURIComponent(project)}`);
+    const linked=new Set(editingObservation?.supporting_asset_ids||[]);
     for(const item of result.items||[]){
-     const option=document.createElement("option");option.value=item.media_id;
-     option.textContent=`${item.mime_type||"evidence"} · ${item.media_id}`;
+     const label=`${item.mime_type||"evidence"} · ${item.media_id}`;
+     const option=document.createElement("option");option.value=item.media_id;option.textContent=label;
      select.appendChild(option);
+     if(supporting&&item.media_id!==preferred&&!linked.has(item.media_id)){
+      const supportOption=document.createElement("option");supportOption.value=item.media_id;supportOption.textContent=label;
+      supporting.appendChild(supportOption);
+     }
     }
     if(preferred)select.value=preferred;
    }catch(e){status("obs-save-status",e.message,true)}
@@ -96,6 +119,8 @@ _SCIENCE_WORKFLOW_PATCH = bytes(
    for(const id of ["obs-count","obs-life-stage","obs-sex","obs-behavior","obs-notes"]){if(q(id))q(id).value=""}
    if(q("obs-type"))q("obs-type").value="unknown";
    if(q("obs-asset")){q("obs-asset").disabled=false;q("obs-asset").value=""}
+   if(q("obs-supporting-select"))q("obs-supporting-select").value="";
+   if(q("obs-supporting-panel"))q("obs-supporting-panel").hidden=true;
    status("obs-save-status","");
   }
 
@@ -121,7 +146,33 @@ _SCIENCE_WORKFLOW_PATCH = bytes(
    if(q("obs-notes"))q("obs-notes").value=item.notes||"";
    await refreshObservationEvidence(item.asset_id||"");
    if(q("obs-asset"))q("obs-asset").disabled=true;
+   renderSupportingEvidence();
    setObservationView("create");
+  }
+
+  async function linkSupportingEvidence(){
+   const asset=q("obs-supporting-select")?.value||"";
+   if(!editingObservation||!asset)return;
+   try{
+    const result=await api(`/api/v1/observations/${encodeURIComponent(editingObservation.id)}/evidence`,{
+     method:"POST",headers:{"If-Match":String(editingObservation.revision||1)},body:JSON.stringify({asset_id:asset})
+    });
+    editingObservation={...result.item,revision:result.revision};
+    status("obs-save-status","Supporting evidence linked.");
+    renderSupportingEvidence();await refreshObservationEvidence(editingObservation.asset_id||"");
+   }catch(e){status("obs-save-status",e.message,true)}
+  }
+
+  async function unlinkSupportingEvidence(asset){
+   if(!editingObservation||!asset)return;
+   try{
+    const result=await api(`/api/v1/observations/${encodeURIComponent(editingObservation.id)}/evidence/${encodeURIComponent(asset)}`,{
+     method:"DELETE",headers:{"If-Match":String(editingObservation.revision||1)}
+    });
+    editingObservation={...result.item,revision:result.revision};
+    status("obs-save-status","Supporting evidence removed.");
+    renderSupportingEvidence();await refreshObservationEvidence(editingObservation.asset_id||"");
+   }catch(e){status("obs-save-status",e.message,true)}
   }
 
   async function saveAlignedObservation(){
@@ -168,6 +219,10 @@ _SCIENCE_WORKFLOW_PATCH = bytes(
   if(newObservation)newObservation.hidden=true;
   q("obs-project")?.addEventListener("change",()=>refreshObservationEvidence());
   q("obs-save-aligned")?.addEventListener("click",saveAlignedObservation);
+  q("obs-supporting-link")?.addEventListener("click",linkSupportingEvidence);
+  q("obs-supporting-list")?.addEventListener("click",event=>{
+   const button=event.target.closest("[data-unlink-evidence]");if(button)unlinkSupportingEvidence(button.dataset.unlinkEvidence);
+  });
   q("obs-cancel-aligned")?.addEventListener("click",()=>{editingObservation=null;if(q("obs-project"))q("obs-project").disabled=false;setObservationView("review")});
   q("observation-list")?.addEventListener("click",event=>{
    if(event.target.closest("input[type=checkbox]"))return;

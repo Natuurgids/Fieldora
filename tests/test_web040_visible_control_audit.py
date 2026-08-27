@@ -37,11 +37,13 @@ def _fixture(tmp_path: Path):
       <button data-task-view="review">Review knowledge</button>
       <button data-task-view="add">Add identification</button>
     </div>
+    <button id="direct-control">Direct action</button>
     <script src="/app.js"></script>
     </body></html>"""
     (tmp_path / "index.html").write_text(html, encoding="utf-8")
+    base = b'document.getElementById("direct-control").onclick=()=>{};'
     response = patch_visible_control_audit_response(
-        "/app.js", ApiResponse(200, b"window.baseApp=true;", "text/javascript")
+        "/app.js", ApiResponse(200, base, "text/javascript")
     )
     (tmp_path / "app.js").write_bytes(response.body)
 
@@ -73,13 +75,14 @@ def test_patch_is_idempotent_and_only_targets_app_bundle() -> None:
     twice = patch_visible_control_audit_response("/app.js", once)
     assert once.body == twice.body
     assert b"__fieldoraVisibleControlAuditWired" in once.body
+    assert b"__fieldoraAuditVisibleButtons" in once.body
 
     api = ApiResponse.json(200, {"items": []})
     assert patch_visible_control_audit_response("/api/v1/knowledge", api) == api
 
 
 @pytest.mark.parametrize("browser_name", ("chromium", "firefox", "webkit"))
-def test_dead_knowledge_pseudo_tabs_are_removed_but_real_review_controls_remain(
+def test_dead_knowledge_pseudo_tabs_are_removed_and_survivors_have_action_contracts(
     tmp_path: Path,
     browser_name: str,
 ) -> None:
@@ -101,4 +104,11 @@ def test_dead_knowledge_pseudo_tabs_are_removed_but_real_review_controls_remain(
             "Reject",
             "Defer",
         ]
+
+        inventory = page.evaluate("window.__fieldoraAuditVisibleButtons()")
+        assert inventory
+        assert all(item["contract"] for item in inventory), inventory
+        assert next(item for item in inventory if item["id"] == "direct-control")[
+            "contract"
+        ] == "direct-handler"
         browser.close()

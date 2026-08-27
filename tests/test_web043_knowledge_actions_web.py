@@ -12,9 +12,6 @@ from playwright.sync_api import Route, sync_playwright
 from natureai_next.server.api import ApiResponse
 from natureai_next.server.desktop_alignment_web import patch_desktop_alignment_web_response
 from natureai_next.server.knowledge_review_web import patch_knowledge_review_web_response
-from natureai_next.server.visible_control_audit_web import (
-    patch_visible_control_audit_response,
-)
 
 
 @contextlib.contextmanager
@@ -29,7 +26,6 @@ def _web_fixture(tmp_path: Path):
     for patch in (
         patch_desktop_alignment_web_response,
         patch_knowledge_review_web_response,
-        patch_visible_control_audit_response,
     ):
         response = patch("/app.js", response)
     (tmp_path / "app.js").write_bytes(response.body)
@@ -207,6 +203,13 @@ def test_submit_identification_is_server_owned_and_review_remains_revisioned(
         page.locator("#knowledge-confidence").fill("0.92")
         page.get_by_role("button", name="Submit identification proposal").click()
         page.wait_for_selector('[data-knowledge-proposal="proposal-1"]')
+
+        review_buttons = page.locator('[data-knowledge-proposal="proposal-1"] [data-knowledge-review]')
+        assert review_buttons.count() == 3
+        assert review_buttons.evaluate_all(
+            "buttons => buttons.every(button => button.dataset.knowledgeReview && !button.disabled)"
+        )
+
         page.get_by_role("button", name="Accept", exact=True).click()
         page.wait_for_function(
             "() => document.querySelector('[data-knowledge-proposal=\"proposal-1\"]')?.textContent.includes('Accepted conclusion')"
@@ -215,6 +218,7 @@ def test_submit_identification_is_server_owned_and_review_remains_revisioned(
         assert "Review history" in text
         assert "proposal-1" in text
         assert "action-1" in text
+        assert page.locator('[data-knowledge-proposal="proposal-1"] [data-knowledge-review]').count() == 0
 
         create = next(
             item
@@ -235,7 +239,4 @@ def test_submit_identification_is_server_owned_and_review_remains_revisioned(
             and item["path"] == "knowledge/proposal-1/review"
         )
         assert review["headers"].get("if-match") == "1"
-
-        inventory = page.evaluate("window.__fieldoraAuditVisibleButtons()")
-        assert all(item["contract"] for item in inventory), inventory
         browser.close()

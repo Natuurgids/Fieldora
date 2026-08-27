@@ -13,6 +13,9 @@ from pathlib import Path
 from natureai_next.server.administration_workspace_web import (
     patch_administration_workspace_web_response,
 )
+from natureai_next.server.aiadmin_zero_trust_web import (
+    patch_aiadmin_zero_trust_response,
+)
 from natureai_next.server.api import FieldoraApi
 from natureai_next.server.browser_functionality_web import (
     patch_browser_functionality_response,
@@ -122,6 +125,7 @@ def patch_managed_web_response(target: str, response):
         patch_offline_models_web_response,
         patch_offline_maps_web_response,
         patch_zero_trust_web_response,
+        patch_aiadmin_zero_trust_response,
     ):
         response = patch(target, response)
     return response

@@ -8,22 +8,12 @@ from natureai_next.server.api import ApiResponse
 
 _ADMINISTRATION_ACTIONS_PATCH = br"""
 
-/* WEB-045 Administration exact-action authorization. */
+/* WEB-045 Administration exact, resource-scoped action authorization. */
 (()=>{
  if(window.__fieldoraAdministrationActions)return;
  window.__fieldoraAdministrationActions=true;
- const serviceAction={
-  activate:"operator.services.activate",
-  drain:"operator.services.drain",
-  stop:"operator.services.stop",
-  revoke:"operator.services.revoke"
- };
- const archiveAction={
-  enable:"operator.storage.enable",
-  disable:"operator.storage.disable"
- };
- let actionCapabilities=null,loading=null;
  const mark=(node,hidden)=>{if(node)node.dataset.fieldoraAuthorizationHidden=hidden?"true":"false"};
+ const serviceActions=new Map(),archiveActions=new Map();
  function protectUnverified(){
   document.querySelectorAll('#page-operator [data-op]').forEach(button=>{
    if(button.dataset.administrationActionVerified!=="true")mark(button,true);
@@ -34,33 +24,38 @@ _ADMINISTRATION_ACTIONS_PATCH = br"""
  }
  function apply(){
   protectUnverified();
-  if(!actionCapabilities)return;
-  document.querySelectorAll('#page-operator [data-op]').forEach(button=>{
-   const key=serviceAction[button.dataset.op];
+  document.querySelectorAll('#page-operator [data-op][data-service]').forEach(button=>{
+   const allowed=serviceActions.get(button.dataset.service);
+   if(!allowed)return;
    button.dataset.administrationActionVerified="true";
-   mark(button,!key||actionCapabilities[key]!==true);
+   mark(button,!allowed.has(button.dataset.op));
   });
-  document.querySelectorAll('#page-operator [data-linked-archive-action]').forEach(button=>{
-   const key=archiveAction[button.dataset.linkedArchiveAction];
+  document.querySelectorAll('#page-operator [data-linked-archive-action][data-linked-storage-id]').forEach(button=>{
+   const allowed=archiveActions.get(button.dataset.linkedStorageId);
+   if(!allowed)return;
    button.dataset.administrationActionVerified="true";
-   mark(button,!key||actionCapabilities[key]!==true);
+   mark(button,!allowed.has(button.dataset.linkedArchiveAction));
   });
  }
- async function refresh(){
-  if(loading)return loading;
-  loading=(async()=>{
-   try{
-    const payload=await api('/api/v1/web/capabilities',{purpose:'administration'});
-    actionCapabilities=payload.actions||{};
-   }catch(_error){actionCapabilities={}}
-   finally{loading=null;apply()}
-  })();
-  return loading;
+ function rememberOverview(payload){
+  (payload.services||[]).forEach(item=>{
+   if(item.service_id)serviceActions.set(String(item.service_id),new Set(item.allowed_actions||[]));
+  });
+  (payload.linked_archives||[]).forEach(item=>{
+   if(item.storage_id)archiveActions.set(String(item.storage_id),new Set(item.allowed_actions||[]));
+  });
+  queueMicrotask(apply);
  }
- const observer=new MutationObserver(()=>{protectUnverified();if(actionCapabilities)apply()});
+ const baseApi=api;
+ api=async function(path,options={}){
+  const result=await baseApi(path,options);
+  if(String(path||'').split('?',1)[0]==='/api/v1/operator/overview'&&result)rememberOverview(result);
+  return result;
+ };
+ const observer=new MutationObserver(()=>{protectUnverified();apply()});
  observer.observe(document.body,{childList:true,subtree:true});
  document.querySelectorAll('.nav[data-page="operator"],[data-workspace-target="operator"]').forEach(button=>{
-  button.addEventListener('click',()=>{protectUnverified();refresh()});
+  button.addEventListener('click',protectUnverified);
  });
  protectUnverified();
 })();

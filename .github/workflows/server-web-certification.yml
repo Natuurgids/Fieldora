@@ -37,6 +37,7 @@ on:
       - "src/natureai_next/server/project_idempotency.py"
       - "src/natureai_next/server/project_idempotency_web.py"
       - "src/natureai_next/server/optimistic_concurrency_web.py"
+      - "src/natureai_next/server/structured_errors.py"
       - "src/natureai_next/resources/help/**"
       - "src/natureai_next/resources/server_web/**"
       - "tests/test_cross_client_parity_contract.py"
@@ -46,6 +47,7 @@ on:
       - "tests/test_web048_server_filters.py"
       - "tests/test_web049_project_idempotency.py"
       - "tests/test_web050_optimistic_concurrency.py"
+      - "tests/test_web051_structured_errors.py"
       - "tests/test_server_web_compatibility.py"
       - "tests/test_server_web_browser_navigation.py"
       - "tests/test_desktop_alignment_web.py"
@@ -121,12 +123,14 @@ jobs:
           src/natureai_next/server/project_idempotency.py
           src/natureai_next/server/project_idempotency_web.py
           src/natureai_next/server/optimistic_concurrency_web.py
+          src/natureai_next/server/structured_errors.py
           tests/test_cross_client_parity_contract.py
           tests/test_web046_contextual_help.py
           tests/test_web047_pagination.py
           tests/test_web048_server_filters.py
           tests/test_web049_project_idempotency.py
           tests/test_web050_optimistic_concurrency.py
+          tests/test_web051_structured_errors.py
           tests/test_server_web_compatibility.py
           tests/test_server_web_browser_navigation.py
           tests/test_desktop_alignment_web.py
@@ -156,6 +160,9 @@ jobs:
 
       - name: WEB-050 optimistic concurrency UX across browser engines
         run: python -m pytest -q tests/test_web050_optimistic_concurrency.py
+
+      - name: WEB-051 structured browser error regression across browser engines
+        run: python -m pytest -q tests/test_web051_structured_errors.py
 
       - name: Server web and parity compatibility tests across browser engines
         run: >-

@@ -255,6 +255,13 @@ def _open_projects(page: Page) -> None:
     page.locator("#page-projects").wait_for(state="visible")
 
 
+def _select_project(page: Page, project_id: str) -> None:
+    project = page.locator(f'[data-project-tree="{project_id}"]')
+    project.wait_for(state="visible")
+    project.click()
+    page.locator("#portfolio-edit-project").wait_for(state="visible")
+
+
 def test_web058_project_runtime_inside_docker(tmp_path: Path) -> None:
     with _live_server(tmp_path) as (url, projects, media, access, decisions), sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
@@ -286,10 +293,7 @@ def test_web058_project_runtime_inside_docker(tmp_path: Path) -> None:
         owner_policies = [policy for policy in access.policies() if policy.source is PolicySource.OBJECT_GRANT and policy.source_id == project.project_id]
         assert len(owner_policies) == 1
 
-        page.evaluate(
-            "id=>{selectedProject=id;return loadPortfolio()}",
-            project.project_id,
-        )
+        _select_project(page, project.project_id)
         page.locator("#portfolio-edit-project").click()
         page.locator("#portfolio-project-lifecycle-name").fill("WEB-058 Runtime Project Edited")
         page.locator("#portfolio-project-lifecycle-description").fill("Persisted browser edit")
@@ -301,7 +305,7 @@ def test_web058_project_runtime_inside_docker(tmp_path: Path) -> None:
         page.reload()
         page.locator("#workspace").wait_for(state="visible")
         _open_projects(page)
-        page.evaluate("id=>{selectedProject=id;return loadPortfolio()}", project.project_id)
+        _select_project(page, project.project_id)
         page.locator("#portfolio-edit-project").click()
         assert page.locator("#portfolio-project-lifecycle-name").input_value() == "WEB-058 Runtime Project Edited"
         assert page.locator("#portfolio-project-lifecycle-description").input_value() == "Persisted browser edit"

@@ -33,12 +33,14 @@ on:
       - "src/natureai_next/server/offline_first_api.py"
       - "src/natureai_next/server/pagination.py"
       - "src/natureai_next/server/pagination_api.py"
+      - "src/natureai_next/server/filtering.py"
       - "src/natureai_next/resources/help/**"
       - "src/natureai_next/resources/server_web/**"
       - "tests/test_cross_client_parity_contract.py"
       - "tests/test_server_help_wiring.py"
       - "tests/test_web046_contextual_help.py"
       - "tests/test_web047_pagination.py"
+      - "tests/test_web048_server_filters.py"
       - "tests/test_server_web_compatibility.py"
       - "tests/test_server_web_browser_navigation.py"
       - "tests/test_desktop_alignment_web.py"
@@ -110,9 +112,11 @@ jobs:
           src/natureai_next/server/offline_first_api.py
           src/natureai_next/server/pagination.py
           src/natureai_next/server/pagination_api.py
+          src/natureai_next/server/filtering.py
           tests/test_cross_client_parity_contract.py
           tests/test_web046_contextual_help.py
           tests/test_web047_pagination.py
+          tests/test_web048_server_filters.py
           tests/test_server_web_compatibility.py
           tests/test_server_web_browser_navigation.py
           tests/test_desktop_alignment_web.py
@@ -133,6 +137,9 @@ jobs:
 
       - name: WEB-047 bounded pagination regression
         run: python -m pytest -q tests/test_web047_pagination.py
+
+      - name: WEB-048 governed server filter regression
+        run: python -m pytest -q tests/test_web048_server_filters.py
 
       - name: Server web and parity compatibility tests across browser engines
         run: >-

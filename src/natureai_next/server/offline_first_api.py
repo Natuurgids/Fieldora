@@ -32,6 +32,7 @@ from natureai_next.server.project_idempotency import (
     wrap_project_management,
 )
 from natureai_next.server.project_idempotency_web import ProjectIdempotencyWebApiMixin
+from natureai_next.server.project_runtime_web import ProjectRuntimeWebApiMixin
 from natureai_next.server.research_records_api import ResearchRecordsApiMixin
 from natureai_next.server.structured_errors import StructuredErrorApiMixin
 from natureai_next.server.visible_control_audit_api import VisibleControlAuditApiMixin
@@ -39,6 +40,7 @@ from natureai_next.server.visible_control_audit_api import VisibleControlAuditAp
 
 class OfflineFirstFieldoraApi(
     BoundedUploadWebApiMixin,
+    ProjectRuntimeWebApiMixin,
     OptimisticConcurrencyWebApiMixin,
     StructuredErrorApiMixin,
     ProjectIdempotencyWebApiMixin,

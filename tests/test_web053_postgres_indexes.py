@@ -42,7 +42,11 @@ class _Connection:
 
 def _postgres_instance(kind, executed):
     instance = object.__new__(kind)
-    instance._connect = lambda: _Connection(executed)
+
+    def connect():
+        return _Connection(executed)
+
+    instance._connect = connect
     return instance
 
 

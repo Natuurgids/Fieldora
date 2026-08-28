@@ -101,7 +101,7 @@ def _api_create(api: _ProjectApi, project_id: str, name: str):
 
 
 def test_web055_desktop_and_api_project_create_have_equivalent_domain_outcomes() -> None:
-    project_id = "web055-project"
+    project_id = "55000000-0000-4000-8000-000000000001"
     direct_service = _ProjectContractService()
     api_service = _ProjectContractService()
 
@@ -117,7 +117,7 @@ def test_web055_desktop_and_api_project_create_have_equivalent_domain_outcomes()
 
 
 def test_web055_desktop_and_api_replay_and_conflict_contracts_are_equivalent() -> None:
-    project_id = "web055-replay"
+    project_id = "55000000-0000-4000-8000-000000000002"
     direct_service = _ProjectContractService()
     api_service = _ProjectContractService()
     api = _ProjectApi(api_service)
@@ -146,7 +146,7 @@ def test_web055_real_desktop_and_server_wiring_stays_on_project_service_boundari
         encoding="utf-8"
     )
 
-    assert "self._projects.create_project(" in desktop
-    assert "self._projects.update_project(" in desktop
+    assert "self._service.create_project(" in desktop
+    assert "self._service.update_project(" in desktop
     assert "wrap_project_management(project_management)" in server
     assert "ProjectIdempotencyApiMixin" in server

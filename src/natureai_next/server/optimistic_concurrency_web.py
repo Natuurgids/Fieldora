@@ -70,7 +70,7 @@ _OPTIMISTIC_CONCURRENCY_PATCH = bytes(
   try{return await previousApi(path,options)}catch(error){
    const conflict=capturedConflict;
    capturedConflict=null;
-   if(error?.message!=="revision_conflict"||!conflict||conflict.path!==requestPath(path))throw error;
+   if((error?.code||error?.message)!=="revision_conflict"||!conflict||conflict.path!==requestPath(path))throw error;
    const attempted=safeJson(options.body);
    const current=conflict.payload?.current||null;
    localNode.textContent=JSON.stringify(attempted,null,2);

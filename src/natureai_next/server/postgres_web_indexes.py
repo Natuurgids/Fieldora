@@ -16,7 +16,6 @@ from natureai_next.server import (
     postgres_science,
 )
 
-
 _PROJECT_INDEXES = (
     "CREATE INDEX IF NOT EXISTS ix_pm_projects_org_updated_keyset_pg "
     "ON pm_projects(organization_id,updated_at_us DESC,project_id)",

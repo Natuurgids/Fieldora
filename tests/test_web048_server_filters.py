@@ -84,7 +84,7 @@ def _media(tmp_path: Path) -> GovernedMediaStore:
     store = GovernedMediaStore(database, tmp_path / "objects")
     rows = (
         ("z-photo-fox", "image/jpeg"),
-        ("y-photo-denied", "image/jpeg"),
+        ("y-photo-fox-denied", "image/jpeg"),
         ("x-audio-fox", "audio/wav"),
         ("w-photo-owl", "image/jpeg"),
         ("v-photo-fox", "image/png"),
@@ -139,7 +139,11 @@ def test_web048_library_search_and_kind_filter_run_before_pbac(tmp_path: Path) -
     assert [item["media_id"] for item in first["items"]] == ["z-photo-fox"]
     assert first["count"] == 1
     assert first["next_cursor"]
-    assert set(decisions.seen) <= {"z-photo-fox", "v-photo-fox"}
+    assert set(decisions.seen) == {
+        "z-photo-fox",
+        "y-photo-fox-denied",
+        "v-photo-fox",
+    }
     assert "x-audio-fox" not in decisions.seen
     assert "w-photo-owl" not in decisions.seen
 
@@ -151,7 +155,7 @@ def test_web048_library_search_and_kind_filter_run_before_pbac(tmp_path: Path) -
     )
     assert [item["media_id"] for item in second["items"]] == ["v-photo-fox"]
     assert second["next_cursor"] == ""
-    assert decisions.seen == ["v-photo-fox"]
+    assert decisions.seen == ["y-photo-fox-denied", "v-photo-fox"]
 
 
 def test_web048_observation_search_and_status_filter_run_before_pbac(tmp_path: Path) -> None:
@@ -159,7 +163,7 @@ def test_web048_observation_search_and_status_filter_run_before_pbac(tmp_path: P
     first = _get(api, "/api/v1/observations?limit=1&q=fox&status=confirmed")
     assert [item["id"] for item in first["items"]] == ["o-1"]
     assert first["next_cursor"]
-    assert set(decisions.seen) <= {"o-1", "o-denied", "o-4"}
+    assert set(decisions.seen) == {"o-1", "o-denied", "o-4"}
     assert "o-2" not in decisions.seen
     assert "o-3" not in decisions.seen
 
@@ -171,6 +175,7 @@ def test_web048_observation_search_and_status_filter_run_before_pbac(tmp_path: P
     )
     assert [item["id"] for item in second["items"]] == ["o-4"]
     assert second["next_cursor"] == ""
+    assert decisions.seen == ["o-denied", "o-4"]
 
 
 def test_web048_filter_validation_fails_closed(tmp_path: Path) -> None:

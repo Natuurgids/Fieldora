@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import sqlite3
 from urllib.parse import parse_qs, urlsplit
 

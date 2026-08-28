@@ -203,7 +203,7 @@ def test_web057_duplicate_bulk_runtime_graph_inside_docker(tmp_path: Path) -> No
         page.locator("#workspace").wait_for(state="visible")
         page.locator('[data-page="library"]').click()
         page.locator("#page-library").wait_for(state="visible")
-        page.locator("#upload-project").select_option("project-1")
+        page.evaluate("document.getElementById('upload-project').value='project-1'")
 
         status = _upload(
             page,

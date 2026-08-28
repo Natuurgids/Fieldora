@@ -14,8 +14,8 @@ from natureai_next.server.project_idempotency import (
     ProjectMutationConflict,
 )
 from natureai_next.server.project_idempotency_web import (
-    ProjectIdempotencyWebApiMixin,
     _PROJECT_IDEMPOTENCY_PATCH,
+    ProjectIdempotencyWebApiMixin,
 )
 
 
@@ -24,7 +24,7 @@ class _Cursor(AbstractContextManager["_Cursor"]):
         self.project_row = project_row
         self.statements: list[tuple[str, tuple[object, ...]]] = []
 
-    def __enter__(self) -> "_Cursor":
+    def __enter__(self) -> _Cursor:
         return self
 
     def __exit__(self, exc_type, exc, tb) -> None:
@@ -41,7 +41,7 @@ class _Connection(AbstractContextManager["_Connection"]):
     def __init__(self, cursor: _Cursor) -> None:
         self._cursor = cursor
 
-    def __enter__(self) -> "_Connection":
+    def __enter__(self) -> _Connection:
         return self
 
     def __exit__(self, exc_type, exc, tb) -> None:

@@ -10,11 +10,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from natureai_next.server.postgres_media import PostgresMediaMetadataRepository
-from natureai_next.server.postgres_project_management import (
-    PostgresProjectManagementService,
+from natureai_next.server import (
+    postgres_media,
+    postgres_project_management,
+    postgres_science,
 )
-from natureai_next.server.postgres_science import PostgresScienceRepository
 
 
 _PROJECT_INDEXES = (
@@ -62,12 +62,15 @@ def ensure_managed_web_postgres_indexes(
     review into a destructive uniqueness migration over existing deployments.
     """
 
-    if isinstance(project_management, PostgresProjectManagementService):
+    if isinstance(
+        project_management,
+        postgres_project_management.PostgresProjectManagementService,
+    ):
         _apply(project_management._connect, _PROJECT_INDEXES)
 
     metadata = getattr(media, "_metadata", None)
-    if isinstance(metadata, PostgresMediaMetadataRepository):
+    if isinstance(metadata, postgres_media.PostgresMediaMetadataRepository):
         _apply(metadata._connect, _MEDIA_INDEXES)
 
-    if isinstance(science, PostgresScienceRepository):
+    if isinstance(science, postgres_science.PostgresScienceRepository):
         _apply(science._connect, _SCIENCE_INDEXES)

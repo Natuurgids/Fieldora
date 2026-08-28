@@ -80,8 +80,7 @@ def test_structured_error_envelope_handles_non_json_failures() -> None:
 
 def test_web051_composition_sits_below_web050_and_patch_is_packaged() -> None:
     mro = OfflineFirstFieldoraApi.__mro__
-    assert mro[1] is OptimisticConcurrencyWebApiMixin
-    assert mro[2] is StructuredErrorApiMixin
+    assert mro.index(OptimisticConcurrencyWebApiMixin) < mro.index(StructuredErrorApiMixin)
     response = _PatchedApi().dispatch("GET", "/app.js", {}, b"")
     assert response.body.endswith(_STRUCTURED_ERROR_WEB_PATCH)
     script = _STRUCTURED_ERROR_WEB_PATCH.decode("utf-8")

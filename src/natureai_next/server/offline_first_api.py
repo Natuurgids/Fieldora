@@ -28,11 +28,13 @@ from natureai_next.server.project_idempotency import (
     ProjectIdempotencyApiMixin,
     wrap_project_management,
 )
+from natureai_next.server.project_idempotency_web import ProjectIdempotencyWebApiMixin
 from natureai_next.server.research_records_api import ResearchRecordsApiMixin
 from natureai_next.server.visible_control_audit_api import VisibleControlAuditApiMixin
 
 
 class OfflineFirstFieldoraApi(
+    ProjectIdempotencyWebApiMixin,
     ProjectIdempotencyApiMixin,
     FilteringApiMixin,
     PaginationApiMixin,

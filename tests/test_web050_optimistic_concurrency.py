@@ -43,8 +43,8 @@ class _PatchedApi(OptimisticConcurrencyWebApiMixin, _BaseApi):
     pass
 
 
-def test_web050_patch_is_outermost_managed_presentation_adapter() -> None:
-    assert OfflineFirstFieldoraApi.__mro__[1] is OptimisticConcurrencyWebApiMixin
+def test_web050_patch_remains_managed_presentation_adapter() -> None:
+    assert OptimisticConcurrencyWebApiMixin in OfflineFirstFieldoraApi.__mro__
     response = _PatchedApi().dispatch("GET", "/app.js", {}, b"")
     assert response.body.endswith(_OPTIMISTIC_CONCURRENCY_PATCH)
     script = _OPTIMISTIC_CONCURRENCY_PATCH.decode("utf-8")

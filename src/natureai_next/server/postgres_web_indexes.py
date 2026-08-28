@@ -10,11 +10,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from natureai_next.server import (
-    postgres_media,
-    postgres_project_management,
-    postgres_science,
-)
+import natureai_next.server.postgres_media as postgres_media
+import natureai_next.server.postgres_project_management as postgres_project_management
+import natureai_next.server.postgres_science as postgres_science
 
 
 _PROJECT_INDEXES = (

@@ -5,8 +5,8 @@ import threading
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from playwright.sync_api import sync_playwright
 import pytest
+from playwright.sync_api import sync_playwright
 
 from natureai_next.server.api import ApiResponse
 from natureai_next.server.bounded_upload_web import (
@@ -14,7 +14,6 @@ from natureai_next.server.bounded_upload_web import (
     patch_bounded_upload_response,
 )
 from natureai_next.server.offline_first_api import OfflineFirstFieldoraApi
-
 
 _FULL_BUFFER_SCRIPT = b'''async function upload(file){
  const bytes=await file.arrayBuffer(),hash=[...new Uint8Array(await crypto.subtle.digest("SHA-256",bytes))].map(x=>x.toString(16).padStart(2,"0")).join("");

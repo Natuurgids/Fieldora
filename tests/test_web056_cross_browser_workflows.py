@@ -167,7 +167,7 @@ class _WorkflowApi:
                 "download_url": f"/api/v1/media/{media_id}",
             }
             self.media.append(item)
-            self._record_mutation(route, path, {},)
+            self._record_mutation(route, path, {})
             return self._json(route, {"media_id": media_id})
         if path == "observations" and method == "GET":
             return self._json(route, {"items": self.observations})
@@ -228,7 +228,7 @@ def test_web056_complete_create_import_link_edit_review_workflow(
         page.locator("#portfolio-new-project").click()
         page.locator("#portfolio-project-name").fill("Cross-browser Survey")
         page.locator("#portfolio-project-save").click()
-        page.wait_for_selector("#portfolio-project-editor[hidden]")
+        page.wait_for_selector("#portfolio-project-editor", state="hidden")
         created = next(
             project for project in backend.projects if project["name"] == "Cross-browser Survey"
         )
@@ -270,7 +270,7 @@ def test_web056_complete_create_import_link_edit_review_workflow(
         assert backend.observations[0]["revision"] == 1
 
         page.locator('[data-observation="observation-1"]').click()
-        page.wait_for_selector("#observation-editor-title:text('Edit observation')")
+        page.get_by_text("Edit observation", exact=True).wait_for()
         page.locator("#obs-supporting-select").select_option("imported-2")
         page.locator("#obs-supporting-link").click()
         page.wait_for_function(

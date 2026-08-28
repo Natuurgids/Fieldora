@@ -4,6 +4,8 @@ on:
   pull_request:
     paths:
       - "scripts/Certify-Fieldora-Clean-Runtime.ps1"
+      - "scripts/Test-Fieldora-Web-ReleaseGate.ps1"
+      - "WEB_DESKTOP_PARITY_PLAN.md"
       - ".github/workflows/runtime-harness-certification.yml"
   workflow_dispatch:
 
@@ -74,3 +76,71 @@ jobs:
             if ($text.Contains($forbidden)) { throw "Runtime harness contains forbidden shortcut or secret marker: $forbidden" }
           }
           Write-Host 'Exact-SHA runtime proof and secret-opacity contract: OK'
+
+      - name: WEB-060 release gate contract
+        shell: pwsh
+        run: |
+          $gatePath = './scripts/Test-Fieldora-Web-ReleaseGate.ps1'
+          $gateText = Get-Content -LiteralPath $gatePath -Raw
+          [void][scriptblock]::Create($gateText)
+
+          $sha = '${{ github.event.pull_request.head.sha }}'
+          if ([string]::IsNullOrWhiteSpace($sha)) { $sha = (git rev-parse HEAD).Trim() }
+
+          $planPath = Join-Path $env:RUNNER_TEMP 'web060-plan.md'
+          $badPlanPath = Join-Path $env:RUNNER_TEMP 'web060-bad-plan.md'
+          $proofPath = Join-Path $env:RUNNER_TEMP 'web060-windows-proof.json'
+          $badProofPath = Join-Path $env:RUNNER_TEMP 'web060-rocky-proof.json'
+
+          $rows = 1..59 | ForEach-Object { '| WEB-{0:D3} | DONE | synthetic contract row | certified |' -f $_ }
+          @('# WEB-060 synthetic parity plan','| ID | Status | Work item | Acceptance |','|---|---|---|---|') + $rows |
+            Set-Content -LiteralPath $planPath -Encoding utf8NoBOM
+          $badRows = @($rows)
+          $badRows[58] = '| WEB-059 | TODO | synthetic blocked row | not certified |'
+          @('# WEB-060 synthetic blocked plan','| ID | Status | Work item | Acceptance |','|---|---|---|---|') + $badRows |
+            Set-Content -LiteralPath $badPlanPath -Encoding utf8NoBOM
+
+          $proof = [ordered]@{
+            schema = 'fieldora.clean-runtime-certification.v1'
+            fieldora_ref = $sha.ToLowerInvariant()
+            platform = 'Windows11'
+            host_identity = 'Windows 10.0.26100.0'
+            started_at = '2026-08-29T00:00:00+00:00'
+            completed_at = '2026-08-29T00:10:00+00:00'
+            docker_server_version = 'synthetic-contract'
+            docker_compose_version = 'synthetic-contract'
+            install_root = 'D:\FDTEST'
+            services = @(
+              @{name='fieldora-postgres';running=$true;restart_count=0},
+              @{name='fieldora-server';running=$true;restart_count=0},
+              @{name='fieldora-worker';running=$true;restart_count=0},
+              @{name='fieldora-cert-renewer';running=$true;restart_count=0}
+            )
+            https = @{live=$true;ready=$true;openapi=$true;root=$true;docs=$true}
+            credential_handoff = @{present=$true;size_bytes=64;content_recorded=$false}
+            storage_service_mtls_desired_state = $true
+            offline_model = @{installed=$false;mounted_read_only=$false}
+            secrets_or_payloads_recorded = $false
+          }
+          $proof | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $proofPath -Encoding utf8NoBOM
+
+          & $gatePath -FieldoraRef $sha -WindowsProofPath $proofPath -ParityPlanPath $planPath
+          if (-not $?) { throw 'WEB-060 valid synthetic release proof was rejected.' }
+
+          $blocked = $false
+          try {
+            & $gatePath -FieldoraRef $sha -WindowsProofPath $proofPath -ParityPlanPath $badPlanPath
+          }
+          catch { $blocked = $true }
+          if (-not $blocked) { throw 'WEB-060 accepted incomplete mandatory parity status.' }
+
+          $proof.platform = 'RockyLinux9'
+          $proof | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $badProofPath -Encoding utf8NoBOM
+          $blocked = $false
+          try {
+            & $gatePath -FieldoraRef $sha -WindowsProofPath $badProofPath -ParityPlanPath $planPath
+          }
+          catch { $blocked = $true }
+          if (-not $blocked) { throw 'WEB-060 accepted a non-Windows runtime proof.' }
+
+          Write-Host 'WEB-060 release gate validator rejects incomplete parity and non-Windows proof: OK'

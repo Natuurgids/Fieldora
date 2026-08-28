@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
-from urllib.parse import unquote, urlsplit
 import json
+from urllib.parse import unquote, urlsplit
 
 from natureai_next.application.authentication import AuthenticationFailed
 from natureai_next.domain.access_control import AccessRequest
 from natureai_next.server.api import ApiResponse
 from natureai_next.server.browser_functionality_api import _session_cookie
 from natureai_next.server.media_links import new_association
-
 
 _PROJECT_RUNTIME_WEB_PATCH = bytes(
     r"""

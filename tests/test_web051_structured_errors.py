@@ -43,6 +43,10 @@ class _PatchedApi(StructuredErrorApiMixin, _BaseApi):
     pass
 
 
+class _CombinedApi(OptimisticConcurrencyWebApiMixin, StructuredErrorApiMixin, _BaseApi):
+    pass
+
+
 def test_structured_error_envelope_keeps_legacy_fields_and_adds_safe_contract() -> None:
     response = structured_error_response(
         ApiResponse.json(
@@ -82,20 +86,20 @@ def test_web051_composition_sits_below_web050_and_patch_is_packaged() -> None:
     assert response.body.endswith(_STRUCTURED_ERROR_WEB_PATCH)
     script = _STRUCTURED_ERROR_WEB_PATCH.decode("utf-8")
     assert '"transport","network_error"' in script
-    assert 'response.status===401||response.status===403?"auth"' in script
-    assert 'response.status===409?"conflict"' in script
-    assert '?"validation":"server"' in script
+    assert 'if(status===401||status===403)return "auth"' in script
+    assert 'if(status===409)return "conflict"' in script
+    assert 'return "validation"' in script
     assert "X-Correlation-ID" in script
     assert "fieldoraErrorSummary" in script
 
 
 @contextlib.contextmanager
-def _web_fixture(tmp_path: Path):
+def _web_fixture(tmp_path: Path, api_type=_PatchedApi):
     (tmp_path / "index.html").write_text(
         '<!doctype html><html><body><script src="/app.js"></script></body></html>',
         encoding="utf-8",
     )
-    response = _PatchedApi().dispatch("GET", "/app.js", {}, b"")
+    response = api_type().dispatch("GET", "/app.js", {}, b"")
     (tmp_path / "app.js").write_bytes(response.body)
 
     class Handler(SimpleHTTPRequestHandler):
@@ -186,4 +190,54 @@ def test_web051_browser_distinguishes_auth_validation_conflict_and_transport(
             "correlationId": "",
             "summary": "The server could not be reached. Check the connection and try again.",
         }
+        browser.close()
+
+
+@pytest.mark.parametrize("browser_name", ("chromium", "firefox", "webkit"))
+def test_web051_structured_revision_conflict_still_reaches_web050_compare_ux(
+    tmp_path: Path,
+    browser_name: str,
+) -> None:
+    current = {"id": "project-1", "name": "Server copy", "revision": 4}
+    attempted = {"expected_revision": 3, "name": "My edit"}
+    with _web_fixture(tmp_path, _CombinedApi) as url, sync_playwright() as playwright:
+        browser = getattr(playwright, browser_name).launch(headless=True)
+        page = browser.new_page()
+        page.route(
+            "**/api/v1/projects/project-1",
+            lambda route: route.fulfill(
+                status=409,
+                content_type="application/json",
+                headers={"X-Correlation-ID": "corr-conflict"},
+                body=json.dumps(
+                    {
+                        "error": "revision_conflict",
+                        "code": "revision_conflict",
+                        "message": "The request conflicts with the current server state.",
+                        "correlation_id": "corr-conflict",
+                        "current": current,
+                    }
+                ),
+            ),
+        )
+        page.goto(url)
+        result = page.evaluate(
+            """async attempted => {
+              try{
+                await api('/api/v1/projects/project-1', {
+                  method:'PATCH', body:JSON.stringify(attempted)
+                });
+                return {name:'unexpected success',message:''};
+              }catch(error){return {name:error.name,message:error.message};}
+            }""",
+            attempted,
+        )
+
+        assert result == {
+            "name": "RevisionConflictError",
+            "message": "This record changed on the server. Compare your changes or reload the latest version.",
+        }
+        page.wait_for_selector("#revision-conflict-dialog[open]")
+        assert json.loads(page.locator("#revision-conflict-local").inner_text()) == attempted
+        assert json.loads(page.locator("#revision-conflict-current").inner_text()) == current
         browser.close()

@@ -11,7 +11,9 @@ from __future__ import annotations
 from typing import Any
 
 from natureai_next.server.postgres_media import PostgresMediaMetadataRepository
-from natureai_next.server.postgres_project_management import PostgresProjectManagementService
+from natureai_next.server.postgres_project_management import (
+    PostgresProjectManagementService,
+)
 from natureai_next.server.postgres_science import PostgresScienceRepository
 
 

@@ -54,12 +54,10 @@ def structured_error_response(response: ApiResponse) -> ApiResponse:
         for name, value in response.headers
         if name.casefold() != "x-correlation-id"
     ) + (("X-Correlation-ID", correlation_id),)
-    return ApiResponse.json(response.status, normalized).__class__(
-        response.status,
-        ApiResponse.json(response.status, normalized).body,
-        "application/json; charset=utf-8",
-        headers,
-    )
+    encoded = json.dumps(
+        normalized, ensure_ascii=False, separators=(",", ":")
+    ).encode()
+    return ApiResponse(response.status, encoded, "application/json; charset=utf-8", headers)
 
 
 _STRUCTURED_ERROR_WEB_PATCH = bytes(
@@ -69,32 +67,51 @@ _STRUCTURED_ERROR_WEB_PATCH = bytes(
 (()=>{
  if(window.__fieldoraStructuredErrors)return;
  window.__fieldoraStructuredErrors=true;
+ const structuredNativeFetch=window.fetch.bind(window);
  const baseStructuredApi=api;
+ let capturedStructuredError=null;
+ const structuredPath=input=>{
+  try{return new URL(typeof input==="string"?input:input.url,window.location.href).pathname}catch(_error){return ""}
+ };
  function fieldoraError(kind,code,message,correlationId,status,payload){
   const error=new Error(message||code||"Request failed");
   error.kind=kind;error.code=code||"request_failed";error.correlationId=correlationId||"";
   error.status=status||0;error.payload=payload||{};
   return error;
  }
+ function errorKind(status){
+  if(status===401||status===403)return "auth";
+  if(status===409)return "conflict";
+  if(status===400||status===413||status===416||status===422)return "validation";
+  return "server";
+ }
+ window.fetch=async function(input,init){
+  const response=await structuredNativeFetch(input,init);
+  if(!response.ok){
+   const clone=response.clone();let payload={};
+   try{payload=await clone.json()}catch(_error){}
+   capturedStructuredError={
+    path:structuredPath(input),status:response.status,payload,
+    correlationId:String(payload.correlation_id||response.headers.get("X-Correlation-ID")||"")
+   };
+  }
+  return response;
+ };
  api=async function(path,options={}){
   try{return await baseStructuredApi(path,options)}
   catch(error){
-   if(error&&error.payload&&error.code)return Promise.reject(error);
-   if(error instanceof TypeError)return Promise.reject(fieldoraError("transport","network_error","The server could not be reached. Check the connection and try again.","",0,{}));
-   return Promise.reject(error);
+   if(error instanceof TypeError){
+    capturedStructuredError=null;
+    throw fieldoraError("transport","network_error","The server could not be reached. Check the connection and try again.","",0,{});
+   }
+   const captured=capturedStructuredError;
+   capturedStructuredError=null;
+   if(!captured||captured.path!==structuredPath(path))throw error;
+   const payload=captured.payload||{};
+   const code=String(payload.code||payload.error||"request_failed");
+   const message=String(payload.message||`Request failed (${captured.status})`);
+   throw fieldoraError(errorKind(captured.status),code,message,captured.correlationId,captured.status,payload);
   }
- };
- const originalFetch=window.fetch.bind(window);
- window.fetch=async function(input,init){
-  const response=await originalFetch(input,init);
-  if(response.ok)return response;
-  const clone=response.clone();let payload={};
-  try{payload=await clone.json()}catch(_error){}
-  const code=String(payload.code||payload.error||"request_failed");
-  const correlationId=String(payload.correlation_id||response.headers.get("X-Correlation-ID")||"");
-  const message=String(payload.message||`Request failed (${response.status})`);
-  const kind=response.status===401||response.status===403?"auth":response.status===409?"conflict":response.status===400||response.status===413||response.status===416||response.status===422?"validation":"server";
-  throw fieldoraError(kind,code,message,correlationId,response.status,payload);
  };
  window.fieldoraErrorSummary=function(error){
   const suffix=error?.correlationId?` · reference ${error.correlationId}`:"";

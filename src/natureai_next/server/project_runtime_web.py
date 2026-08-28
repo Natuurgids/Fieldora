@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import json
 from urllib.parse import unquote, urlsplit
+import json
 
 from natureai_next.application.authentication import AuthenticationFailed
 from natureai_next.domain.access_control import AccessRequest

@@ -34,6 +34,7 @@ on:
       - "src/natureai_next/server/pagination.py"
       - "src/natureai_next/server/pagination_api.py"
       - "src/natureai_next/server/filtering.py"
+      - "src/natureai_next/server/postgres_web_indexes.py"
       - "src/natureai_next/server/project_idempotency.py"
       - "src/natureai_next/server/project_idempotency_web.py"
       - "src/natureai_next/server/optimistic_concurrency_web.py"
@@ -50,6 +51,7 @@ on:
       - "tests/test_web050_optimistic_concurrency.py"
       - "tests/test_web051_structured_errors.py"
       - "tests/test_web052_bounded_upload_memory.py"
+      - "tests/test_web053_postgres_indexes.py"
       - "tests/test_server_web_compatibility.py"
       - "tests/test_server_web_browser_navigation.py"
       - "tests/test_desktop_alignment_web.py"
@@ -122,6 +124,7 @@ jobs:
           src/natureai_next/server/pagination.py
           src/natureai_next/server/pagination_api.py
           src/natureai_next/server/filtering.py
+          src/natureai_next/server/postgres_web_indexes.py
           src/natureai_next/server/project_idempotency.py
           src/natureai_next/server/project_idempotency_web.py
           src/natureai_next/server/optimistic_concurrency_web.py
@@ -135,6 +138,7 @@ jobs:
           tests/test_web050_optimistic_concurrency.py
           tests/test_web051_structured_errors.py
           tests/test_web052_bounded_upload_memory.py
+          tests/test_web053_postgres_indexes.py
           tests/test_server_web_compatibility.py
           tests/test_server_web_browser_navigation.py
           tests/test_desktop_alignment_web.py
@@ -170,6 +174,9 @@ jobs:
 
       - name: WEB-052 bounded browser upload memory across browser engines
         run: python -m pytest -q tests/test_web052_bounded_upload_memory.py
+
+      - name: WEB-053 PostgreSQL constraint and index review regression
+        run: python -m pytest -q tests/test_web053_postgres_indexes.py
 
       - name: Server web and parity compatibility tests across browser engines
         run: >-

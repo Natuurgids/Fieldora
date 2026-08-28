@@ -31,11 +31,14 @@ on:
       - "src/natureai_next/server/media_detail_web.py"
       - "src/natureai_next/server/media_links.py"
       - "src/natureai_next/server/offline_first_api.py"
+      - "src/natureai_next/server/pagination.py"
+      - "src/natureai_next/server/pagination_api.py"
       - "src/natureai_next/resources/help/**"
       - "src/natureai_next/resources/server_web/**"
       - "tests/test_cross_client_parity_contract.py"
       - "tests/test_server_help_wiring.py"
       - "tests/test_web046_contextual_help.py"
+      - "tests/test_web047_pagination.py"
       - "tests/test_server_web_compatibility.py"
       - "tests/test_server_web_browser_navigation.py"
       - "tests/test_desktop_alignment_web.py"
@@ -105,8 +108,11 @@ jobs:
           src/natureai_next/server/media_detail_web.py
           src/natureai_next/server/media_links.py
           src/natureai_next/server/offline_first_api.py
+          src/natureai_next/server/pagination.py
+          src/natureai_next/server/pagination_api.py
           tests/test_cross_client_parity_contract.py
           tests/test_web046_contextual_help.py
+          tests/test_web047_pagination.py
           tests/test_server_web_compatibility.py
           tests/test_server_web_browser_navigation.py
           tests/test_desktop_alignment_web.py
@@ -124,6 +130,9 @@ jobs:
 
       - name: WEB-046 contextual Help regression across browser engines
         run: python -m pytest -q tests/test_web046_contextual_help.py tests/test_server_help_wiring.py
+
+      - name: WEB-047 bounded pagination regression
+        run: python -m pytest -q tests/test_web047_pagination.py
 
       - name: Server web and parity compatibility tests across browser engines
         run: >-

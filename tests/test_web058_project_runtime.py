@@ -248,6 +248,13 @@ def _upload_preexisting(page: Page) -> str:
     return digest
 
 
+def _open_projects(page: Page) -> None:
+    page.locator('[data-page="research"]').click()
+    page.locator("#page-research").wait_for(state="visible")
+    page.locator('#page-research [data-workspace-target="projects"]').click()
+    page.locator("#page-projects").wait_for(state="visible")
+
+
 def test_web058_project_runtime_inside_docker(tmp_path: Path) -> None:
     with _live_server(tmp_path) as (url, projects, media, access, decisions), sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
@@ -261,7 +268,7 @@ def test_web058_project_runtime_inside_docker(tmp_path: Path) -> None:
         assert evidence.project_id == ""
         assert media.associations.links(evidence.media_id, "local") == ()
 
-        page.locator('[data-page="projects"]').click()
+        _open_projects(page)
         page.locator("#portfolio-new-project").click()
         page.locator("#portfolio-project-name").fill("WEB-058 Runtime Project")
         page.locator("#portfolio-project-description").fill("Created in the real browser runtime")
@@ -293,7 +300,7 @@ def test_web058_project_runtime_inside_docker(tmp_path: Path) -> None:
 
         page.reload()
         page.locator("#workspace").wait_for(state="visible")
-        page.locator('[data-page="projects"]').click()
+        _open_projects(page)
         page.evaluate("id=>{selectedProject=id;return loadPortfolio()}", project.project_id)
         page.locator("#portfolio-edit-project").click()
         assert page.locator("#portfolio-project-lifecycle-name").input_value() == "WEB-058 Runtime Project Edited"

@@ -79,15 +79,13 @@ class PaginationApiMixin:
     def _paged_projects(self, identity, headers, limit: int, after: str) -> ApiResponse:
         purpose = headers.get("x-fieldora-purpose", "research")
         service = getattr(self, "_project_management", None)
-        scanner: Callable[[str, int], tuple]
+
         if service is not None:
-            scanner = lambda cursor, size: scan_projects(
-                service, identity.organization_id, cursor, size
-            )
+            def scanner(cursor: str, size: int) -> tuple:
+                return scan_projects(service, identity.organization_id, cursor, size)
         else:
-            scanner = lambda cursor, size: scan_science(
-                self._science, "projects", cursor, size
-            )
+            def scanner(cursor: str, size: int) -> tuple:
+                return scan_science(self._science, "projects", cursor, size)
 
         def allowed(item: dict) -> bool:
             project_id = str(item.get("id", ""))
@@ -192,9 +190,7 @@ class PaginationApiMixin:
             return platform_admin or request.get("organization_id") == identity.organization_id
 
         response = _authorized_page(
-            lambda cursor, size: scan_audit(
-                self._audit_repository, cursor, size
-            ),
+            lambda cursor, size: scan_audit(self._audit_repository, cursor, size),
             allowed,
             limit,
             after,

@@ -38,6 +38,7 @@ on:
       - "src/natureai_next/server/project_idempotency_web.py"
       - "src/natureai_next/server/optimistic_concurrency_web.py"
       - "src/natureai_next/server/structured_errors.py"
+      - "src/natureai_next/server/bounded_upload_web.py"
       - "src/natureai_next/resources/help/**"
       - "src/natureai_next/resources/server_web/**"
       - "tests/test_cross_client_parity_contract.py"
@@ -48,6 +49,7 @@ on:
       - "tests/test_web049_project_idempotency.py"
       - "tests/test_web050_optimistic_concurrency.py"
       - "tests/test_web051_structured_errors.py"
+      - "tests/test_web052_bounded_upload_memory.py"
       - "tests/test_server_web_compatibility.py"
       - "tests/test_server_web_browser_navigation.py"
       - "tests/test_desktop_alignment_web.py"
@@ -124,6 +126,7 @@ jobs:
           src/natureai_next/server/project_idempotency_web.py
           src/natureai_next/server/optimistic_concurrency_web.py
           src/natureai_next/server/structured_errors.py
+          src/natureai_next/server/bounded_upload_web.py
           tests/test_cross_client_parity_contract.py
           tests/test_web046_contextual_help.py
           tests/test_web047_pagination.py
@@ -131,6 +134,7 @@ jobs:
           tests/test_web049_project_idempotency.py
           tests/test_web050_optimistic_concurrency.py
           tests/test_web051_structured_errors.py
+          tests/test_web052_bounded_upload_memory.py
           tests/test_server_web_compatibility.py
           tests/test_server_web_browser_navigation.py
           tests/test_desktop_alignment_web.py
@@ -163,6 +167,9 @@ jobs:
 
       - name: WEB-051 structured browser error regression across browser engines
         run: python -m pytest -q tests/test_web051_structured_errors.py
+
+      - name: WEB-052 bounded browser upload memory across browser engines
+        run: python -m pytest -q tests/test_web052_bounded_upload_memory.py
 
       - name: Server web and parity compatibility tests across browser engines
         run: >-

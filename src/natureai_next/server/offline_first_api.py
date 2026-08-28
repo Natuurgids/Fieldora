@@ -6,6 +6,7 @@ import os
 from collections.abc import Callable
 
 from natureai_next.server.administration_actions_api import AdministrationActionsApiMixin
+from natureai_next.server.bounded_upload_web import BoundedUploadWebApiMixin
 from natureai_next.server.facility_actions_api import FacilityActionsApiMixin
 from natureai_next.server.filtering import FilteringApiMixin
 from natureai_next.server.knowledge_parity_api import KnowledgeParityApiMixin
@@ -36,6 +37,7 @@ from natureai_next.server.visible_control_audit_api import VisibleControlAuditAp
 
 
 class OfflineFirstFieldoraApi(
+    BoundedUploadWebApiMixin,
     OptimisticConcurrencyWebApiMixin,
     StructuredErrorApiMixin,
     ProjectIdempotencyWebApiMixin,

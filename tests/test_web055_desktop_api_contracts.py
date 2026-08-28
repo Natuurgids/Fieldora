@@ -146,7 +146,7 @@ def test_web055_real_desktop_and_server_wiring_stays_on_project_service_boundari
         encoding="utf-8"
     )
 
+    assert "self._service = ProjectManagementService(database_path)" in desktop
     assert "self._service.create_project(" in desktop
-    assert "self._service.update_project(" in desktop
     assert "wrap_project_management(project_management)" in server
     assert "ProjectIdempotencyApiMixin" in server

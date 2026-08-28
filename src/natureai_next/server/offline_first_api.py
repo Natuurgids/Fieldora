@@ -24,11 +24,16 @@ from natureai_next.server.offline_model_store_api import InstalledModelApiMixin
 from natureai_next.server.offline_sync_api import OfflineSyncApiMixin, OfflineSyncRepository
 from natureai_next.server.original_derivative_api import OriginalDerivativeApiMixin
 from natureai_next.server.pagination_api import PaginationApiMixin
+from natureai_next.server.project_idempotency import (
+    ProjectIdempotencyApiMixin,
+    wrap_project_management,
+)
 from natureai_next.server.research_records_api import ResearchRecordsApiMixin
 from natureai_next.server.visible_control_audit_api import VisibleControlAuditApiMixin
 
 
 class OfflineFirstFieldoraApi(
+    ProjectIdempotencyApiMixin,
     FilteringApiMixin,
     PaginationApiMixin,
     VisibleControlAuditApiMixin,
@@ -67,6 +72,9 @@ class OfflineFirstFieldoraApi(
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
+        self._project_management = wrap_project_management(
+            getattr(self, "_project_management", None)
+        )
         sync_factory = type(self)._offline_sync_factory
         linked_factory = type(self)._linked_storage_factory
         self._offline_sync = None if sync_factory is None else sync_factory()

@@ -22,6 +22,7 @@ from natureai_next.server.observation_parity_api import ObservationParityApiMixi
 from natureai_next.server.offline_map_store_api import InstalledMapApiMixin
 from natureai_next.server.offline_model_store_api import InstalledModelApiMixin
 from natureai_next.server.offline_sync_api import OfflineSyncApiMixin, OfflineSyncRepository
+from natureai_next.server.optimistic_concurrency_web import OptimisticConcurrencyWebApiMixin
 from natureai_next.server.original_derivative_api import OriginalDerivativeApiMixin
 from natureai_next.server.pagination_api import PaginationApiMixin
 from natureai_next.server.project_idempotency import (
@@ -34,6 +35,7 @@ from natureai_next.server.visible_control_audit_api import VisibleControlAuditAp
 
 
 class OfflineFirstFieldoraApi(
+    OptimisticConcurrencyWebApiMixin,
     ProjectIdempotencyWebApiMixin,
     ProjectIdempotencyApiMixin,
     FilteringApiMixin,

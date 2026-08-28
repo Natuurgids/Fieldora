@@ -235,6 +235,9 @@ def _upload_preexisting(page: Page) -> str:
     payload = b"pre-existing governed evidence"
     digest = hashlib.sha256(payload).hexdigest()
     page.locator('[data-page="library"]').click()
+    page.locator("#page-library").wait_for(state="visible")
+    page.locator('[data-library-view="import"]').click()
+    page.locator("#import-card").wait_for(state="visible")
     page.locator("#upload-file").set_input_files(
         {"name": "existing.jpg", "mimeType": "image/jpeg", "buffer": payload}
     )

@@ -31,11 +31,13 @@ from natureai_next.server.project_idempotency import (
 )
 from natureai_next.server.project_idempotency_web import ProjectIdempotencyWebApiMixin
 from natureai_next.server.research_records_api import ResearchRecordsApiMixin
+from natureai_next.server.structured_errors import StructuredErrorApiMixin
 from natureai_next.server.visible_control_audit_api import VisibleControlAuditApiMixin
 
 
 class OfflineFirstFieldoraApi(
     OptimisticConcurrencyWebApiMixin,
+    StructuredErrorApiMixin,
     ProjectIdempotencyWebApiMixin,
     ProjectIdempotencyApiMixin,
     FilteringApiMixin,

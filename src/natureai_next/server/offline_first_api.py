@@ -26,6 +26,7 @@ from natureai_next.server.offline_sync_api import OfflineSyncApiMixin, OfflineSy
 from natureai_next.server.optimistic_concurrency_web import OptimisticConcurrencyWebApiMixin
 from natureai_next.server.original_derivative_api import OriginalDerivativeApiMixin
 from natureai_next.server.pagination_api import PaginationApiMixin
+from natureai_next.server.postgres_web_indexes import ensure_managed_web_postgres_indexes
 from natureai_next.server.project_idempotency import (
     ProjectIdempotencyApiMixin,
     wrap_project_management,
@@ -80,9 +81,13 @@ class OfflineFirstFieldoraApi(
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        self._project_management = wrap_project_management(
-            getattr(self, "_project_management", None)
+        project_management = getattr(self, "_project_management", None)
+        ensure_managed_web_postgres_indexes(
+            project_management=project_management,
+            media=getattr(self, "_media", None),
+            science=getattr(self, "_science", None),
         )
+        self._project_management = wrap_project_management(project_management)
         sync_factory = type(self)._offline_sync_factory
         linked_factory = type(self)._linked_storage_factory
         self._offline_sync = None if sync_factory is None else sync_factory()

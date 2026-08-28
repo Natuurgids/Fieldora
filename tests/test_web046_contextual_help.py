@@ -226,7 +226,11 @@ def test_web046_f1_opens_each_expected_context_topic_in_managed_client(
         page.wait_for_selector("#workspace:not([hidden])")
 
         for page_name, topic_id in EXPECTED_CONTEXT_HELP.items():
-            page.locator(f'.nav[data-page="{page_name}"]').click()
+            page.evaluate("name => showPage(name)", page_name)
+            page.wait_for_function(
+                "name => document.getElementById(`page-${name}`)?.hidden === false",
+                arg=page_name,
+            )
             page.keyboard.press("F1")
             page.wait_for_function(
                 "expected => document.getElementById('help-title').textContent === expected",

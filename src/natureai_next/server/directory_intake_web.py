@@ -9,7 +9,7 @@ from natureai_next.server.api import ApiResponse
 _DIRECTORY_INTAKE_PATCH = bytes(
     r"""
 
-/* Fieldora folder intake: upload -> seal -> validate workers -> process workers. */
+/* Fieldora folder intake: upload -> seal -> validate workers -> process/publish workers. */
 (()=>{
  const byId=id=>document.getElementById(id);
  const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
@@ -34,13 +34,13 @@ _DIRECTORY_INTAKE_PATCH = bytes(
   for(let attempt=0;attempt<600;attempt++){
    const current=await api(`/api/v1/staged-submissions/${submissionId}`);
    const submission=current.submission||{},files=current.files||[];
-   const complete=files.filter(f=>["processed","published","rejected"].includes(f.state)).length;
-   status("upload-status",`Processing folder · ${complete}/${total} · ${submission.state||"processing"}`);
-   if(["ready_to_publish","published"].includes(submission.state))return current;
+   const complete=files.filter(f=>["published","rejected"].includes(f.state)).length;
+   status("upload-status",`Publishing folder · ${complete}/${total} · ${submission.state||"processing"}`);
+   if(submission.state==="published")return current;
    if(submission.state==="failed")throw new Error("Folder processing failed.");
    await sleep(500);
   }
-  return null;
+  throw new Error("Folder publication is still running; the submission remains queued and can continue in the background.");
  }
  async function governedFolderUpload(files){
   const project=byId("upload-project")?.value||"";
@@ -63,7 +63,7 @@ _DIRECTORY_INTAKE_PATCH = bytes(
    const rejected=(validated.files||[]).filter(f=>f.state==="rejected");
    await api(`/api/v1/staged-submissions/${sid}/process`,{method:"POST",body:"{}"});
    await waitForProcessing(sid,files.length);
-   status("upload-status",`Folder accepted · ${files.length-rejected.length} validated · ${rejected.length} rejected · paths preserved · submission ${sid}` , rejected.length>0);
+   status("upload-status",`Folder imported · ${files.length-rejected.length} published · ${rejected.length} rejected · submission ${sid}` , rejected.length>0);
    await loadMedia();
   }catch(e){status("upload-status",e.message||String(e),true)}
  }

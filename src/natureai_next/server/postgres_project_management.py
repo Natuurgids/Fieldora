@@ -571,6 +571,7 @@ class PostgresProjectManagementService:
         due_date: str = "",
         estimate_hours: float = 0,
         realized_hours: float = 0,
+        milestone: bool = False,
     ) -> str:
         if not title.strip():
             raise ValueError("task title is required")
@@ -612,7 +613,7 @@ class PostgresProjectManagementService:
                         priority,start_date,due_date,estimate_hours,budget,progress,recurrence,
                         recurrence_end,milestone,sprint,position,phase_id,sprint_id,realized_hours,
                         created_by,created_at_us,updated_at_us
-                    ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,0,0,'none','',FALSE,'',%s,%s,%s,%s,%s,%s,%s)
+                    ) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,0,0,'none','',%s,'',%s,%s,%s,%s,%s,%s,%s)
                     """,
                     (
                         task_id,
@@ -626,6 +627,7 @@ class PostgresProjectManagementService:
                         start_date,
                         due_date,
                         float(estimate_hours),
+                        bool(milestone),
                         position,
                         phase_id or None,
                         sprint_id or None,
@@ -640,7 +642,11 @@ class PostgresProjectManagementService:
                     project_id,
                     actor_id,
                     "task.created",
-                    {"task_id": task_id, "title": title.strip()},
+                    {
+                        "task_id": task_id,
+                        "title": title.strip(),
+                        "milestone": bool(milestone),
+                    },
                     task_id=task_id,
                 )
         return task_id
@@ -652,7 +658,7 @@ class PostgresProjectManagementService:
                     """
                     SELECT t.task_id,t.project_id,t.parent_task_id,t.title,t.description,
                            s.name,t.owner_id,t.priority,t.start_date,t.due_date,t.estimate_hours,
-                           t.realized_hours,t.phase_id,t.sprint_id,t.position
+                           t.realized_hours,t.phase_id,t.sprint_id,t.position,t.milestone
                     FROM pm_tasks t
                     JOIN pm_projects p ON p.project_id=t.project_id
                     JOIN pm_statuses s ON s.status_id=t.status_id
@@ -680,6 +686,7 @@ class PostgresProjectManagementService:
                 "phase_id": "" if row[12] is None else str(row[12]),
                 "sprint_id": "" if row[13] is None else str(row[13]),
                 "position": int(row[14]),
+                "milestone": bool(row[15]),
             }
             for row in rows
         )

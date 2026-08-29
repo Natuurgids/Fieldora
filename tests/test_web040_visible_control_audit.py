@@ -9,7 +9,9 @@ import pytest
 from playwright.sync_api import sync_playwright
 
 from natureai_next.server.api import ApiResponse
+from natureai_next.server.observation_actions_api import ObservationActionsApiMixin
 from natureai_next.server.offline_first_api import OfflineFirstFieldoraApi
+from natureai_next.server.pagination_api import PaginationApiMixin
 from natureai_next.server.visible_control_audit_api import VisibleControlAuditApiMixin
 from natureai_next.server.visible_control_audit_web import (
     patch_visible_control_audit_response,
@@ -66,7 +68,10 @@ def _fixture(tmp_path: Path):
 
 
 def test_visible_control_audit_wraps_final_managed_composition() -> None:
-    assert OfflineFirstFieldoraApi.__mro__[1] is VisibleControlAuditApiMixin
+    mro = OfflineFirstFieldoraApi.__mro__
+    assert VisibleControlAuditApiMixin in mro
+    assert mro.index(PaginationApiMixin) < mro.index(VisibleControlAuditApiMixin)
+    assert mro.index(VisibleControlAuditApiMixin) < mro.index(ObservationActionsApiMixin)
 
 
 def test_patch_is_idempotent_and_only_targets_app_bundle() -> None:

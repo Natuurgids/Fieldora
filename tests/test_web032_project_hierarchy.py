@@ -192,13 +192,14 @@ def _browser_fixture(tmp_path: Path):
 
     server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
+    server_thread = thread
+    server_thread.start()
     try:
         yield f"http://127.0.0.1:{server.server_port}/"
     finally:
         server.shutdown()
         server.server_close()
-        thread.join(timeout=5)
+        server_thread.join(timeout=5)
 
 
 def test_web032_contextual_browser_actions_fill_selected_relationships(tmp_path: Path) -> None:
@@ -216,12 +217,19 @@ def test_web032_contextual_browser_actions_fill_selected_relationships(tmp_path:
         assert actions.get_by_role("button", name="＋ New sprint").count() == 1
         assert actions.get_by_role("button", name="＋ New allocation").count() == 1
 
+        actions.get_by_role("button", name="＋ New phase").click()
+        page.locator("#project-child-name").fill("Survey phase")
+        page.get_by_role("button", name="Create phase").click()
+        page.wait_for_function("window.calls.length === 1")
+        assert page.evaluate("window.calls[0].path") == "/api/v1/phases"
+        assert page.evaluate("window.calls[0].record.project_id") == "project-1"
+
         page.locator("#phase-row").click()
         actions.get_by_role("button", name="＋ New task").click()
         page.locator("#project-child-title").fill("Transect")
         page.get_by_role("button", name="Create task").click()
-        page.wait_for_function("window.calls.length === 1")
-        assert page.evaluate("window.calls[0]") == {
+        page.wait_for_function("window.calls.length === 2")
+        assert page.evaluate("window.calls[1]") == {
             "path": "/api/v1/tasks",
             "record": {
                 "project_id": "project-1",
@@ -237,15 +245,21 @@ def test_web032_contextual_browser_actions_fill_selected_relationships(tmp_path:
         actions.get_by_role("button", name="＋ New subtask").click()
         page.locator("#project-child-title").fill("Photograph")
         page.get_by_role("button", name="Create subtask").click()
-        page.wait_for_function("window.calls.length === 2")
-        assert page.evaluate("window.calls[1].record.parent_task_id") == "task-1"
+        page.wait_for_function("window.calls.length === 3")
+        assert page.evaluate("window.calls[2].record.parent_task_id") == "task-1"
+
+        actions.get_by_role("button", name="＋ New sprint").click()
+        page.locator("#project-child-name").fill("Spring round")
+        page.get_by_role("button", name="Create sprint").click()
+        page.wait_for_function("window.calls.length === 4")
+        assert page.evaluate("window.calls[3].path") == "/api/v1/sprints"
 
         page.locator("#phase-row").click()
         actions.get_by_role("button", name="＋ New allocation").click()
         page.locator("#project-child-user").fill("researcher-1")
         page.locator("#project-child-start").fill("2026-09-01")
         page.get_by_role("button", name="Create allocation").click()
-        page.wait_for_function("window.calls.length === 3")
-        assert page.evaluate("window.calls[2].record.phase_id") == "phase-1"
-        assert page.evaluate("window.portfolioReloads") == 3
+        page.wait_for_function("window.calls.length === 5")
+        assert page.evaluate("window.calls[4].record.phase_id") == "phase-1"
+        assert page.evaluate("window.portfolioReloads") == 5
         browser.close()

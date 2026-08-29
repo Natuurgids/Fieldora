@@ -37,7 +37,7 @@ _PROJECT_HIERARCHY_PATCH = bytes(
   window.__fieldoraProjectHierarchyWired=true;
   let selectedWork={kind:"project",id:"",projectId:""};
   const actions=document.createElement("div");actions.id="project-hierarchy-actions";actions.className="actions";actions.dataset.fieldoraAuthorizationHidden="true";
-  actions.innerHTML='<button type="button" data-project-child="phase">New phase</button><button type="button" data-project-child="task">New task</button><button type="button" data-project-child="subtask" hidden>New subtask</button><button type="button" data-project-child="sprint">New sprint</button><button type="button" data-project-child="allocation">New allocation</button>';
+  actions.innerHTML='<button type="button" data-project-child="phase">New phase</button><button type="button" data-project-child="task">New task</button><button type="button" data-project-child="milestone">New milestone</button><button type="button" data-project-child="subtask" hidden>New subtask</button><button type="button" data-project-child="sprint">New sprint</button><button type="button" data-project-child="allocation">New allocation</button>';
   toolbar.prepend(actions);
   const editor=document.createElement("section");editor.id="project-hierarchy-editor";editor.className="card section";editor.hidden=true;cockpit.before(editor);
   function projectId(){return selectedProject||selectedWork.projectId||""}
@@ -65,7 +65,8 @@ _PROJECT_HIERARCHY_PATCH = bytes(
   }
   function rowHtml(item,kind,depth,label){
    const due=item.due_date||item.end_date||"";
-   return `<div class="row" data-portfolio-id="${esc(item.id)}" data-project-id="${esc(item.project_id)}" data-kind="${esc(kind)}"><strong>${" ".repeat(depth)}${depth?"↳ ":""}${esc(label)}</strong><span>${esc(kind==="task"?(item.assignee_id||""):kind[0].toUpperCase()+kind.slice(1))}</span><span>${esc(item.status||due)}</span></div>`;
+   const workLabel=kind==="task"&&item.milestone?`Milestone · ${label}`:label;
+   return `<div class="row" data-portfolio-id="${esc(item.id)}" data-project-id="${esc(item.project_id)}" data-kind="${esc(kind)}"><strong>${" ".repeat(depth)}${depth?"↳ ":""}${esc(workLabel)}</strong><span>${esc(kind==="task"?(item.assignee_id||""):kind[0].toUpperCase()+kind.slice(1))}</span><span>${esc(item.status||due)}</span></div>`;
   }
   function renderHierarchy(){
    if(typeof portfolioView!=="undefined"&&portfolioView!=="hierarchy")return;
@@ -100,10 +101,10 @@ _PROJECT_HIERARCHY_PATCH = bytes(
    if(!projectId()&&projects?.length)setSelection("project",projects[0].id,projects[0].id);
    else authority();
   };
-  function labelFor(kind){return ({phase:"phase",task:"task",subtask:"subtask",sprint:"sprint",allocation:"allocation"})[kind]||kind}
+  function labelFor(kind){return ({phase:"phase",task:"task",milestone:"milestone",subtask:"subtask",sprint:"sprint",allocation:"allocation"})[kind]||kind}
   function relationshipNote(kind){
    if(kind==="subtask")return `Parent task: ${selectedWork.id}`;
-   if(kind==="task"&&selectedWork.kind==="phase")return `Phase: ${selectedWork.id}`;
+   if((kind==="task"||kind==="milestone")&&selectedWork.kind==="phase")return `Phase: ${selectedWork.id}`;
    if(kind==="allocation"&&selectedWork.kind==="phase")return `Phase: ${selectedWork.id}`;
    return "Selected project";
   }
@@ -113,7 +114,7 @@ _PROJECT_HIERARCHY_PATCH = bytes(
    const common=`<p class="muted">${esc(relationshipNote(kind))}</p>`;
    let fields="";
    if(kind==="phase")fields='<label>Name<input id="project-child-name" autocomplete="off"></label><label>Description<textarea id="project-child-description"></textarea></label>';
-   if(kind==="task"||kind==="subtask")fields='<label>Title<input id="project-child-title" autocomplete="off"></label><label>Description<textarea id="project-child-description"></textarea></label><label>Owner<input id="project-child-owner" autocomplete="off"></label><label>Due date<input id="project-child-due" type="date"></label>';
+   if(kind==="task"||kind==="milestone"||kind==="subtask")fields='<label>Title<input id="project-child-title" autocomplete="off"></label><label>Description<textarea id="project-child-description"></textarea></label><label>Owner<input id="project-child-owner" autocomplete="off"></label><label>Due date<input id="project-child-due" type="date"></label>';
    if(kind==="sprint")fields='<label>Name<input id="project-child-name" autocomplete="off"></label><label>Start date<input id="project-child-start" type="date"></label><label>End date<input id="project-child-end" type="date"></label><label>Goal<textarea id="project-child-goal"></textarea></label>';
    if(kind==="allocation")fields='<label>User<input id="project-child-user" autocomplete="off"></label><label>Start date<input id="project-child-start" type="date"></label><label>End date<input id="project-child-end" type="date"></label><label>Hours / week<input id="project-child-hours" type="number" min="0" step="0.25" value="0"></label><label>Allocation %<input id="project-child-percent" type="number" min="0" step="1" value="0"></label><label>Role<input id="project-child-role" autocomplete="off"></label>';
    editor.dataset.kind=kind;editor.innerHTML=`<h2>New ${esc(labelFor(kind))}</h2>${common}<div class="form-grid">${fields}</div><div class="actions section"><button id="project-child-save" class="primary" type="button">Create ${esc(labelFor(kind))}</button><button id="project-child-cancel" type="button">Cancel</button></div><p id="project-child-message" class="status"></p>`;editor.hidden=false;
@@ -126,8 +127,9 @@ _PROJECT_HIERARCHY_PATCH = bytes(
    let path="",record={project_id:pid};
    if(kind==="phase"){
     record.name=q("project-child-name").value.trim();record.description=q("project-child-description").value.trim();path="/api/v1/phases";if(!record.name)return fail("Phase name is required.");
-   }else if(kind==="task"||kind==="subtask"){
+   }else if(kind==="task"||kind==="milestone"||kind==="subtask"){
     record.title=q("project-child-title").value.trim();record.description=q("project-child-description").value.trim();record.owner_id=q("project-child-owner").value.trim();record.due_date=q("project-child-due").value;path="/api/v1/tasks";if(!record.title)return fail("Task title is required.");
+    if(kind==="milestone")record.milestone=true;
     if(kind==="subtask")record.parent_task_id=selectedWork.id;else if(selectedWork.kind==="phase")record.phase_id=selectedWork.id;
    }else if(kind==="sprint"){
     record.name=q("project-child-name").value.trim();record.start_date=q("project-child-start").value;record.end_date=q("project-child-end").value;record.goal=q("project-child-goal").value.trim();path="/api/v1/sprints";if(!record.name)return fail("Sprint name is required.");
@@ -320,6 +322,7 @@ class ProjectHierarchyWebApiMixin:
                     realized_hours=float(
                         record.get("realized_hours") or record.get("realized") or 0
                     ),
+                    milestone=record.get("milestone") is True,
                 )
             elif resource_type == "sprint":
                 created_id = self._project_management.create_sprint(

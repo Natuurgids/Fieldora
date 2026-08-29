@@ -27,7 +27,6 @@ from natureai_next.server.operator_control import (
     PostgresOperatorRepository,
     SqliteOperatorRepository,
 )
-from natureai_next.server.platform_extensions import ProjectOptionalStagedIngestionStore
 from natureai_next.server.postgres_linked_preview import PostgresLinkedPreviewLeases
 from natureai_next.server.postgres_linked_storage import PostgresLinkedStorageRepository
 from natureai_next.server.postgres_offline_sync import PostgresOfflineSyncStore
@@ -35,6 +34,11 @@ from natureai_next.server.postgres_project_management import (
     PostgresProjectManagementService,
 )
 from natureai_next.server.service_runtime import ServiceRuntimeSupervisor
+from natureai_next.server.staged_library_publication import (
+    PublishingGovernedMediaStore,
+    PublishingProjectOptionalStagedIngestionStore,
+    PublishingStagedIngestionService,
+)
 from natureai_next.server.storage_service_runtime import (
     StorageServiceListenerConfig,
     StorageServiceListenerRuntime,
@@ -59,6 +63,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     storage_listener = _storage_service_listener(arguments, command)
     base_administration = server_cli.AccessAdministrationService
     base_run_one_job = server_cli.run_one_job
+    base_media_store = server_cli.GovernedMediaStore
+    base_staged_store = server_cli.StagedIngestionStore
+    base_staged_service = server_cli.StagedIngestionService
 
     class TrackingAdministration(base_administration):
         def __init__(self, repository: Any) -> None:
@@ -81,7 +88,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     OfflineFirstFieldoraApi.configure_linked_storage(linked_storage_factory)
     OfflineFirstFieldoraApi.configure_project_management(project_management_factory)
     server_cli.FieldoraApi = OfflineFirstFieldoraApi
-    server_cli.StagedIngestionStore = ProjectOptionalStagedIngestionStore
+    server_cli.GovernedMediaStore = PublishingGovernedMediaStore
+    server_cli.StagedIngestionStore = PublishingProjectOptionalStagedIngestionStore
+    server_cli.StagedIngestionService = PublishingStagedIngestionService
     server_cli.AccessAdministrationService = TrackingAdministration
     if command == "run-job-worker" and supervisor is not None:
         server_cli.run_one_job = guarded_run_one_job
@@ -101,7 +110,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         OfflineFirstFieldoraApi.configure_linked_storage(None)
         OfflineFirstFieldoraApi.configure_project_management(None)
         server_cli.FieldoraApi = BrowserFunctionalityFieldoraApi
-        server_cli.StagedIngestionStore = ProjectOptionalStagedIngestionStore
+        server_cli.GovernedMediaStore = base_media_store
+        server_cli.StagedIngestionStore = base_staged_store
+        server_cli.StagedIngestionService = base_staged_service
         server_cli.AccessAdministrationService = base_administration
         server_cli.run_one_job = base_run_one_job
 

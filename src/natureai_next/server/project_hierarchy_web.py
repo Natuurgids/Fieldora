@@ -35,12 +35,71 @@ _PROJECT_HIERARCHY_PATCH = bytes(
   const cockpit=q("project-desktop-cockpit");if(!cockpit)return false;
   const toolbar=cockpit.querySelector(".cockpit-center .cockpit-toolbar");if(!toolbar)return false;
   window.__fieldoraProjectHierarchyWired=true;
-  let selectedWork={kind:"project",id:""};
+  let selectedWork={kind:"project",id:"",projectId:""};
   const actions=document.createElement("div");actions.id="project-hierarchy-actions";actions.className="actions";actions.dataset.fieldoraAuthorizationHidden="true";
   actions.innerHTML='<button type="button" data-project-child="phase">New phase</button><button type="button" data-project-child="task">New task</button><button type="button" data-project-child="subtask" hidden>New subtask</button><button type="button" data-project-child="sprint">New sprint</button><button type="button" data-project-child="allocation">New allocation</button>';
   toolbar.prepend(actions);
   const editor=document.createElement("section");editor.id="project-hierarchy-editor";editor.className="card section";editor.hidden=true;cockpit.before(editor);
-  function projectId(){return selectedProject||""}
+  function projectId(){return selectedProject||selectedWork.projectId||""}
+  function portfolioData(){
+   const list=q("portfolio-list");
+   return {
+    phases:JSON.parse(list?.dataset.phases||"[]"),
+    tasks:JSON.parse(list?.dataset.tasks||"[]"),
+    sprints:JSON.parse(list?.dataset.sprints||"[]")
+   };
+  }
+  function projectFor(kind,id,row){
+   if(row?.dataset.projectId)return row.dataset.projectId;
+   if(kind==="project")return id;
+   const data=portfolioData();
+   const source=kind==="phase"?data.phases:kind==="sprint"?data.sprints:data.tasks;
+   return String(source.find(item=>String(item.id)===String(id))?.project_id||"");
+  }
+  function setSelection(kind,id,pid){
+   selectedWork={kind,id,projectId:pid};
+   if(pid)selectedProject=pid;
+   const sub=actions.querySelector('[data-project-child="subtask"]');
+   if(sub)sub.hidden=kind!=="task";
+   setTimeout(authority,0);
+  }
+  function rowHtml(item,kind,depth,label){
+   const due=item.due_date||item.end_date||"";
+   return `<div class="row" data-portfolio-id="${esc(item.id)}" data-project-id="${esc(item.project_id)}" data-kind="${esc(kind)}"><strong>${" ".repeat(depth)}${depth?"↳ ":""}${esc(label)}</strong><span>${esc(kind==="task"?(item.assignee_id||""):kind[0].toUpperCase()+kind.slice(1))}</span><span>${esc(item.status||due)}</span></div>`;
+  }
+  function renderHierarchy(){
+   if(typeof portfolioView!=="undefined"&&portfolioView!=="hierarchy")return;
+   const list=q("portfolio-list");if(!list)return;
+   const data=portfolioData(),scope=q("portfolio-scope")?.value||"all";
+   let visible=(projects||[]);
+   if(scope==="mine"&&me)visible=visible.filter(p=>!p.owner_id||p.owner_id===me.identity_id||data.tasks.some(t=>t.project_id===p.id&&t.assignee_id===me.identity_id));
+   const out=[];
+   const taskChildren=new Map();
+   data.tasks.forEach(task=>{const parent=String(task.parent_task_id||"");if(!taskChildren.has(parent))taskChildren.set(parent,[]);taskChildren.get(parent).push(task)});
+   const addTasks=(items,depth)=>{
+    for(const task of items){
+     out.push(rowHtml(task,"task",depth,task.name||task.title||task.id));
+     addTasks((taskChildren.get(String(task.id))||[]).filter(child=>child.project_id===task.project_id),depth+1);
+    }
+   };
+   for(const project of visible){
+    out.push(rowHtml({...project,project_id:project.id},"project",0,project.name||project.title||project.id));
+    const phases=data.phases.filter(item=>item.project_id===project.id);
+    for(const phase of phases){
+     out.push(rowHtml(phase,"phase",1,phase.name||phase.title||phase.id));
+     addTasks(data.tasks.filter(task=>task.project_id===project.id&&task.phase_id===phase.id&&!task.parent_task_id),2);
+    }
+    addTasks(data.tasks.filter(task=>task.project_id===project.id&&!task.phase_id&&!task.parent_task_id),1);
+   }
+   list.innerHTML=out.join("")||'<p class="empty">No accessible work.</p>';
+  }
+  const priorLoadPortfolio=loadPortfolio;
+  loadPortfolio=async function(){
+   await priorLoadPortfolio();
+   renderHierarchy();
+   if(!projectId()&&projects?.length)setSelection("project",projects[0].id,projects[0].id);
+   else authority();
+  };
   function labelFor(kind){return ({phase:"phase",task:"task",subtask:"subtask",sprint:"sprint",allocation:"allocation"})[kind]||kind}
   function relationshipNote(kind){
    if(kind==="subtask")return `Parent task: ${selectedWork.id}`;
@@ -84,11 +143,11 @@ _PROJECT_HIERARCHY_PATCH = bytes(
   actions.querySelectorAll("[data-project-child]").forEach(button=>button.onclick=()=>openEditor(button.dataset.projectChild));
   document.addEventListener("click",event=>{
    const row=event.target.closest?.("[data-portfolio-id]");
-   if(row){selectedWork={kind:row.dataset.kind||"",id:row.dataset.portfolioId||""};const sub=actions.querySelector('[data-project-child="subtask"]');if(sub)sub.hidden=selectedWork.kind!=="task";return}
-   const project=event.target.closest?.("[data-project-tree]");if(project){selectedWork={kind:"project",id:project.dataset.projectTree||""};const sub=actions.querySelector('[data-project-child="subtask"]');if(sub)sub.hidden=true;setTimeout(authority,0)}
+   if(row){const kind=row.dataset.kind||"",id=row.dataset.portfolioId||"",pid=projectFor(kind,id,row);setSelection(kind,id,pid);return}
+   const project=event.target.closest?.("[data-project-tree]");if(project){const id=project.dataset.projectTree||"";setSelection("project",id,id)}
   },true);
   const tree=q("project-cockpit-tree");if(tree)new MutationObserver(()=>setTimeout(authority,0)).observe(tree,{childList:true,subtree:true});
-  authority();return true;
+  renderHierarchy();authority();return true;
  }
  if(!mount()){
   const observer=new MutationObserver(()=>{if(mount())observer.disconnect()});
@@ -231,16 +290,36 @@ class ProjectHierarchyWebApiMixin:
                     str(record.get("title") or record.get("name") or ""),
                     organization_id=identity.organization_id,
                     actor_id=identity.identity_id,
-                    parent_task_id=(str(record["parent_task_id"]).strip() if record.get("parent_task_id") else None),
-                    phase_id=(str(record["phase_id"]).strip() if record.get("phase_id") else None),
-                    sprint_id=(str(record["sprint_id"]).strip() if record.get("sprint_id") else None),
-                    owner_id=str(record.get("owner_id") or record.get("assignee_id") or ""),
+                    parent_task_id=(
+                        str(record["parent_task_id"]).strip()
+                        if record.get("parent_task_id")
+                        else None
+                    ),
+                    phase_id=(
+                        str(record["phase_id"]).strip()
+                        if record.get("phase_id")
+                        else None
+                    ),
+                    sprint_id=(
+                        str(record["sprint_id"]).strip()
+                        if record.get("sprint_id")
+                        else None
+                    ),
+                    owner_id=str(
+                        record.get("owner_id") or record.get("assignee_id") or ""
+                    ),
                     description=str(record.get("description", "")),
                     priority=str(record.get("priority", "normal")),
                     start_date=str(record.get("start_date", "")),
                     due_date=str(record.get("due_date", "")),
-                    estimate_hours=float(record.get("estimate_hours") or record.get("manual_estimate") or 0),
-                    realized_hours=float(record.get("realized_hours") or record.get("realized") or 0),
+                    estimate_hours=float(
+                        record.get("estimate_hours")
+                        or record.get("manual_estimate")
+                        or 0
+                    ),
+                    realized_hours=float(
+                        record.get("realized_hours") or record.get("realized") or 0
+                    ),
                 )
             elif resource_type == "sprint":
                 created_id = self._project_management.create_sprint(
@@ -262,18 +341,28 @@ class ProjectHierarchyWebApiMixin:
                     start_date=str(record.get("start_date", "")),
                     end_date=str(record.get("end_date", "")),
                     hours_per_week=float(record.get("hours_per_week", 0) or 0),
-                    allocation_percent=float(record.get("allocation_percent", 0) or 0),
+                    allocation_percent=float(
+                        record.get("allocation_percent", 0) or 0
+                    ),
                     role=str(record.get("role", "")),
-                    phase_id=(str(record["phase_id"]).strip() if record.get("phase_id") else None),
+                    phase_id=(
+                        str(record["phase_id"]).strip()
+                        if record.get("phase_id")
+                        else None
+                    ),
                 )
         except KeyError:
             return ApiResponse.json(404, {"error": "not_found"})
         except (TypeError, ValueError) as exc:
-            return ApiResponse.json(400, {"error": "invalid_request", "detail": str(exc)})
+            return ApiResponse.json(
+                400, {"error": "invalid_request", "detail": str(exc)}
+            )
         item = next(
             (
                 dict(raw)
-                for raw in getattr(self._project_management, list_name)(identity.organization_id)
+                for raw in getattr(self._project_management, list_name)(
+                    identity.organization_id
+                )
                 if str(raw.get("id", "")) == created_id
             ),
             None,
@@ -283,7 +372,9 @@ class ProjectHierarchyWebApiMixin:
         return ApiResponse.json(201, {"item": item})
 
     @staticmethod
-    def _patch_project_hierarchy_response(target: str, response: ApiResponse) -> ApiResponse:
+    def _patch_project_hierarchy_response(
+        target: str, response: ApiResponse
+    ) -> ApiResponse:
         if (
             urlsplit(target).path != "/app.js"
             or response.status != 200

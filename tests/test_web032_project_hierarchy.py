@@ -56,6 +56,7 @@ class _ProjectManagement:
             "parent_task_id": kwargs.get("parent_task_id") or "",
             "phase_id": kwargs.get("phase_id") or "",
             "sprint_id": kwargs.get("sprint_id") or "",
+            "milestone": bool(kwargs.get("milestone", False)),
         }
         self._items["tasks"].append(item)
         self.created.append(("task", {"project_id": project_id, "title": title, **kwargs}))
@@ -115,6 +116,16 @@ def test_web032_managed_child_routes_preserve_hierarchy_relationships() -> None:
     assert _post(
         api,
         "/api/v1/tasks",
+        {
+            "project_id": "project-1",
+            "title": "Field complete",
+            "phase_id": "phase-1",
+            "milestone": True,
+        },
+    ).status == 201
+    assert _post(
+        api,
+        "/api/v1/tasks",
         {"project_id": "project-1", "title": "Photograph", "parent_task_id": "task-1"},
     ).status == 201
     assert _post(
@@ -135,7 +146,9 @@ def test_web032_managed_child_routes_preserve_hierarchy_relationships() -> None:
 
     tasks = api._project_management.tasks("org-1")
     assert tasks[0]["phase_id"] == "phase-1"
-    assert tasks[1]["parent_task_id"] == "task-1"
+    assert tasks[1]["phase_id"] == "phase-1"
+    assert tasks[1]["milestone"] is True
+    assert tasks[2]["parent_task_id"] == "task-1"
     allocation = api._project_management.allocations("org-1")[0]
     assert allocation["project_id"] == "project-1"
     created_allocation = api._project_management.created[-1][1]
@@ -147,7 +160,7 @@ def test_web032_direct_child_mutation_is_independently_denied() -> None:
     response = _post(
         api,
         "/api/v1/tasks",
-        {"project_id": "project-1", "title": "Must not be created"},
+        {"project_id": "project-1", "title": "Must not be created", "milestone": True},
     )
     assert response.status == 403
     assert json.loads(response.body) == {"error": "forbidden"}
@@ -220,6 +233,7 @@ def test_web032_contextual_browser_actions_fill_selected_relationships(tmp_path:
         for kind, label in (
             ("phase", "New phase"),
             ("task", "New task"),
+            ("milestone", "New milestone"),
             ("sprint", "New sprint"),
             ("allocation", "New allocation"),
         ):
@@ -251,27 +265,44 @@ def test_web032_contextual_browser_actions_fill_selected_relationships(tmp_path:
             },
         }
 
+        actions.locator('[data-project-child="milestone"]').click()
+        page.locator("#project-child-title").fill("Field complete")
+        page.get_by_role("button", name="Create milestone").click()
+        page.wait_for_function("window.calls.length === 3")
+        assert page.evaluate("window.calls[2]") == {
+            "path": "/api/v1/tasks",
+            "record": {
+                "project_id": "project-1",
+                "title": "Field complete",
+                "description": "",
+                "owner_id": "",
+                "due_date": "",
+                "milestone": True,
+                "phase_id": "phase-1",
+            },
+        }
+
         page.locator("#task-row").click()
         subtask = actions.locator('[data-project-child="subtask"]')
         assert not subtask.is_hidden()
         subtask.click()
         page.locator("#project-child-title").fill("Photograph")
         page.get_by_role("button", name="Create subtask").click()
-        page.wait_for_function("window.calls.length === 3")
-        assert page.evaluate("window.calls[2].record.parent_task_id") == "task-1"
+        page.wait_for_function("window.calls.length === 4")
+        assert page.evaluate("window.calls[3].record.parent_task_id") == "task-1"
 
         actions.locator('[data-project-child="sprint"]').click()
         page.locator("#project-child-name").fill("Spring round")
         page.get_by_role("button", name="Create sprint").click()
-        page.wait_for_function("window.calls.length === 4")
-        assert page.evaluate("window.calls[3].path") == "/api/v1/sprints"
+        page.wait_for_function("window.calls.length === 5")
+        assert page.evaluate("window.calls[4].path") == "/api/v1/sprints"
 
         page.locator("#phase-row").click()
         actions.locator('[data-project-child="allocation"]').click()
         page.locator("#project-child-user").fill("researcher-1")
         page.locator("#project-child-start").fill("2026-09-01")
         page.get_by_role("button", name="Create allocation").click()
-        page.wait_for_function("window.calls.length === 5")
-        assert page.evaluate("window.calls[4].record.phase_id") == "phase-1"
-        assert page.evaluate("window.portfolioReloads") == 5
+        page.wait_for_function("window.calls.length === 6")
+        assert page.evaluate("window.calls[5].record.phase_id") == "phase-1"
+        assert page.evaluate("window.portfolioReloads") == 6
         browser.close()

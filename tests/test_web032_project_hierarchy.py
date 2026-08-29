@@ -161,10 +161,7 @@ def test_web032_direct_child_mutation_is_independently_denied() -> None:
 @contextlib.contextmanager
 def _browser_fixture(tmp_path: Path):
     html = """<!doctype html><html><body>
-    <section id="project-desktop-cockpit">
-      <section class="cockpit-center"><div class="cockpit-toolbar"></div></section>
-      <div id="project-cockpit-tree"><button data-project-tree="project-1">Project</button></div>
-    </section>
+    <main id="page-projects"></main>
     <button id="phase-row" data-portfolio-id="phase-1" data-kind="phase">Survey</button>
     <button id="task-row" data-portfolio-id="task-1" data-kind="task">Transect</button>
     <script>
@@ -177,7 +174,15 @@ def _browser_fixture(tmp_path: Path):
         return {items:[]};
       }
       async function loadPortfolio(){window.portfolioReloads++}
-    </script><script src="/app.js"></script>
+    </script>
+    <script src="/app.js"></script>
+    <script>
+      setTimeout(()=>{
+        const cockpit=document.createElement("section");cockpit.id="project-desktop-cockpit";
+        cockpit.innerHTML='<section class="cockpit-center"><div class="cockpit-toolbar"></div></section><div id="project-cockpit-tree"><button data-project-tree="project-1">Project</button></div>';
+        document.getElementById("page-projects").appendChild(cockpit);
+      },0);
+    </script>
     </body></html>"""
     (tmp_path / "index.html").write_text(html, encoding="utf-8")
     app = _Api().dispatch("GET", "/app.js", {}, b"")
@@ -192,14 +197,13 @@ def _browser_fixture(tmp_path: Path):
 
     server = ThreadingHTTPServer(("127.0.0.1", 0), handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
-    server_thread = thread
-    server_thread.start()
+    thread.start()
     try:
         yield f"http://127.0.0.1:{server.server_port}/"
     finally:
         server.shutdown()
         server.server_close()
-        server_thread.join(timeout=5)
+        thread.join(timeout=5)
 
 
 def test_web032_contextual_browser_actions_fill_selected_relationships(tmp_path: Path) -> None:
@@ -208,16 +212,22 @@ def test_web032_contextual_browser_actions_fill_selected_relationships(tmp_path:
         page = browser.new_page()
         page.goto(url)
 
+        page.wait_for_selector("#project-hierarchy-actions")
         actions = page.locator("#project-hierarchy-actions")
         page.wait_for_function(
             "document.querySelector('#project-hierarchy-actions').dataset.fieldoraAuthorizationHidden === 'false'"
         )
-        assert actions.get_by_role("button", name="＋ New phase").count() == 1
-        assert actions.get_by_role("button", name="＋ New task").count() == 1
-        assert actions.get_by_role("button", name="＋ New sprint").count() == 1
-        assert actions.get_by_role("button", name="＋ New allocation").count() == 1
+        for kind, label in (
+            ("phase", "New phase"),
+            ("task", "New task"),
+            ("sprint", "New sprint"),
+            ("allocation", "New allocation"),
+        ):
+            button = actions.locator(f'[data-project-child="{kind}"]')
+            assert button.count() == 1
+            assert button.inner_text() == label
 
-        actions.get_by_role("button", name="＋ New phase").click()
+        actions.locator('[data-project-child="phase"]').click()
         page.locator("#project-child-name").fill("Survey phase")
         page.get_by_role("button", name="Create phase").click()
         page.wait_for_function("window.calls.length === 1")
@@ -225,7 +235,7 @@ def test_web032_contextual_browser_actions_fill_selected_relationships(tmp_path:
         assert page.evaluate("window.calls[0].record.project_id") == "project-1"
 
         page.locator("#phase-row").click()
-        actions.get_by_role("button", name="＋ New task").click()
+        actions.locator('[data-project-child="task"]').click()
         page.locator("#project-child-title").fill("Transect")
         page.get_by_role("button", name="Create task").click()
         page.wait_for_function("window.calls.length === 2")
@@ -242,20 +252,22 @@ def test_web032_contextual_browser_actions_fill_selected_relationships(tmp_path:
         }
 
         page.locator("#task-row").click()
-        actions.get_by_role("button", name="＋ New subtask").click()
+        subtask = actions.locator('[data-project-child="subtask"]')
+        assert not subtask.is_hidden()
+        subtask.click()
         page.locator("#project-child-title").fill("Photograph")
         page.get_by_role("button", name="Create subtask").click()
         page.wait_for_function("window.calls.length === 3")
         assert page.evaluate("window.calls[2].record.parent_task_id") == "task-1"
 
-        actions.get_by_role("button", name="＋ New sprint").click()
+        actions.locator('[data-project-child="sprint"]').click()
         page.locator("#project-child-name").fill("Spring round")
         page.get_by_role("button", name="Create sprint").click()
         page.wait_for_function("window.calls.length === 4")
         assert page.evaluate("window.calls[3].path") == "/api/v1/sprints"
 
         page.locator("#phase-row").click()
-        actions.get_by_role("button", name="＋ New allocation").click()
+        actions.locator('[data-project-child="allocation"]').click()
         page.locator("#project-child-user").fill("researcher-1")
         page.locator("#project-child-start").fill("2026-09-01")
         page.get_by_role("button", name="Create allocation").click()

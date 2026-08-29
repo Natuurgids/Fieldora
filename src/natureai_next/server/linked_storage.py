@@ -14,10 +14,10 @@ import mimetypes
 import os
 import sqlite3
 import time
+from collections.abc import Iterable, Iterator
 from dataclasses import asdict, dataclass
 from pathlib import Path, PurePosixPath
 from threading import RLock
-from typing import Iterable, Iterator
 from uuid import uuid4
 
 from PIL import Image, ImageOps

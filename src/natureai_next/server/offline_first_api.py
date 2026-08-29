@@ -27,6 +27,7 @@ from natureai_next.server.optimistic_concurrency_web import OptimisticConcurrenc
 from natureai_next.server.original_derivative_api import OriginalDerivativeApiMixin
 from natureai_next.server.pagination_api import PaginationApiMixin
 from natureai_next.server.postgres_web_indexes import ensure_managed_web_postgres_indexes
+from natureai_next.server.project_hierarchy_web import ProjectHierarchyWebApiMixin
 from natureai_next.server.project_idempotency import (
     ProjectIdempotencyApiMixin,
     wrap_project_management,
@@ -40,6 +41,7 @@ from natureai_next.server.visible_control_audit_api import VisibleControlAuditAp
 
 class OfflineFirstFieldoraApi(
     BoundedUploadWebApiMixin,
+    ProjectHierarchyWebApiMixin,
     ProjectRuntimeWebApiMixin,
     OptimisticConcurrencyWebApiMixin,
     StructuredErrorApiMixin,

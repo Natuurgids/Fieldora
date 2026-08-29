@@ -103,7 +103,13 @@ function Invoke-PrivateCaCurl([string]$Path, [switch]$DiscardBody) {
     $caPath = Join-Path $InstallRoot 'service-trust/ca-certificate.pem'
     if (-not (Test-Path -LiteralPath $caPath)) { throw "Fieldora public CA is missing at $caPath." }
     $curl = if ($IsWindows) { Get-Command curl.exe -ErrorAction Stop } else { Get-Command curl -ErrorAction Stop }
-    $args = @('--fail','--silent','--show-error','--cacert',$caPath,"https://127.0.0.1:8765$Path")
+    $args = @('--fail','--silent','--show-error','--cacert',$caPath)
+    # Fieldora's private/offline CA intentionally has no Internet-reachable revocation service.
+    # Schannel otherwise fails a valid private-CA chain with CRYPT_E_NO_REVOCATION_CHECK.
+    # Best-effort preserves certificate/hostname verification and any available revocation checks;
+    # unlike --ssl-no-revoke or --insecure it does not disable TLS trust validation.
+    if ($IsWindows) { $args += '--ssl-revoke-best-effort' }
+    $args += "https://127.0.0.1:8765$Path"
     if ($DiscardBody) { $args += @('-o', $(if ($IsWindows) { 'NUL' } else { '/dev/null' })) }
     $body = @(& $curl.Source @args)
     if ($LASTEXITCODE -ne 0) { throw "HTTPS check failed for $Path." }

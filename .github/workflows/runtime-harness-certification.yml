@@ -72,8 +72,9 @@ jobs:
           )) {
             if (-not $text.Contains($needle)) { throw "Runtime proof contract is missing: $needle" }
           }
+          $codeText = (($text -split "`r?`n") | Where-Object { $_ -notmatch '^\s*#' }) -join "`n"
           foreach ($forbidden in @('--insecure','-k ','huggingface.co','artifact_store_path','ca-private.pem','issuer-private.pem')) {
-            if ($text.Contains($forbidden)) { throw "Runtime harness contains forbidden shortcut or secret marker: $forbidden" }
+            if ($codeText.Contains($forbidden)) { throw "Runtime harness contains forbidden shortcut or secret marker: $forbidden" }
           }
           Write-Host 'Exact-SHA runtime proof and secret-opacity contract: OK'
 

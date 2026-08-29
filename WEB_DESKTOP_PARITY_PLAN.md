@@ -114,7 +114,9 @@ Every `DONE` item must name its focused tests/CI evidence in the Notes column or
 | WEB-029 | TODO | Project validation parity | Name/status/dates/owner/description and any required organizational fields validate identically in desktop/API/web. |
 | WEB-030 | TODO | Project owner immediate access | Creator receives only the intended governed project authority and can immediately open/edit the project; PBAC remains authoritative. |
 | WEB-031 | TODO | Project edit/archive lifecycle | Web implements desktop-equivalent edit/status/archive actions with optimistic revision conflict handling. |
-| WEB-032 | TODO | Project hierarchy and child creation | Phase/task/sprint/allocation creation and hierarchy views invoke real governed mutations, not view-only placeholders. |
+| WEB-032 | DONE | Project hierarchy and child creation | Phase/task/sprint/allocation creation and hierarchy views invoke real governed mutations, not view-only placeholders. |
+
+WEB-032 evidence: exact implementation head `f98f8c0040507bed23c6ad3f21534ac9ea542baf`; workflow **WEB-032 managed Project hierarchy certification** run `33276063660`; Ruff and `tests/test_web032_project_hierarchy.py` passed, covering PBAC-denied direct mutation plus contextual phase/task/subtask/sprint/allocation browser actions.
 
 ## Phase E — Library, observations, provenance, and relationships
 

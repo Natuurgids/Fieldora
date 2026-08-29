@@ -24,7 +24,7 @@ _DIRECTORY_INTAKE_PATCH = bytes(
    const submission=current.submission||{},files=current.files||[];
    const validated=files.filter(f=>["validated","rejected","processing","processed","published"].includes(f.state)).length;
    status("upload-status",`Validating folder · ${validated}/${total} · ${submission.state||"scanning"}`);
-   if(["validated","validated_with_rejections"].includes(submission.state))return current;
+   if(["validated","validated_with_rejections","processing","ready_to_publish","published"].includes(submission.state))return current;
    if(["failed","rejected"].includes(submission.state))throw new Error(`Folder validation failed: ${submission.state}`);
    await sleep(500);
   }
@@ -61,7 +61,9 @@ _DIRECTORY_INTAKE_PATCH = bytes(
    await api(`/api/v1/staged-submissions/${sid}/seal`,{method:"POST",body:"{}"});
    const validated=await waitForValidation(sid,files.length);
    const rejected=(validated.files||[]).filter(f=>f.state==="rejected");
-   await api(`/api/v1/staged-submissions/${sid}/process`,{method:"POST",body:"{}"});
+   if(["validated","validated_with_rejections"].includes(validated.submission?.state||"")){
+    await api(`/api/v1/staged-submissions/${sid}/process`,{method:"POST",body:"{}"});
+   }
    await waitForProcessing(sid,files.length);
    status("upload-status",`Folder imported · ${files.length-rejected.length} published · ${rejected.length} rejected · submission ${sid}` , rejected.length>0);
    await loadMedia();

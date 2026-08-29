@@ -84,7 +84,6 @@ class PublishingStagedIngestionService(StagedIngestionService):
     """Publish processed staged files into Library evidence idempotently."""
 
     def process_batch(self, staged_file_ids: tuple[str, ...]) -> dict[str, object]:
-        self.store.mark_processing(staged_file_ids)
         media = _ACTIVE_MEDIA_STORE
         if media is None:
             raise RuntimeError("managed media store is unavailable for staged publication")
@@ -92,11 +91,22 @@ class PublishingStagedIngestionService(StagedIngestionService):
         published = 0
         for staged_file_id in staged_file_ids:
             item = self.store.file(staged_file_id)
-            if item is None or item.state not in {"processing", "processed", "published"}:
+            if item is None:
                 raise ValueError("staged file is unavailable for publication")
+            if item.state == "validated":
+                self.store.mark_processing((staged_file_id,))
+                item = self.store.file(staged_file_id)
+                assert item is not None
+            if item.state == "processing":
+                self.store.mark_processed((staged_file_id,))
+                item = self.store.file(staged_file_id)
+                assert item is not None
             if item.state == "published":
                 published += 1
                 continue
+            if item.state != "processed":
+                raise ValueError("staged file is unavailable for publication")
+
             submission = self.store.submission(item.submission_id)
             if submission is None:
                 raise ValueError("staged submission is unavailable for publication")

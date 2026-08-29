@@ -1,6 +1,6 @@
 """Managed Project hierarchy APIs and contextual browser actions.
 
-WEB-032 keeps hierarchy semantics in the shared Project Management service.  This
+WEB-032 keeps hierarchy semantics in the shared Project Management service. This
 mixin is a transport/UI layer only: managed deployments never persist phases, tasks,
 sprints or allocations through the generic science-record fallback.
 """
@@ -184,7 +184,7 @@ class ProjectHierarchyWebApiMixin:
         if self._project_for_organization(identity.organization_id, project_id) is None:
             return ApiResponse.json(404, {"error": "not_found"})
         purpose = headers.get("x-fieldora-purpose", "research")
-        resource_type, list_name, create_name = child
+        resource_type, list_name, _create_name = child
         project_decision = self._decisions.decide(
             AccessRequest(
                 identity.identity_id,
@@ -226,16 +226,32 @@ class ProjectHierarchyWebApiMixin:
                     str(record.get("title") or record.get("name") or ""),
                     organization_id=identity.organization_id,
                     actor_id=identity.identity_id,
-                    parent_task_id=(str(record["parent_task_id"]).strip() if record.get("parent_task_id") else None),
-                    phase_id=(str(record["phase_id"]).strip() if record.get("phase_id") else None),
-                    sprint_id=(str(record["sprint_id"]).strip() if record.get("sprint_id") else None),
+                    parent_task_id=(
+                        str(record["parent_task_id"]).strip()
+                        if record.get("parent_task_id")
+                        else None
+                    ),
+                    phase_id=(
+                        str(record["phase_id"]).strip()
+                        if record.get("phase_id")
+                        else None
+                    ),
+                    sprint_id=(
+                        str(record["sprint_id"]).strip()
+                        if record.get("sprint_id")
+                        else None
+                    ),
                     owner_id=str(record.get("owner_id") or record.get("assignee_id") or ""),
                     description=str(record.get("description", "")),
                     priority=str(record.get("priority", "normal")),
                     start_date=str(record.get("start_date", "")),
                     due_date=str(record.get("due_date", "")),
-                    estimate_hours=float(record.get("estimate_hours") or record.get("manual_estimate") or 0),
-                    realized_hours=float(record.get("realized_hours") or record.get("realized") or 0),
+                    estimate_hours=float(
+                        record.get("estimate_hours") or record.get("manual_estimate") or 0
+                    ),
+                    realized_hours=float(
+                        record.get("realized_hours") or record.get("realized") or 0
+                    ),
                 )
             elif resource_type == "sprint":
                 created_id = self._project_management.create_sprint(
@@ -259,16 +275,24 @@ class ProjectHierarchyWebApiMixin:
                     hours_per_week=float(record.get("hours_per_week", 0) or 0),
                     allocation_percent=float(record.get("allocation_percent", 0) or 0),
                     role=str(record.get("role", "")),
-                    phase_id=(str(record["phase_id"]).strip() if record.get("phase_id") else None),
+                    phase_id=(
+                        str(record["phase_id"]).strip()
+                        if record.get("phase_id")
+                        else None
+                    ),
                 )
         except KeyError:
             return ApiResponse.json(404, {"error": "not_found"})
         except (TypeError, ValueError) as exc:
-            return ApiResponse.json(400, {"error": "invalid_request", "detail": str(exc)})
+            return ApiResponse.json(
+                400, {"error": "invalid_request", "detail": str(exc)}
+            )
         item = next(
             (
                 dict(raw)
-                for raw in getattr(self._project_management, list_name)(identity.organization_id)
+                for raw in getattr(self._project_management, list_name)(
+                    identity.organization_id
+                )
                 if str(raw.get("id", "")) == created_id
             ),
             None,
@@ -278,7 +302,9 @@ class ProjectHierarchyWebApiMixin:
         return ApiResponse.json(201, {"item": item})
 
     @staticmethod
-    def _patch_project_hierarchy_response(target: str, response: ApiResponse) -> ApiResponse:
+    def _patch_project_hierarchy_response(
+        target: str, response: ApiResponse
+    ) -> ApiResponse:
         if (
             urlsplit(target).path != "/app.js"
             or response.status != 200

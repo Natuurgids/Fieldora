@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 import sqlite3
+from pathlib import Path
 
 from natureai_next.application.project_management import ProjectManagementService
-
 
 ROOT = Path(__file__).resolve().parents[1]
 

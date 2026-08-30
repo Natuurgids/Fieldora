@@ -27,6 +27,7 @@ from natureai_next.server.offline_sync_api import OfflineSyncApiMixin, OfflineSy
 from natureai_next.server.optimistic_concurrency_web import OptimisticConcurrencyWebApiMixin
 from natureai_next.server.original_derivative_api import OriginalDerivativeApiMixin
 from natureai_next.server.pagination_api import PaginationApiMixin
+from natureai_next.server.portfolio_module_web import PortfolioModuleWebApiMixin
 from natureai_next.server.postgres_web_indexes import ensure_managed_web_postgres_indexes
 from natureai_next.server.project_hierarchy_web import ProjectHierarchyWebApiMixin
 from natureai_next.server.project_idempotency import (
@@ -43,6 +44,7 @@ from natureai_next.server.visible_control_audit_api import VisibleControlAuditAp
 
 class OfflineFirstFieldoraApi(
     ModularShellWebApiMixin,
+    PortfolioModuleWebApiMixin,
     BoundedUploadWebApiMixin,
     ProjectLifecycleWebApiMixin,
     ProjectHierarchyWebApiMixin,

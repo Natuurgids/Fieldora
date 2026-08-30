@@ -135,7 +135,20 @@ def _mock_api(route: Route, calls: dict[str, int]) -> None:
             "expiring_certificate_count": 0,
             "services": [],
             "storage": [],
-            "linked_archives": [],
+            "linked_archives": [
+                {
+                    "storage_id": "archive-1",
+                    "display_name": "Archive One",
+                    "service_id": "storage-service-1",
+                    "service_name": "Storage Service",
+                    "service_state": "active",
+                    "node_name": "node-1",
+                    "enabled": True,
+                    "stale": False,
+                    "read_only": True,
+                    "heartbeat_age_seconds": 2,
+                }
+            ],
             "linked_archive_events": [],
             "jobs": {"by_status": {}, "recent": []},
         }
@@ -249,4 +262,17 @@ def test_administration_buttons_are_wired_in_final_managed_ui(
         page.locator("#administration-storage-add").click()
         page.wait_for_selector("#page-operator:not([hidden])")
         _assert_all_visible_buttons_wired(page)
+
+        # Sweep every visible top-level workspace. This turns wiring into a final-DOM
+        # contract: a newly introduced visible button fails CI unless its owning module
+        # has configured a direct, listener-owned or delegated action contract.
+        visible_pages = page.locator(".sidebar .nav").evaluate_all(
+            "nodes => nodes.filter(node => node.getClientRects().length > 0)"
+            ".map(node => node.dataset.page)"
+        )
+        for page_name in visible_pages:
+            page.locator(f'.sidebar .nav[data-page="{page_name}"]').click()
+            page.wait_for_timeout(25)
+            _assert_all_visible_buttons_wired(page)
+
         browser.close()

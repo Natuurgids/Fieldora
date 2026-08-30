@@ -6,10 +6,12 @@ on:
       - "src/natureai_next/server/web_module_contracts.py"
       - "src/natureai_next/server/web_module_runtime.py"
       - "src/natureai_next/server/modular_shell_web.py"
+      - "src/natureai_next/server/portfolio_module_web.py"
       - "src/natureai_next/server/offline_first_api.py"
       - "tests/test_web_module_contracts.py"
       - "tests/test_web_module_runtime.py"
       - "tests/test_modular_shell_web.py"
+      - "tests/test_portfolio_module_web.py"
       - ".github/workflows/modular-shell-certification.yml"
   workflow_dispatch:
 
@@ -40,13 +42,16 @@ jobs:
           src/natureai_next/server/web_module_contracts.py
           src/natureai_next/server/web_module_runtime.py
           src/natureai_next/server/modular_shell_web.py
+          src/natureai_next/server/portfolio_module_web.py
           src/natureai_next/server/offline_first_api.py
           tests/test_web_module_contracts.py
           tests/test_web_module_runtime.py
           tests/test_modular_shell_web.py
+          tests/test_portfolio_module_web.py
       - name: Modular shell contract tests
         run: >-
           pytest -q
           tests/test_web_module_contracts.py
           tests/test_web_module_runtime.py
           tests/test_modular_shell_web.py
+          tests/test_portfolio_module_web.py

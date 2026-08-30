@@ -47,6 +47,42 @@ $tempHandoffInstaller = Join-Path $env:TEMP "Install-Fieldora-Bootstrap-Handoff-
 $tempModelInstaller = Join-Path $env:TEMP "Install-Fieldora-Offline-Model-$([Guid]::NewGuid().ToString('N')).ps1"
 try {
     Invoke-WebRequest -Uri $url -OutFile $tempInstaller -UseBasicParsing
+
+    # The portable clean installer contains a POSIX command-substitution probe. Passing
+    # that probe through a PowerShell double-quoted argument causes PowerShell to parse
+    # the inner `find ... -name` expression before sh receives it. Patch only that exact
+    # scanner-probe line in the downloaded immutable-ref installer, fail closed if the
+    # expected line is absent/duplicated, and pass the shell program as one literal value.
+    $installerLines = @(Get-Content -LiteralPath $tempInstaller)
+    $scannerProbeIndexes = @(
+        for ($i = 0; $i -lt $installerLines.Count; $i++) {
+            if (
+                $installerLines[$i] -like '*docker run --rm fieldora-v5-rocky:local sh -lc*' -and
+                $installerLines[$i] -like '*clamscan --version*' -and
+                $installerLines[$i] -like '*find /var/lib/clamav*'
+            ) {
+                $i
+            }
+        }
+    )
+    if ($scannerProbeIndexes.Count -ne 1) {
+        throw "Expected exactly one staged-intake malware-scanner probe in the clean installer; found $($scannerProbeIndexes.Count)."
+    }
+    $scannerProbeIndex = $scannerProbeIndexes[0]
+    $scannerProbeReplacement = @(
+        '    $scannerProbe = ''command -v clamscan >/dev/null && clamscan --version >/dev/null && test -n "$(find /var/lib/clamav -maxdepth 1 -type f \( -name ''''*.cvd'''' -o -name ''''*.cld'''' \) -print -quit)"''',
+        '    & docker run --rm fieldora-v5-rocky:local sh -lc $scannerProbe'
+    )
+    $patchedInstallerLines = @()
+    if ($scannerProbeIndex -gt 0) {
+        $patchedInstallerLines += $installerLines[0..($scannerProbeIndex - 1)]
+    }
+    $patchedInstallerLines += $scannerProbeReplacement
+    if ($scannerProbeIndex + 1 -lt $installerLines.Count) {
+        $patchedInstallerLines += $installerLines[($scannerProbeIndex + 1)..($installerLines.Count - 1)]
+    }
+    Set-Content -LiteralPath $tempInstaller -Value $patchedInstallerLines -Encoding utf8NoBOM
+
     $invoke = @{
         InstallRoot = $InstallRoot
         FieldoraRef = $FieldoraRef

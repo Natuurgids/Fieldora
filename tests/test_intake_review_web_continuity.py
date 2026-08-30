@@ -29,7 +29,7 @@ def test_intake_review_refreshes_real_lists_when_administration_subnav_opens() -
 
     assert 'api("/api/v1/submissions?limit=100")' in script
     assert 'api("/api/v1/review-cases?limit=100")' in script
-    assert 'id="intake-review-refresh"' in script
+    assert 'refresh.id="intake-review-refresh"' in script
     assert 'data-workspace-target="intake-review"' in script
     assert "setTimeout(refreshIntakeReview,0)" in script
     assert 'data-submission-id="${html(item.submission_id)}"' in script

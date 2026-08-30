@@ -28,6 +28,10 @@ jobs:
         shell: bash
         run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
 
+      - name: Install focused test dependency
+        shell: bash
+        run: python -m pip install pytest
+
       - name: Parse linked-storage PowerShell helpers
         shell: pwsh
         run: |

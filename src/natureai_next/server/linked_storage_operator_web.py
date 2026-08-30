@@ -43,7 +43,7 @@ _LINKED_STORAGE_OPERATOR_WEB_PATCH = bytes(
   const target=byId("operator-linked-service-handoff");if(!target)return;
   target.hidden=false;
   target.innerHTML=`<h3>Storage-node handoff</h3><p class="muted">Use these non-secret identifiers on the storage node. Root paths, root aliases, private keys, CA material and source credentials are configured only on that node and are never sent through this browser form.</p><div class="list"><div class="row"><strong>Service ID</strong><code>${html(service.service_id)}</code></div><div class="row"><strong>Organization ID</strong><code>${html(operatorOrganizationId)}</code></div><div class="row"><strong>Service type</strong><code>linked-storage</code></div><div class="row"><strong>State</strong><span class="pill">${html(service.state)}</span></div></div><div class="actions section"><button id="operator-linked-service-activate" class="primary" type="button">Activate storage service</button></div>`;
-  byId("operator-linked-service-activate")?.addEventListener("click",()=>activateStorageService(service.service_id));
+  const activate=byId("operator-linked-service-activate");if(activate)activate.onclick=()=>activateStorageService(service.service_id);
  }
 
  async function prepareStorageServiceId(){
@@ -110,7 +110,7 @@ _LINKED_STORAGE_OPERATOR_WEB_PATCH = bytes(
     return `<div class="row" data-linked-archive="${html(item.storage_id)}"><strong>${html(item.display_name||item.storage_id)}</strong><span>${html(item.storage_id)} · ${html(item.service_name||item.service_id)}</span><span class="pill">${html(item.service_state)} · ${html(health)}</span><span>${html(item.node_name||"unregistered node")} · ${html(age)}${item.read_only?" · read only":""}</span><div class="actions"><button data-linked-archive-action="${operation}" data-linked-storage-id="${html(item.storage_id)}">${label}</button></div></div>`;
    }).join(""):'<div class="empty">No linked archives registered for this organization. Prepare, enroll and activate a linked-storage service below, then complete archive registration from that storage node.</div>';
    renderArchiveEvents(overview.linked_archive_events||[]);
-   target.querySelectorAll("[data-linked-archive-action]").forEach(button=>button.addEventListener("click",()=>setArchiveEnabled(button.dataset.linkedStorageId,button.dataset.linkedArchiveAction==="enable")));
+   target.querySelectorAll("[data-linked-archive-action]").forEach(button=>button.onclick=()=>setArchiveEnabled(button.dataset.linkedStorageId,button.dataset.linkedArchiveAction==="enable"));
   }catch(error){target.innerHTML=`<div class="empty">${html(error.message)}</div>`}
  }
 
@@ -121,8 +121,8 @@ _LINKED_STORAGE_OPERATOR_WEB_PATCH = bytes(
    section.innerHTML='<h2>Linked archives</h2><p class="muted">Archive ownership, enrolled storage service and heartbeat freshness. Disablement revokes Library access without exposing or changing storage-node paths.</p><p id="operator-linked-archives-status" class="status"></p><div id="operator-linked-archives" class="list"></div><h3>Connect a storage service</h3><p class="muted">Prepare the durable service identity first, create its mTLS certificate on the trusted Fieldora host, then enroll and activate it. Filesystem roots, aliases, private keys, CA certificates and storage credentials stay on the storage node.</p><div class="form-grid"><label>Service ID<input id="operator-linked-service-id" readonly autocomplete="off" placeholder="Prepare an identity first"></label><label>Service name<input id="operator-linked-service-name" autocomplete="off" placeholder="Herbarium archive service"></label><label>Node name<input id="operator-linked-service-node" autocomplete="off" placeholder="archive-node-01"></label><label>Certificate serial<input id="operator-linked-service-certificate-serial" autocomplete="off"></label><label>Certificate expiry<input id="operator-linked-service-certificate-expiry" type="date"></label></div><div class="actions section"><button id="operator-linked-service-prepare" type="button">Prepare service ID</button><button id="operator-linked-service-enroll" class="primary" type="button">Enroll linked-storage service</button></div><p id="operator-linked-service-setup-status" class="status"></p><div id="operator-linked-service-trust-command" class="section" hidden></div><div id="operator-linked-service-handoff" class="section" hidden></div><h3>Recent lifecycle activity</h3><p class="muted">Newest registration and Operator lifecycle events for this organization.</p><div id="operator-linked-archive-events" class="list"></div>';
    const storage=byId("operator-storage")?.closest("section");
    if(storage)storage.after(section);else page.appendChild(section);
-   byId("operator-linked-service-prepare")?.addEventListener("click",prepareStorageServiceId);
-   byId("operator-linked-service-enroll")?.addEventListener("click",enrollStorageService);
+   const prepare=byId("operator-linked-service-prepare");if(prepare)prepare.onclick=prepareStorageServiceId;
+   const enroll=byId("operator-linked-service-enroll");if(enroll)enroll.onclick=enrollStorageService;
   }
   const nav=document.querySelector('.nav[data-page="operator"]');
   if(nav&&!nav.dataset.linkedArchivesWired){nav.dataset.linkedArchivesWired="true";nav.addEventListener("click",()=>setTimeout(loadOperatorExtensions,0))}

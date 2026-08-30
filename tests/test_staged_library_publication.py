@@ -16,7 +16,13 @@ class _CleanScanner:
         return True, "clean"
 
 
-def _service(tmp_path):
+class _UnavailableScanner:
+    @staticmethod
+    def scan(_path):
+        return False, "scanner_unavailable:FileNotFoundError"
+
+
+def _service(tmp_path, scanner=None):
     media = PublishingGovernedMediaStore(
         tmp_path / "media.sqlite3",
         tmp_path / "media",
@@ -28,7 +34,7 @@ def _service(tmp_path):
     service = PublishingStagedIngestionService(
         store,
         ServerJobStore(tmp_path / "jobs.sqlite3"),
-        malware_scanner=_CleanScanner(),
+        malware_scanner=scanner or _CleanScanner(),
     )
     return media, store, service
 
@@ -104,6 +110,40 @@ def test_project_folder_context_is_association_not_evidence_ownership(tmp_path) 
     assert media.associations.linked_media_ids(
         "organization-1", "project", "project-2"
     ) == (first.media_id,)
+
+
+def test_all_rejected_folder_is_terminal_instead_of_stuck_ready_to_publish(tmp_path) -> None:
+    _media, store, service = _service(tmp_path, _UnavailableScanner())
+    payload = b"scanner-failure-must-not-hang"
+    digest = hashlib.sha256(payload).hexdigest()
+    submission = store.create_submission(
+        subject_id="user-1",
+        organization_id="organization-1",
+        project_id="",
+        contract_id="",
+        purpose="research",
+        publication_policy="review",
+        expected_files=1,
+    )
+    item = store.begin_file(
+        submission.submission_id,
+        relative_path="folder/photo.jpg",
+        filename="photo.jpg",
+        mime_type="image/jpeg",
+        expected_size=len(payload),
+        expected_sha256=digest,
+    )
+    store.append(item.staged_file_id, 0, payload)
+    service.seal_and_queue(submission.submission_id)
+
+    validation = service.validate_file(item.staged_file_id)
+
+    assert validation["accepted"] is False
+    assert validation["malware_detail"] == "scanner_unavailable:FileNotFoundError"
+    final = store.submission(submission.submission_id)
+    assert final is not None
+    assert final.state == "rejected"
+    assert store.files(submission.submission_id, "validated") == ()
 
 
 def test_folder_browser_waits_for_published_not_ready_to_publish() -> None:

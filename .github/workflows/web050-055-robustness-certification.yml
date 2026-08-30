@@ -1,0 +1,78 @@
+name: WEB-050 through WEB-055 robustness certification
+
+on:
+  pull_request:
+    paths:
+      - "src/natureai_next/server/optimistic_concurrency_web.py"
+      - "src/natureai_next/server/structured_errors.py"
+      - "src/natureai_next/server/bounded_upload_web.py"
+      - "src/natureai_next/server/postgres_web_indexes.py"
+      - "src/natureai_next/server/project_idempotency.py"
+      - "src/natureai_next/server/project_idempotency_web.py"
+      - "src/natureai_next/server/offline_first_api.py"
+      - "tests/test_web050_optimistic_concurrency.py"
+      - "tests/test_web051_structured_errors.py"
+      - "tests/test_web052_bounded_upload_memory.py"
+      - "tests/test_web053_postgres_indexes.py"
+      - "tests/test_web055_desktop_api_contracts.py"
+      - ".github/workflows/web050-055-robustness-certification.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  robustness-parity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Verify exact PR head
+        if: ${{ github.event_name == 'pull_request' }}
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install certification dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -e ".[dev,server-postgresql]"
+
+      - name: Install browser engines
+        run: python -m playwright install --with-deps chromium firefox webkit
+
+      - name: Ruff WEB-050 through WEB-055 seam
+        run: >-
+          python -m ruff check
+          src/natureai_next/server/optimistic_concurrency_web.py
+          src/natureai_next/server/structured_errors.py
+          src/natureai_next/server/bounded_upload_web.py
+          src/natureai_next/server/postgres_web_indexes.py
+          src/natureai_next/server/project_idempotency.py
+          src/natureai_next/server/project_idempotency_web.py
+          tests/test_web050_optimistic_concurrency.py
+          tests/test_web051_structured_errors.py
+          tests/test_web052_bounded_upload_memory.py
+          tests/test_web053_postgres_indexes.py
+          tests/test_web055_desktop_api_contracts.py
+
+      - name: WEB-050 optimistic concurrency UX
+        run: pytest -q tests/test_web050_optimistic_concurrency.py
+
+      - name: WEB-051 structured web errors
+        run: pytest -q tests/test_web051_structured_errors.py
+
+      - name: WEB-052 bounded upload memory
+        run: pytest -q tests/test_web052_bounded_upload_memory.py
+
+      - name: WEB-053 managed PostgreSQL indexes
+        run: pytest -q tests/test_web053_postgres_indexes.py
+
+      - name: WEB-055 desktop API contract parity
+        run: pytest -q tests/test_web055_desktop_api_contracts.py

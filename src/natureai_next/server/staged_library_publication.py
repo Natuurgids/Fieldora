@@ -79,6 +79,21 @@ class PublishingProjectOptionalStagedIngestionStore(ProjectOptionalStagedIngesti
 class PublishingStagedIngestionService(StagedIngestionService):
     """Publish processed staged files into Library evidence idempotently."""
 
+    def validate_file(self, staged_file_id: str) -> dict[str, object]:
+        """Make an all-rejected submission terminal instead of leaving it publishable forever."""
+        result = super().validate_file(staged_file_id)
+        item = self.store.file(staged_file_id)
+        if item is None:
+            return result
+        submission = self.store.submission(item.submission_id)
+        if (
+            submission is not None
+            and submission.state == "validated_with_rejections"
+            and not self.store.files(submission.submission_id, "validated")
+        ):
+            self.store.set_submission_state(submission.submission_id, "rejected")
+        return result
+
     def process_batch(self, staged_file_ids: tuple[str, ...]) -> dict[str, object]:
         media = _ACTIVE_MEDIA_STORE
         if media is None:

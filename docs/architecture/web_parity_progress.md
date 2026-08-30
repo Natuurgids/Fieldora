@@ -39,13 +39,15 @@ Every module must document and test:
 ## Iteration plan
 
 ### Iteration 1 — Platform and shell foundation
-- [~] Establish branch-visible parity checklist and definition of done
-- [ ] Explicit web workspace/module registry
-- [ ] Route ownership and normalization contract
+- [x] Establish branch-visible parity checklist and definition of done
+- [~] Explicit web workspace/module registry
+- [~] Route ownership and normalization contract
 - [ ] Module mount/unmount lifecycle
 - [ ] Remove dependence on cross-feature global DOM manipulation for migrated modules
 - [ ] Platform notification/error boundary
-- [ ] Module contract test harness
+- [~] Module contract test harness
+
+**Iteration 1 evidence:** `src/natureai_next/server/web_module_contracts.py` now defines framework-independent module metadata, route/action ownership and dependency validation. `tests/test_web_module_contracts.py` exercises the initial contract, including separate ownership for `projects.core` and `portfolio`. Test execution/CI certification is still required before the registry, routing contract or test harness can be marked complete.
 
 ### Iteration 2 — Identity, session and capabilities
 - [ ] Local credential sign-in parity

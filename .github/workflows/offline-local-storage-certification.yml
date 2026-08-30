@@ -1,0 +1,44 @@
+name: Fieldora offline local storage certification
+
+on:
+  pull_request:
+    paths:
+      - 'deployment/storage-node/**'
+      - 'tests/test_storage_node_offline_profile.py'
+      - '.github/workflows/offline-local-storage-certification.yml'
+  workflow_dispatch:
+
+jobs:
+  certify-offline-local-storage:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Verify exact PR head
+        if: ${{ github.event_name == 'pull_request' }}
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+
+      - name: Validate storage Compose contracts
+        shell: bash
+        env:
+          FIELDORA_STORAGE_ENDPOINT: https://fieldora-server:8765
+          FIELDORA_STORAGE_SERVICE_ID: storage-service-test
+          FIELDORA_STORAGE_ORGANIZATION: local
+          FIELDORA_STORAGE_ID: archive-test
+          FIELDORA_STORAGE_DISPLAY_NAME: Test archive
+          FIELDORA_STORAGE_ROOT_ALIAS: test-archive
+          FIELDORA_STORAGE_ROOT: /tmp/fieldora-archive
+          FIELDORA_STORAGE_TRUST_DIR: /tmp/fieldora-storage-trust
+        run: |
+          docker compose -f deployment/storage-node/compose.yaml config -q
+          docker compose \
+            -f deployment/storage-node/compose.yaml \
+            -f deployment/storage-node/compose.same-host.yaml \
+            config -q
+
+      - name: Certify offline local and LAN storage invariants
+        run: python -m pytest -q tests/test_storage_node_offline_profile.py

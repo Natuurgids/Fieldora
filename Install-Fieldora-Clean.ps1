@@ -198,7 +198,11 @@ $dockerfile = @'
 FROM rockylinux:9
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PIP_DISABLE_PIP_VERSION_CHECK=1
 RUN dnf -y update \
- && dnf -y install python3.11 python3.11-pip ca-certificates shadow-utils \
+ && dnf -y install epel-release \
+ && dnf -y install python3.11 python3.11-pip ca-certificates shadow-utils clamav clamav-data \
+ && command -v clamscan \
+ && clamscan --version \
+ && test -n "$(find /var/lib/clamav -maxdepth 1 -type f \( -name '*.cvd' -o -name '*.cld' \) -print -quit)" \
  && dnf clean all && rm -rf /var/cache/dnf
 WORKDIR /opt/fieldora
 COPY . /opt/fieldora
@@ -449,6 +453,10 @@ try {
     & docker compose build --pull --no-cache fieldora-server
     Assert-Exit "Fieldora image build failed"
 
+    Step "Verifying staged-intake malware scanner"
+    & docker run --rm fieldora-v5-rocky:local sh -lc "command -v clamscan >/dev/null && clamscan --version >/dev/null && test -n \"`$(find /var/lib/clamav -maxdepth 1 -type f \\( -name '*.cvd' -o -name '*.cld' \\) -print -quit)\""
+    Assert-Exit "Fieldora image does not contain a usable ClamAV scanner and signature database"
+
     $FieldoraUid = [int](Docker-Output { docker run --rm fieldora-v5-rocky:local id -u fieldora })
     Assert-Exit "Unable to determine Fieldora container uid"
     $FieldoraGid = [int](Docker-Output { docker run --rm fieldora-v5-rocky:local id -g fieldora })
@@ -667,6 +675,7 @@ Internal root CA: $TrustRoot\ca-certificate.pem
     Write-Host "Worker service:    $WorkerServiceId"
     Write-Host "PostgreSQL service:$PostgresServiceId"
     Write-Host "Trust renewer:     $RenewerServiceId"
+    Write-Host "Malware scanner:   ClamAV with packaged EPEL signature database"
     Write-Host "Certificate renewal: automatic, no routine service restart"
     Write-Host "Root CA private key: offline from running containers"
     Write-Host "Restart policy: unless-stopped"

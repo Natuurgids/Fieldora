@@ -1,0 +1,17 @@
+# Same-host override for an offline Fieldora platform and linked-storage service.
+#
+# The clean reference platform names its private Docker network
+# `fieldora_fieldora-network`. Joining that network lets the storage service use
+# https://fieldora-server:8765, whose server certificate already includes the
+# `fieldora-server` DNS SAN. No host port, WAN route, Bastion, or cloud service is
+# required for linked-archive traffic.
+
+services:
+  storage-service:
+    networks:
+      - fieldora-platform
+
+networks:
+  fieldora-platform:
+    external: true
+    name: ${FIELDORA_PLATFORM_NETWORK:-fieldora_fieldora-network}

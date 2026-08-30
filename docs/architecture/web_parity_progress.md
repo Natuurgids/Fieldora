@@ -42,12 +42,12 @@ Every module must document and test:
 - [x] Establish branch-visible parity checklist and definition of done
 - [~] Explicit web workspace/module registry
 - [~] Route ownership and normalization contract
-- [ ] Module mount/unmount lifecycle
-- [ ] Remove dependence on cross-feature global DOM manipulation for migrated modules
+- [~] Module mount/unmount lifecycle
+- [~] Remove dependence on cross-feature global DOM manipulation for migrated modules
 - [ ] Platform notification/error boundary
 - [~] Module contract test harness
 
-**Iteration 1 evidence:** `src/natureai_next/server/web_module_contracts.py` now defines framework-independent module metadata, route/action ownership and dependency validation. `tests/test_web_module_contracts.py` exercises the initial contract, including separate ownership for `projects.core` and `portfolio`. Test execution/CI certification is still required before the registry, routing contract or test harness can be marked complete.
+**Iteration 1 evidence:** `src/natureai_next/server/web_module_contracts.py` defines framework-independent module metadata, route/action ownership and dependency validation, with separate ownership for `projects.core` and `portfolio`. `src/natureai_next/server/web_module_runtime.py` provides explicit mount/unmount lifecycle state and failure isolation. `src/natureai_next/server/modular_shell_web.py` now bridges that registry into the served browser shell, owns route normalization plus browser history for registered modules, emits module lifecycle events, and strips the legacy `showPage` history wrapper from the final `/app.js` response without replacing the renderer. `tests/test_web_module_contracts.py`, `tests/test_web_module_runtime.py`, and `tests/test_modular_shell_web.py` cover the contract, runtime and final composed routing response. The larger navigation compatibility module still contains feature-specific cross-screen wiring, and CI certification is still required before these items can be marked complete.
 
 ### Iteration 2 — Identity, session and capabilities
 - [ ] Local credential sign-in parity

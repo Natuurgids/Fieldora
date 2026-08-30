@@ -47,7 +47,7 @@ Every module must document and test:
 - [ ] Platform notification/error boundary
 - [~] Module contract test harness
 
-**Iteration 1 evidence:** `src/natureai_next/server/web_module_contracts.py` defines framework-independent module metadata, route/action ownership and dependency validation, with separate ownership for `projects.core` and `portfolio`. `src/natureai_next/server/web_module_runtime.py` provides explicit mount/unmount lifecycle state and failure isolation. `src/natureai_next/server/modular_shell_web.py` now bridges that registry into the served browser shell, owns route normalization plus browser history for registered modules, emits module lifecycle events, and strips the legacy `showPage` history wrapper from the final `/app.js` response without replacing the renderer. `tests/test_web_module_contracts.py`, `tests/test_web_module_runtime.py`, and `tests/test_modular_shell_web.py` cover the contract, runtime and final composed routing response. The larger navigation compatibility module still contains feature-specific cross-screen wiring, and CI certification is still required before these items can be marked complete.
+**Iteration 1 evidence:** `src/natureai_next/server/web_module_contracts.py` defines framework-independent module metadata, route/action ownership and dependency validation, with separate ownership for `projects.core` and `portfolio`. `src/natureai_next/server/web_module_runtime.py` provides explicit mount/unmount lifecycle state and failure isolation. `src/natureai_next/server/modular_shell_web.py` bridges that registry into the served browser shell, owns route normalization plus browser history for registered modules, emits module lifecycle events, strips the legacy `showPage` history wrapper, and now removes the shared-navigation Portfolio block only after the dedicated Portfolio module is composed. `tests/test_web_module_contracts.py`, `tests/test_web_module_runtime.py`, `tests/test_modular_shell_web.py`, and `tests/test_portfolio_module_web.py` cover the contract, runtime, final composed routing response and first feature extraction. Other compatibility modules still contain feature-specific cross-screen wiring, and CI/browser certification is still required before these items can be marked complete.
 
 ### Iteration 2 — Identity, session and capabilities
 - [ ] Local credential sign-in parity
@@ -93,12 +93,14 @@ Projects are a high-fidelity parity area. The web workflow, hierarchy and termin
 - [ ] Project workflow parity tests
 
 ### Iteration 7 — Portfolio and project integrations
-- [ ] Portfolio views
-- [ ] Cross-project overview without merging ownership into Projects/Core
+- [~] Portfolio views
+- [~] Cross-project overview without merging ownership into Projects/Core
 - [ ] Capacity/availability links
 - [ ] Research/dossier links
 - [ ] Portable project package exchange
 - [ ] Project reporting/export integration through public contracts
+
+**Iteration 7 evidence:** `src/natureai_next/server/portfolio_module_web.py` is the first feature-owned browser adapter. It owns Portfolio view selection, scope selection, lifecycle mount/unmount, project-open interaction and user-visible module errors without replacing `loadPortfolio`, `showPage`, or another feature global. `web_module_contracts.py` assigns `portfolio.view.select`, `portfolio.scope.select`, and `portfolio.project.open` to `portfolio`; `portfolio` remains dependent on but separate from `projects.core`. `modular_shell_web.py` removes the former Portfolio override from the final shared navigation compatibility response. The existing loader is still called as a transitional integration adapter, and `project_facility_workspace_web.py` contains overlapping Portfolio presentation logic that must be consolidated before Portfolio can be parity-certified. CI and browser/final-DOM certification are also still required, so these items remain in progress.
 
 ### Iteration 8 — Capacity, research and dossiers
 - [ ] Schedules/absences/allocations

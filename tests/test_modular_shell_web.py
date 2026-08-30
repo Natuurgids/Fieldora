@@ -8,6 +8,9 @@ from natureai_next.server.modular_shell_web import (
 )
 from natureai_next.server.navigation_web_compatibility import patch_navigation_web_response
 from natureai_next.server.offline_first_api import OfflineFirstFieldoraApi
+from natureai_next.server.project_facility_workspace_web import (
+    patch_project_facility_workspace_response,
+)
 
 
 def test_manifest_exposes_distinct_project_and_portfolio_owners() -> None:
@@ -74,6 +77,31 @@ def test_final_composed_response_removes_migrated_navigation_and_portfolio_wirin
     # Knowledge and other feature compatibility remain until those modules own
     # their responsibilities. Portfolio has now been explicitly extracted.
     assert "loadKnowledge=async function" in script
+
+
+def test_final_composed_response_removes_project_cockpit_portfolio_overlap() -> None:
+    base = ApiResponse(200, b"const baseApp=true;", "text/javascript; charset=utf-8")
+    cockpit = patch_project_facility_workspace_response("/app.js", base)
+    before = cockpit.body.decode("utf-8")
+
+    assert "function portfolioData()" in before
+    assert "applyPortfolioView()" in before
+    assert "const oldPortfolio=loadPortfolio" in before
+    assert "project-desktop-cockpit" in before
+    assert "facility-desktop-cockpit" in before
+
+    final = patch_modular_shell_response("/app.js", cockpit)
+    script = final.body.decode("utf-8")
+
+    assert "function portfolioData()" not in script
+    assert "applyPortfolioView()" not in script
+    assert "const oldPortfolio=loadPortfolio" not in script
+    # Projects and Facilities remain intact; only Portfolio-owned presentation
+    # and wiring is removed from this transitional combined cockpit patch.
+    assert "project-desktop-cockpit" in script
+    assert "facility-desktop-cockpit" in script
+    assert "function setProjectCenter(view)" in script
+    assert "renderProjectTree();" in script
 
 
 def test_non_app_script_response_is_untouched() -> None:

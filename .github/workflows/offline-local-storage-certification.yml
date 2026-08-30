@@ -6,9 +6,11 @@ on:
       - 'deployment/storage-node/**'
       - 'Start-Fieldora-LinkedStorage.ps1'
       - 'New-Fieldora-Storage-ServiceTrust.ps1'
+      - 'Renew-Fieldora-LinkedStorageTrust.ps1'
       - 'tests/test_storage_node_offline_profile.py'
       - 'tests/test_linked_storage_startup_helper.py'
       - 'tests/test_storage_service_trust_handoff.py'
+      - 'tests/test_linked_storage_certificate_renewal_helper.py'
       - '.github/workflows/offline-local-storage-certification.yml'
   workflow_dispatch:
 
@@ -30,7 +32,11 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          foreach ($script in @('New-Fieldora-Storage-ServiceTrust.ps1','Start-Fieldora-LinkedStorage.ps1')) {
+          foreach ($script in @(
+            'New-Fieldora-Storage-ServiceTrust.ps1',
+            'Start-Fieldora-LinkedStorage.ps1',
+            'Renew-Fieldora-LinkedStorageTrust.ps1'
+          )) {
             $tokens = $null
             $errors = $null
             [System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $script), [ref]$tokens, [ref]$errors) | Out-Null
@@ -61,3 +67,4 @@ jobs:
           tests/test_storage_node_offline_profile.py
           tests/test_linked_storage_startup_helper.py
           tests/test_storage_service_trust_handoff.py
+          tests/test_linked_storage_certificate_renewal_helper.py

@@ -9,6 +9,8 @@ never included.
 from __future__ import annotations
 
 import json
+import sqlite3
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -17,10 +19,11 @@ from natureai_next.server.api import ApiResponse
 
 _HEARTBEAT_STALE_SECONDS = 120
 _LINKED_ARCHIVE_EVENT_LIMIT = 100
+_OPERATOR_JOB_LIMIT = 100
 
 
 class LinkedStorageOperatorApiMixin:
-    """Append linked archive health and expose PBAC-gated archive enable/disable actions."""
+    """Append governed Operator projections and linked-archive lifecycle actions."""
 
     def dispatch(
         self, method: str, target: str, headers: dict[str, str], body: bytes
@@ -32,26 +35,36 @@ class LinkedStorageOperatorApiMixin:
             and route.path == "/api/v1/operator/overview"
             and response.status == 200
         ):
-            repository = getattr(self, "_linked_storage", None)
-            operator = getattr(self, "_operator", None)
-            connect_factory = getattr(repository, "connect_factory", None)
-            if repository is None or operator is None or connect_factory is None:
-                return response
             payload = json.loads(response.body)
             organization_id = str(payload.get("organization_id", "")).strip()
             checked_at = int(payload.get("checked_at_epoch", 0))
             if not organization_id or checked_at < 1:
                 return response
-            payload["linked_archives"] = _linked_archive_health(
-                connect_factory,
-                operator,
+
+            # The base Operator snapshot historically exposed only aggregate queue counts.
+            # Enrich that same governed response with a bounded, payload-free recent-job
+            # projection so operators can actually reconcile work that continues after a
+            # browser session ends. Never expose job payload/result bodies or lease tokens.
+            payload["jobs"] = _operator_job_snapshot(
+                getattr(self, "_jobs", None),
                 organization_id,
-                checked_at,
+                payload.get("jobs"),
             )
-            payload["linked_archive_events"] = _linked_archive_events(
-                connect_factory,
-                organization_id,
-            )
+
+            repository = getattr(self, "_linked_storage", None)
+            operator = getattr(self, "_operator", None)
+            connect_factory = getattr(repository, "connect_factory", None)
+            if repository is not None and operator is not None and connect_factory is not None:
+                payload["linked_archives"] = _linked_archive_health(
+                    connect_factory,
+                    operator,
+                    organization_id,
+                    checked_at,
+                )
+                payload["linked_archive_events"] = _linked_archive_events(
+                    connect_factory,
+                    organization_id,
+                )
             return ApiResponse.json(200, payload)
 
         if method != "POST" or response.status != 404:
@@ -99,6 +112,64 @@ class LinkedStorageOperatorApiMixin:
                 }
             },
         )
+
+
+def _operator_job_snapshot(
+    jobs: Any,
+    organization_id: str,
+    aggregate: object,
+) -> dict[str, object]:
+    """Return bounded Operator-safe job metadata for SQLite or PostgreSQL queues."""
+
+    base = dict(aggregate) if isinstance(aggregate, dict) else {}
+    database_path = getattr(jobs, "_database_path", None)
+    if isinstance(database_path, Path) and database_path.is_file():
+        connection = sqlite3.connect(database_path)
+        try:
+            rows = connection.execute(
+                "SELECT job_id,job_type,project_id,status,attempts,created_at_utc,"
+                "updated_at_utc,lease_owner FROM server_jobs "
+                "WHERE organization_id=? ORDER BY updated_at_utc DESC,job_id LIMIT ?",
+                (organization_id, _OPERATOR_JOB_LIMIT),
+            ).fetchall()
+        finally:
+            connection.close()
+        base["recent"] = [_operator_job_row(row) for row in rows]
+        return base
+
+    connect = getattr(jobs, "_connect", None)
+    if callable(connect):
+        with connect() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT job_id,job_type,project_id,status,attempts,created_at_utc,"
+                    "updated_at_utc,lease_owner FROM server_jobs "
+                    "WHERE organization_id=%s ORDER BY updated_at_utc DESC,job_id LIMIT %s",
+                    (organization_id, _OPERATOR_JOB_LIMIT),
+                )
+                rows = cursor.fetchall()
+        base["recent"] = [_operator_job_row(row) for row in rows]
+        return base
+
+    base.setdefault("recent", [])
+    return base
+
+
+def _operator_job_row(row: Any) -> dict[str, object]:
+    return {
+        "job_id": str(row[0]),
+        "job_type": str(row[1]),
+        "project_id": str(row[2] or ""),
+        "status": str(row[3]),
+        "attempts": int(row[4]),
+        "created_at_utc": _operator_timestamp(row[5]),
+        "updated_at_utc": _operator_timestamp(row[6]),
+        "lease_owner": str(row[7] or ""),
+    }
+
+
+def _operator_timestamp(value: Any) -> str:
+    return value.isoformat() if hasattr(value, "isoformat") else str(value or "")
 
 
 def _linked_archive_events(

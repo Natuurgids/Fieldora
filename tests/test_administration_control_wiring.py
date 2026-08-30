@@ -204,16 +204,14 @@ def test_administration_buttons_are_wired_in_final_managed_ui(
 
         before = calls.get("GET administration/users", 0)
         page.locator("#administration-users-refresh").click()
-        page.wait_for_function(
-            "value => window.__fieldoraWiringProbe >= value",
-            arg=0,
-        ) if False else None
         page.wait_for_timeout(25)
         assert calls.get("GET administration/users", 0) > before
 
         page.locator("#administration-user-name").fill("Second User")
         page.locator("#administration-user-username").fill("second.user")
-        page.locator("#administration-user-create-password").fill("temporary-password-123")
+        page.locator("#administration-user-create-password").fill(
+            "temporary-password-123"
+        )
         page.locator("#administration-user-create-roles").fill("researcher")
         page.locator("#administration-user-create").click()
         page.wait_for_selector("#administration-user-create-status:text-is('User created.')")

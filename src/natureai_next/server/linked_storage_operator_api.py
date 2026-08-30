@@ -13,6 +13,7 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
+from uuid import UUID, uuid4
 
 from natureai_next.application.authentication import AuthenticationFailed
 from natureai_next.server.api import ApiResponse
@@ -20,6 +21,7 @@ from natureai_next.server.api import ApiResponse
 _HEARTBEAT_STALE_SECONDS = 120
 _LINKED_ARCHIVE_EVENT_LIMIT = 100
 _OPERATOR_JOB_LIMIT = 100
+_MAX_OPERATOR_BODY = 16_384
 
 
 class LinkedStorageOperatorApiMixin:
@@ -67,6 +69,50 @@ class LinkedStorageOperatorApiMixin:
                 )
             return ApiResponse.json(200, payload)
 
+        if method == "POST" and response.status == 404:
+            if route.path == "/api/v1/operator/linked-storage-services/prepare-id":
+                identity = self._operator_identity(headers)
+                if isinstance(identity, ApiResponse):
+                    return identity
+                if not self._allow_operator(  # type: ignore[attr-defined]
+                    identity, headers, "service.enroll", ""
+                ):
+                    return ApiResponse.json(403, {"error": "forbidden"})
+                return ApiResponse.json(200, {"service_id": str(uuid4())})
+
+            if route.path == "/api/v1/operator/linked-storage-services":
+                identity = self._operator_identity(headers)
+                if isinstance(identity, ApiResponse):
+                    return identity
+                if not self._allow_operator(  # type: ignore[attr-defined]
+                    identity, headers, "service.enroll", ""
+                ):
+                    return ApiResponse.json(403, {"error": "forbidden"})
+                operator = getattr(self, "_operator", None)
+                if operator is None:
+                    return ApiResponse.json(503, {"error": "operator_unavailable"})
+                if len(body) > _MAX_OPERATOR_BODY:
+                    return ApiResponse.json(400, {"error": "invalid_service"})
+                try:
+                    data = json.loads(body)
+                    if not isinstance(data, dict):
+                        raise ValueError("service body must be an object")
+                    service_id = _prepared_service_id(str(data["service_id"]))
+                    item = operator.enroll(
+                        organization_id=identity.organization_id,
+                        name=str(data["name"]),
+                        service_type="linked-storage",
+                        node_name=str(data["node_name"]),
+                        software_version=str(data.get("software_version", "")),
+                        configuration_sha256=str(data.get("configuration_sha256", "")),
+                        certificate_serial=str(data["certificate_serial"]),
+                        certificate_not_after_epoch=int(data["certificate_not_after_epoch"]),
+                        service_id=service_id,
+                    )
+                except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+                    return ApiResponse.json(400, {"error": "invalid_service"})
+                return ApiResponse.json(201, {"service": item.as_dict()})
+
         if method != "POST" or response.status != 404:
             return response
         suffix = route.path.removeprefix("/api/v1/operator/linked-archives/")
@@ -82,10 +128,9 @@ class LinkedStorageOperatorApiMixin:
         set_source_enabled = getattr(repository, "set_source_enabled", None)
         if repository is None or set_source_enabled is None:
             return ApiResponse.json(503, {"error": "linked_storage_unavailable"})
-        try:
-            _token, identity = self._identity(headers)  # type: ignore[attr-defined]
-        except AuthenticationFailed as exc:
-            return ApiResponse.json(401, {"error": "unauthorized", "detail": str(exc)})
+        identity = self._operator_identity(headers)
+        if isinstance(identity, ApiResponse):
+            return identity
         action = f"storage.{operation}"
         if not self._allow_operator(  # type: ignore[attr-defined]
             identity, headers, action, storage_id
@@ -112,6 +157,22 @@ class LinkedStorageOperatorApiMixin:
                 }
             },
         )
+
+    def _operator_identity(self, headers: dict[str, str]) -> Any | ApiResponse:
+        try:
+            _token, identity = self._identity(headers)  # type: ignore[attr-defined]
+        except AuthenticationFailed as exc:
+            return ApiResponse.json(401, {"error": "unauthorized", "detail": str(exc)})
+        return identity
+
+
+def _prepared_service_id(value: str) -> str:
+    normalized = value.strip().casefold()
+    parsed = UUID(normalized)
+    canonical = str(parsed)
+    if normalized != canonical:
+        raise ValueError("linked storage service id must be a canonical UUID")
+    return canonical
 
 
 def _operator_job_snapshot(

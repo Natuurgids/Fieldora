@@ -5,7 +5,8 @@ on:
     paths:
       - "scripts/Test-Fieldora-Web-ReleaseGate.ps1"
       - "WEB_DESKTOP_PARITY_PLAN.md"
-      - ".github/workflows/web060-release-gate-contract.yml"
+      - "tests/test_ci_exact_head_container_safety.py"
+      - ".github/workflows/**"
   workflow_dispatch:
 
 permissions:
@@ -24,6 +25,16 @@ jobs:
       - name: Verify exact PR head
         if: ${{ github.event_name == 'pull_request' }}
         run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Certify container exact-head verification safety
+        run: |
+          python -m pip install pytest
+          python -m pytest -q tests/test_ci_exact_head_container_safety.py
 
       - name: Certify fail-closed WEB-060 release gate contract
         shell: pwsh

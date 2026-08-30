@@ -30,7 +30,7 @@ _ADMINISTRATION_MANAGEMENT_WEB_PATCH = bytes(
  function renderUsers(items){
   const target=byId("administration-users-list");if(!target)return;
   target.innerHTML=items.length?items.map(user=>`<button class="row" type="button" data-administration-user="${html(user.identity_id)}"><strong>${html(user.display_name)}</strong><span>${html(user.username||"No local sign-in")}</span><span class="pill">${user.enabled?"Active":"Inactive"}</span><span>${html((user.roles||[]).join(", ")||"No direct role")}</span></button>`).join(""):'<div class="empty">No user accounts in this organisation.</div>';
-  target.querySelectorAll("[data-administration-user]").forEach(button=>button.addEventListener("click",()=>selectAdministrationUser(button.dataset.administrationUser||"")));
+  target.querySelectorAll("[data-administration-user]").forEach(button=>button.onclick=()=>selectAdministrationUser(button.dataset.administrationUser||""));
  }
 
  async function loadAdministrationUsers(){

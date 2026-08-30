@@ -1,0 +1,39 @@
+name: Fieldora intake review continuity certification
+
+on:
+  pull_request:
+    paths:
+      - 'src/natureai_next/server/intake_review_web.py'
+      - 'src/natureai_next/server/linked_storage_browser_api.py'
+      - 'src/natureai_next/server/web_compatibility.py'
+      - 'src/natureai_next/server/platform_api.py'
+      - 'tests/test_intake_review_web_continuity.py'
+      - '.github/workflows/intake-review-continuity-certification.yml'
+  workflow_dispatch:
+
+jobs:
+  intake-review-continuity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Verify exact PR head
+        if: ${{ github.event_name == 'pull_request' }}
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install certification dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -e '.[dev]'
+      - name: Ruff intake review continuity boundary
+        run: >-
+          python -m ruff check
+          src/natureai_next/server/intake_review_web.py
+          src/natureai_next/server/linked_storage_browser_api.py
+          tests/test_intake_review_web_continuity.py
+      - name: Intake review continuity
+        run: python -m pytest -q tests/test_intake_review_web_continuity.py

@@ -91,7 +91,7 @@ class PublishingStagedIngestionService(StagedIngestionService):
         submission = self.store.submission(item.submission_id)
         if (
             submission is not None
-            and submission.state == "validated_with_rejections"
+            and submission.state in {"validated_with_rejections", "ready_to_publish"}
             and not self.store.files(submission.submission_id, "validated")
         ):
             self.store.set_submission_state(submission.submission_id, "rejected")

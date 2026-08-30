@@ -9,12 +9,24 @@ from natureai_next.server.api import ApiResponse
 _LINKED_STORAGE_OPERATOR_WEB_PATCH = bytes(
     r"""
 
-/* Fieldora Operator: linked archive ownership, freshness and governed lifecycle. */
+/* Fieldora Operator: durable jobs plus linked archive ownership and lifecycle. */
 (()=>{
  if(window.__fieldoraLinkedStorageOperatorWired)return;
  window.__fieldoraLinkedStorageOperatorWired=true;
  const byId=id=>document.getElementById(id);
  const html=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+ function renderJobs(jobs){
+  const target=byId("operator-jobs");if(!target)return;
+  const counts=jobs?.by_status||{},recent=jobs?.recent||[];
+  const summary=Object.entries(counts).map(([state,count])=>`${state}: ${count}`).join(" · ")||"No queued work";
+  target.outerHTML=`<div id="operator-jobs"><p class="muted" id="operator-job-summary">${html(summary)}</p><div id="operator-job-list" class="list">${recent.length?recent.map(job=>{
+   const when=job.updated_at_utc?new Date(job.updated_at_utc).toLocaleString():"unknown time";
+   const scope=job.project_id?`project ${job.project_id}`:"organization scope";
+   const worker=job.lease_owner?` · worker ${job.lease_owner}`:"";
+   return `<div class="row" data-operator-job="${html(job.job_id)}"><strong>${html(job.job_type)}</strong><span>${html(job.job_id)} · ${html(scope)}</span><span class="pill">${html(job.status)} · attempt ${html(job.attempts)}</span><span>${html(when+worker)}</span></div>`;
+  }).join(""):'<div class="empty">No durable jobs recorded for this organization.</div>'}</div></div>`;
+ }
 
  async function setArchiveEnabled(storageId,enabled){
   const status=byId("operator-linked-archives-status"),operation=enabled?"enable":"disable";
@@ -22,7 +34,7 @@ _LINKED_STORAGE_OPERATOR_WEB_PATCH = bytes(
   try{
    await api(`/api/v1/operator/linked-archives/${encodeURIComponent(storageId)}/${operation}`,{method:"POST",purpose:"administration",body:"{}"});
    if(status)status.textContent=`Linked archive ${enabled?"enabled":"disabled"}.`;
-   await loadLinkedArchives();
+   await loadOperatorExtensions();
   }catch(error){if(status)status.textContent=error.message}
  }
 
@@ -34,10 +46,11 @@ _LINKED_STORAGE_OPERATOR_WEB_PATCH = bytes(
   }).join(""):'<div class="empty">No linked archive lifecycle events recorded.</div>';
  }
 
- async function loadLinkedArchives(){
+ async function loadOperatorExtensions(){
   const target=byId("operator-linked-archives");if(!target)return;
   try{
    const overview=await api("/api/v1/operator/overview",{purpose:"administration"}),items=overview.linked_archives||[];
+   renderJobs(overview.jobs||{});
    target.innerHTML=items.length?items.map(item=>{
     const enabled=item.enabled!==false,age=item.heartbeat_age_seconds==null?"no heartbeat":`${item.heartbeat_age_seconds}s heartbeat age`;
     const health=!enabled?"Disabled":item.stale?"Needs attention":"Healthy",operation=enabled?"disable":"enable",label=enabled?"Disable archive":"Enable archive";
@@ -57,10 +70,10 @@ _LINKED_STORAGE_OPERATOR_WEB_PATCH = bytes(
    if(storage)storage.after(section);else page.appendChild(section);
   }
   const nav=document.querySelector('.nav[data-page="operator"]');
-  if(nav&&!nav.dataset.linkedArchivesWired){nav.dataset.linkedArchivesWired="true";nav.addEventListener("click",()=>setTimeout(loadLinkedArchives,0))}
+  if(nav&&!nav.dataset.linkedArchivesWired){nav.dataset.linkedArchivesWired="true";nav.addEventListener("click",()=>setTimeout(loadOperatorExtensions,0))}
   const refresh=byId("operator-refresh");
-  if(refresh&&!refresh.dataset.linkedArchivesWired){refresh.dataset.linkedArchivesWired="true";refresh.addEventListener("click",()=>setTimeout(loadLinkedArchives,0))}
-  if(!page.hidden)loadLinkedArchives();
+  if(refresh&&!refresh.dataset.linkedArchivesWired){refresh.dataset.linkedArchivesWired="true";refresh.addEventListener("click",()=>setTimeout(loadOperatorExtensions,0))}
+  if(!page.hidden)loadOperatorExtensions();
   return true;
  }
 

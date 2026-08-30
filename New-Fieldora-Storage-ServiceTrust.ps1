@@ -4,7 +4,7 @@ Create the mTLS trust handoff for one prepared Fieldora linked-storage service I
 This helper is intentionally run on the trusted Fieldora host. It uses the existing
 installation-local constrained service issuer through a short-lived container, writes only
 the storage service certificate/private key plus the public CA certificate to the handoff
-directory, and never exposes key material to the browser.
+directory, and never exposes key material to the browser or mounts the offline root CA key.
 #>
 
 [CmdletBinding()]
@@ -49,20 +49,22 @@ if ($organizationId.Contains("/") -or $organizationId.Contains("\")) {
 }
 
 $installFull = [IO.Path]::GetFullPath($InstallRoot)
-$authorityRoot = Join-Path $installFull "service-trust"
 $sourceRoot = Join-Path $installFull "source"
 if (-not (Test-Path -LiteralPath (Join-Path $sourceRoot "pyproject.toml"))) {
     throw "Fieldora source is missing under $sourceRoot. Run the clean installer first."
-}
-foreach ($required in @("ca-certificate.pem", "issuer-certificate.pem", "issuer-private.pem")) {
-    if (-not (Test-Path -LiteralPath (Join-Path $authorityRoot $required))) {
-        throw "Fieldora service authority is missing $required under $authorityRoot."
-    }
 }
 
 $image = "fieldora-v5-rocky:local"
 $imageFound = (@(& docker images --format "{{.Repository}}:{{.Tag}}") -join "`n") -split "`n" | Where-Object { $_ -eq $image }
 if (-not $imageFound) { throw "Fieldora runtime image $image is missing. Run the clean installer first." }
+
+$issuerVolume = "fieldora-issuer-authority"
+$volumeFound = (@(& docker volume ls --filter "name=^${issuerVolume}$" --format "{{.Name}}") -join "").Trim()
+if ($volumeFound -ne $issuerVolume) {
+    throw "Constrained Fieldora issuer volume $issuerVolume is missing. Run the clean installer first."
+}
+& docker run --rm --user 0 -v "${issuerVolume}:/authority:ro" $image sh -lc "test -f /authority/ca-certificate.pem && test -f /authority/issuer-certificate.pem && test -f /authority/issuer-private.pem && test ! -e /authority/ca-private.pem"
+Assert-Exit "Constrained issuer authority is incomplete or contains the offline root CA private key"
 
 if ([string]::IsNullOrWhiteSpace($OutputRoot)) {
     $OutputRoot = Join-Path $installFull (Join-Path "linked-storage-trust" $canonicalServiceId)
@@ -75,12 +77,12 @@ $caPath = Join-Path $outputFull "ca-certificate.pem"
 if (-not $Force -and ((Test-Path $certificatePath) -or (Test-Path $privateKeyPath))) {
     throw "Storage service trust already exists at $outputFull. Use -Force only for an intentional certificate/key replacement."
 }
-Remove-Item -LiteralPath $certificatePath,$privateKeyPath -Force -ErrorAction SilentlyContinue
+Remove-Item -LiteralPath $certificatePath,$privateKeyPath,$caPath -Force -ErrorAction SilentlyContinue
 
 Write-Host "Issuing mTLS certificate for linked-storage service $canonicalServiceId..." -ForegroundColor Cyan
 $issuedJson = Docker-Output {
     docker run --rm --user 0 `
-        -v "${authorityRoot}:/authority" `
+        -v "${issuerVolume}:/authority:ro" `
         -v "${outputFull}:/output" `
         $image `
         fieldora-service-trust --root /authority issue `
@@ -98,7 +100,8 @@ if ($issued.service_id -ne $canonicalServiceId -or $issued.organization_id -ne $
     throw "Issued certificate identity does not match the requested Fieldora service identity."
 }
 
-Copy-Item -LiteralPath (Join-Path $authorityRoot "ca-certificate.pem") -Destination $caPath -Force
+& docker run --rm --user 0 -v "${issuerVolume}:/authority:ro" -v "${outputFull}:/output" $image sh -lc "cp /authority/ca-certificate.pem /output/ca-certificate.pem"
+Assert-Exit "Unable to copy the public Fieldora CA certificate into the storage handoff"
 foreach ($required in @($certificatePath,$privateKeyPath,$caPath)) {
     if (-not (Test-Path -LiteralPath $required)) { throw "Storage trust handoff is incomplete: $required" }
 }
@@ -123,6 +126,7 @@ $handoff = [ordered]@{
     trust_directory = $outputFull
     browser_safe_fields = @("service_id", "organization_id", "certificate_serial", "certificate_expiry_date")
     private_key_content_recorded = $false
+    offline_root_ca_private_key_mounted = $false
 }
 $handoffPath = Join-Path $outputFull "HANDOFF.json"
 $handoff | ConvertTo-Json -Depth 3 | Set-Content -LiteralPath $handoffPath -Encoding utf8NoBOM

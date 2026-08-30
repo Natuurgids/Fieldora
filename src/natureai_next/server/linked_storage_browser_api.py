@@ -12,6 +12,9 @@ from natureai_next.server.intake_review_web import patch_intake_review_web_respo
 from natureai_next.server.linked_storage_operator_web import (
     patch_linked_storage_operator_web_response,
 )
+from natureai_next.server.linked_storage_setup_web import (
+    patch_linked_storage_setup_web_response,
+)
 from natureai_next.server.linked_storage_web import patch_linked_storage_web_response
 from natureai_next.server.media_detail_web import patch_media_detail_response
 from natureai_next.server.project_lifecycle_api import ProjectLifecycleFieldoraApi
@@ -60,6 +63,7 @@ class LinkedStorageBrowserFieldoraApi(ProjectLifecycleFieldoraApi):
                 response = ApiResponse.json(404, {"error": "not_found"})
         response = patch_linked_storage_web_response(target, response)
         response = patch_linked_storage_operator_web_response(target, response)
+        response = patch_linked_storage_setup_web_response(target, response)
         response = patch_intake_review_web_response(target, response)
         return patch_media_detail_response(target, response)
 

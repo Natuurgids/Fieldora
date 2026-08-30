@@ -2,7 +2,7 @@
 
 The routes in this module deliberately reuse the existing governance authority:
 an identity must already be allowed to administer organisation contracts before it
-can administer human identities in that same organisation.  Password material is
+can administer human identities in that same organisation. Password material is
 never returned and disabling an account revokes its active sessions immediately.
 """
 
@@ -64,14 +64,20 @@ def _direct_roles(repository, identity_id: str, organization_id: str) -> tuple[s
     return tuple(str(row[0]) for row in rows)
 
 
-def _payload(repository, identity, credential: dict[str, object] | None = None) -> dict[str, object]:
+def _payload(
+    repository, identity, credential: dict[str, object] | None = None
+) -> dict[str, object]:
     credential = credential or {}
     return {
         "identity_id": identity.identity_id,
         "display_name": identity.display_name,
         "username": str(credential.get("username", "")),
-        "enabled": bool(identity.enabled and credential.get("credential_enabled", True)),
-        "roles": list(_direct_roles(repository, identity.identity_id, identity.organization_id)),
+        "enabled": bool(
+            identity.enabled and credential.get("credential_enabled", True)
+        ),
+        "roles": list(
+            _direct_roles(repository, identity.identity_id, identity.organization_id)
+        ),
     }
 
 
@@ -106,7 +112,9 @@ def _set_enabled(repository, identity_id: str, enabled: bool) -> None:
         connection.close()
 
 
-def _replace_roles(repository, identity_id: str, organization_id: str, roles: list[str]) -> None:
+def _replace_roles(
+    repository, identity_id: str, organization_id: str, roles: list[str]
+) -> None:
     normalized = sorted({role.strip() for role in roles if role.strip()})
     if len(normalized) > 32 or any(len(role) > 100 for role in normalized):
         raise ValueError("invalid_roles")
@@ -120,6 +128,26 @@ def _replace_roles(repository, identity_id: str, organization_id: str, roles: li
         connection.executemany(
             "INSERT OR IGNORE INTO access_role_assignments VALUES(?,?,?,?)",
             ((identity_id, role, organization_id, "") for role in normalized),
+        )
+    finally:
+        connection.close()
+
+
+def _remove_incomplete_user(repository, identity_id: str) -> None:
+    """Remove a user that failed before account creation could complete."""
+    connection = repository._factory.connect()
+    try:
+        connection.execute(
+            "DELETE FROM access_sessions WHERE identity_id=?", (identity_id,)
+        )
+        connection.execute(
+            "DELETE FROM access_credentials WHERE identity_id=?", (identity_id,)
+        )
+        connection.execute(
+            "DELETE FROM access_role_assignments WHERE subject_id=?", (identity_id,)
+        )
+        connection.execute(
+            "DELETE FROM access_identities WHERE identity_id=?", (identity_id,)
         )
     finally:
         connection.close()
@@ -157,13 +185,19 @@ def dispatch_administration_management(
         return ApiResponse.json(200, {"items": users, "count": len(users)})
 
     if path == _BASE and method == "POST":
+        identity = None
         try:
             data = _json_body(body)
             display_name = str(data["display_name"]).strip()
             username = str(data["username"]).strip().casefold()
             password = str(data["password"])
             roles_value = data.get("roles", [])
-            if not display_name or not username or not isinstance(roles_value, list):
+            if (
+                not display_name
+                or not username
+                or len(password) < 12
+                or not isinstance(roles_value, list)
+            ):
                 raise ValueError("invalid_request")
             if repository.credential(username) is not None:
                 return ApiResponse.json(409, {"error": "username_exists"})
@@ -171,13 +205,25 @@ def dispatch_administration_management(
             identity = AccessAdministrationService(repository).create_identity(
                 display_name, actor.organization_id, IdentityKind.USER
             )
-            application._authentication.set_password(identity.identity_id, username, password)
-            _replace_roles(repository, identity.identity_id, actor.organization_id, roles)
+            application._authentication.set_password(
+                identity.identity_id, username, password
+            )
+            _replace_roles(
+                repository, identity.identity_id, actor.organization_id, roles
+            )
         except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+            if identity is not None:
+                _remove_incomplete_user(repository, identity.identity_id)
             return ApiResponse.json(400, {"error": "invalid_user"})
         return ApiResponse.json(
             201,
-            {"user": _payload(repository, identity, {"username": username, "credential_enabled": True})},
+            {
+                "user": _payload(
+                    repository,
+                    identity,
+                    {"username": username, "credential_enabled": True},
+                )
+            },
         )
 
     remainder = path.removeprefix(_BASE + "/")
@@ -197,12 +243,23 @@ def dispatch_administration_management(
             if not isinstance(enabled, bool):
                 raise ValueError("invalid_status")
             if identity_id == actor.identity_id and not enabled:
-                return ApiResponse.json(409, {"error": "cannot_disable_current_user"})
+                return ApiResponse.json(
+                    409, {"error": "cannot_disable_current_user"}
+                )
             _set_enabled(repository, identity_id, enabled)
         except (KeyError, TypeError, ValueError, json.JSONDecodeError):
             return ApiResponse.json(400, {"error": "invalid_status"})
         refreshed = repository.identity(identity_id)
-        return ApiResponse.json(200, {"user": _payload(repository, refreshed, _credential_rows(repository, actor.organization_id).get(identity_id))})
+        return ApiResponse.json(
+            200,
+            {
+                "user": _payload(
+                    repository,
+                    refreshed,
+                    _credential_rows(repository, actor.organization_id).get(identity_id),
+                )
+            },
+        )
 
     if separator and action == "password" and method == "POST":
         try:

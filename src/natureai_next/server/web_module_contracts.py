@@ -155,7 +155,17 @@ FOUNDATION_WEB_MODULES: tuple[WebModuleSpec, ...] = (
     WebModuleSpec("library.catalog", "/library", "Library"),
     WebModuleSpec("observations.core", "/observations", "Observations"),
     WebModuleSpec("projects.core", "/projects", "Projects"),
-    WebModuleSpec("portfolio", "/portfolio", "Portfolio", dependencies=("projects.core",)),
+    WebModuleSpec(
+        "portfolio",
+        "/portfolio",
+        "Portfolio",
+        owns_actions=(
+            "portfolio.view.select",
+            "portfolio.scope.select",
+            "portfolio.project.open",
+        ),
+        dependencies=("projects.core",),
+    ),
     WebModuleSpec("research.dossiers", "/research", "Research"),
     WebModuleSpec("knowledge.center", "/knowledge", "Knowledge & AI"),
     WebModuleSpec("admin.shell", "/administration", "Administration", capability="administration.view"),

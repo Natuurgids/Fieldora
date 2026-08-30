@@ -8,6 +8,7 @@ from natureai_next.application.authentication import AuthenticationFailed
 from natureai_next.domain.access_control import AccessRequest
 from natureai_next.server.api import ApiResponse
 from natureai_next.server.browser_functionality_api import _session_cookie
+from natureai_next.server.intake_review_web import patch_intake_review_web_response
 from natureai_next.server.linked_storage_operator_web import (
     patch_linked_storage_operator_web_response,
 )
@@ -59,6 +60,7 @@ class LinkedStorageBrowserFieldoraApi(ProjectLifecycleFieldoraApi):
                 response = ApiResponse.json(404, {"error": "not_found"})
         response = patch_linked_storage_web_response(target, response)
         response = patch_linked_storage_operator_web_response(target, response)
+        response = patch_intake_review_web_response(target, response)
         return patch_media_detail_response(target, response)
 
     @staticmethod

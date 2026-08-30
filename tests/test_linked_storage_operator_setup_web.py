@@ -3,6 +3,9 @@ from __future__ import annotations
 from natureai_next.server.linked_storage_operator_web import (
     _LINKED_STORAGE_OPERATOR_WEB_PATCH,
 )
+from natureai_next.server.linked_storage_setup_web import (
+    _LINKED_STORAGE_SETUP_WEB_PATCH,
+)
 
 
 def test_linked_storage_setup_enrolls_governed_service_without_storage_secrets() -> None:
@@ -40,9 +43,16 @@ def test_linked_storage_setup_requires_explicit_activation_and_node_registration
 
 def test_linked_storage_empty_state_points_to_real_setup_flow() -> None:
     patch = _LINKED_STORAGE_OPERATOR_WEB_PATCH.decode("utf-8")
+    handoff = _LINKED_STORAGE_SETUP_WEB_PATCH.decode("utf-8")
 
     assert "No linked archives registered for this organization. Enroll and activate" in patch
     assert 'operatorOrganizationId=String(overview.organization_id||"")' in patch
     assert "Storage-node handoff" in patch
     assert "Service ID" in patch
     assert "Organization ID" in patch
+
+    assert 'id="linked-storage-operator-setup"' in handoff
+    assert 'document.querySelector(\'.nav[data-page="operator"]\')' in handoff
+    assert 'showPage("operator")' in handoff
+    assert 'byId("operator-linked-service-name")?.focus()' in handoff
+    assert "operatorNav" in handoff

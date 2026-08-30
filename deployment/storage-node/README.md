@@ -9,6 +9,39 @@ The storage service owns the real filesystem mount and presents only an opaque
 ranges to Fieldora. The browser and Fieldora API do not receive the host mount path
 or storage credentials.
 
+## Provision a storage-service identity
+
+The storage certificate and the durable Operator identity must contain the **same
+service ID**. The setup flow therefore prepares the ID before certificate issuance;
+it does not create a certificate for an identity that the server invents later.
+
+1. In **Operator -> Linked archives -> Connect a storage service**, choose
+   **Prepare service ID**. Fieldora returns a server-prepared opaque UUID. It is not
+   active and grants no storage access by itself.
+2. On the trusted Fieldora host, create the mTLS handoff for that exact ID. For the
+   clean Windows reference installation:
+
+   ```powershell
+   .\New-Fieldora-Storage-ServiceTrust.ps1 `
+     -InstallRoot D:\FDTEST `
+     -ServiceId <prepared-service-id> `
+     -Organization local
+   ```
+
+   The helper uses the installation-local constrained service issuer in a one-shot
+   container. It writes `service.crt`, `service.key`, and the public
+   `ca-certificate.pem` under
+   `D:\FDTEST\linked-storage-trust\<service-id>` by default. It does not download
+   anything and does not copy the root or issuer private key into the handoff.
+3. Enter only the returned **certificate serial** and **certificate expiry** in the
+   Operator form, then enroll the linked-storage service. Never paste the private
+   key or CA material into the browser.
+4. Explicitly activate the enrolled service. Activation is separate from
+   enrollment so a prepared or partially configured node cannot silently become
+   trusted.
+5. Start the storage node with the same service ID, organization, and generated
+   trust directory. The node registers its read-only archive over mTLS.
+
 ## Supported deployment shapes
 
 ### 1. Direct attached storage on the Fieldora host
@@ -23,7 +56,7 @@ the storage service to Fieldora's private Docker network so the mTLS endpoint ca
 be `https://fieldora-server:8765`; no Fieldora API port needs to be exposed beyond
 the existing localhost browser listener.
 
-Example PowerShell environment setup:
+Example PowerShell environment setup after enrollment and activation:
 
 ```powershell
 $env:FIELDORA_STORAGE_ENDPOINT = "https://fieldora-server:8765"
@@ -33,7 +66,7 @@ $env:FIELDORA_STORAGE_ID = "archive-main"
 $env:FIELDORA_STORAGE_DISPLAY_NAME = "Main archive"
 $env:FIELDORA_STORAGE_ROOT_ALIAS = "main-archive"
 $env:FIELDORA_STORAGE_ROOT = "D:\Archive"
-$env:FIELDORA_STORAGE_TRUST_DIR = "D:\FieldoraStorageTrust"
+$env:FIELDORA_STORAGE_TRUST_DIR = "D:\FDTEST\linked-storage-trust\<service-id>"
 
 docker compose `
   -f deployment/storage-node/compose.yaml `
@@ -71,6 +104,11 @@ Use `compose.yaml` by itself. Configure `FIELDORA_STORAGE_ENDPOINT` to an HTTPS 
 origin reachable from that host and covered by the Fieldora server certificate.
 The storage service makes outbound mTLS requests to Fieldora; it does not expose an
 inbound NAS/file protocol to browsers or API nodes.
+
+For a remote host, generate the service trust handoff on the trusted Fieldora host,
+then transfer only the resulting storage-service trust directory through the site's
+approved secure provisioning channel. The Fieldora root and issuer private keys
+must stay on the trusted Fieldora host.
 
 ## Bastion is optional
 

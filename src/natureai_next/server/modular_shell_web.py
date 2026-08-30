@@ -6,10 +6,9 @@ navigation/page nodes, owns browser route/history synchronization for registered
 modules, and emits lifecycle events that migrated modules can consume
 independently.
 
-The final-response migration step also removes the old navigation compatibility
-wrapper that replaced ``showPage`` solely to maintain hash history.  The shell
-may call the existing renderer during migration, but it never replaces that
-global function.
+The final-response migration step removes compatibility fragments only after an
+owning module exists for that responsibility.  The shell may call the existing
+renderer during migration, but it never replaces that global function.
 """
 from __future__ import annotations
 
@@ -20,11 +19,6 @@ from natureai_next.server.api import ApiResponse
 from natureai_next.server.web_module_contracts import foundation_registry
 
 
-# Transitional removal target from navigation_web_compatibility.py.  Keeping the
-# exact, narrowly scoped fragment here lets the outermost shell stop serving the
-# global showPage override before the larger compatibility module is split into
-# feature-owned adapters.  Once that source module is decomposed this constant
-# can be deleted.
 _LEGACY_HISTORY_ROUTING_PATCH = bytes(
     r"""
  const oldShowPage=showPage;
@@ -47,6 +41,21 @@ _LEGACY_HISTORY_ROUTING_PATCH = bytes(
 """,
     "utf-8",
 )
+
+_LEGACY_PORTFOLIO_START = b" /* Projects & Portfolio used to change only the selected button.  Render a\n"
+_LEGACY_PORTFOLIO_END = b" /* Knowledge tabs previously had no state or handlers at all. */"
+
+
+def _strip_legacy_range(body: bytes, start: bytes, end: bytes) -> bytes:
+    """Remove one migrated compatibility responsibility by stable markers."""
+
+    start_index = body.find(start)
+    if start_index < 0:
+        return body
+    end_index = body.find(end, start_index)
+    if end_index < 0:
+        return body
+    return body[:start_index] + body[end_index:]
 
 
 def modular_shell_manifest() -> tuple[dict[str, object], ...]:
@@ -111,12 +120,13 @@ _MODULAR_SHELL_BOOTSTRAP = _bootstrap_script()
 
 
 def patch_modular_shell_response(target: str, response: ApiResponse) -> ApiResponse:
-    """Migrate route/history ownership and append the shell exactly once."""
+    """Remove migrated compatibility wiring and append the shell exactly once."""
 
     if urlsplit(target).path != "/app.js" or response.status != 200:
         return response
 
     body = response.body.replace(_LEGACY_HISTORY_ROUTING_PATCH, b"", 1)
+    body = _strip_legacy_range(body, _LEGACY_PORTFOLIO_START, _LEGACY_PORTFOLIO_END)
     if _MODULAR_SHELL_BOOTSTRAP not in body:
         body += _MODULAR_SHELL_BOOTSTRAP
     if body == response.body:

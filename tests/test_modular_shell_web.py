@@ -16,6 +16,11 @@ def test_manifest_exposes_distinct_project_and_portfolio_owners() -> None:
     assert by_id["projects.core"]["route"] == "/projects"
     assert by_id["portfolio"]["route"] == "/portfolio"
     assert by_id["portfolio"]["dependencies"] == ["projects.core"]
+    assert by_id["portfolio"]["owns_actions"] == [
+        "portfolio.view.select",
+        "portfolio.scope.select",
+        "portfolio.project.open",
+    ]
     assert by_id["admin.shell"]["capability"] == "administration.view"
 
 
@@ -51,10 +56,12 @@ def test_modular_shell_owns_navigation_and_browser_history_without_replacing_ren
     assert "showPage=function" not in script
 
 
-def test_final_composed_response_removes_legacy_show_page_history_wrapper() -> None:
+def test_final_composed_response_removes_migrated_navigation_and_portfolio_wiring() -> None:
     base = ApiResponse(200, b"const baseApp=true;", "text/javascript; charset=utf-8")
     legacy = patch_navigation_web_response("/app.js", base)
     assert b"showPage=function(name)" in legacy.body
+    assert b"loadPortfolio=async function" in legacy.body
+    assert b"loadKnowledge=async function" in legacy.body
 
     final = patch_modular_shell_response("/app.js", legacy)
     script = final.body.decode("utf-8")
@@ -62,10 +69,11 @@ def test_final_composed_response_removes_legacy_show_page_history_wrapper() -> N
     assert "const baseApp=true" in script
     assert "oldShowPage=showPage" not in script
     assert "showPage=function(name)" not in script
+    assert "loadPortfolio=async function" not in script
     assert "window.FieldoraModules" in script
-    # Feature compatibility remains until those responsibilities migrate into
-    # their owning modules; this change removes routing/history coupling only.
-    assert "loadPortfolio=async function" in script
+    # Knowledge and other feature compatibility remain until those modules own
+    # their responsibilities. Portfolio has now been explicitly extracted.
+    assert "loadKnowledge=async function" in script
 
 
 def test_non_app_script_response_is_untouched() -> None:

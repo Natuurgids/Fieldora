@@ -39,7 +39,8 @@ def test_linked_storage_setup_requires_explicit_activation_and_node_registration
     assert 'id="operator-linked-service-activate"' in patch
     assert '/api/v1/operator/services/${encodeURIComponent(serviceId)}/activate' in patch
     assert "It is not active until explicitly activated." in patch
-    assert "The storage node registers the read-only archive after mTLS activation." in patch
+    assert "Storage service active. Configure the storage node with the handoff values below" in patch
+    assert "the node registers its read-only archive over mTLS." in patch
     assert "Root paths, root aliases, private keys, CA material and source credentials" in patch
     assert "/internal/v1/storage/sources" not in patch
 

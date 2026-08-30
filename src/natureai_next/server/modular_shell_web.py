@@ -45,6 +45,15 @@ _LEGACY_HISTORY_ROUTING_PATCH = bytes(
 _LEGACY_PORTFOLIO_START = b" /* Projects & Portfolio used to change only the selected button.  Render a\n"
 _LEGACY_PORTFOLIO_END = b" /* Knowledge tabs previously had no state or handlers at all. */"
 
+# The desktop-density Projects/Facilities cockpit predates explicit module
+# ownership and contains a second Portfolio renderer plus a global loadPortfolio
+# wrapper.  Portfolio now has an owning module, so the final served script removes
+# those overlapping responsibilities while retaining the Projects cockpit itself.
+_PROJECT_COCKPIT_PORTFOLIO_RENDER_START = b" function portfolioData(){"
+_PROJECT_COCKPIT_PORTFOLIO_RENDER_END = b" function setProjectCenter(view){"
+_PROJECT_COCKPIT_PORTFOLIO_WIRING_START = b"  const oldPortfolio=loadPortfolio;"
+_PROJECT_COCKPIT_PORTFOLIO_WIRING_END = b"  renderProjectTree();\n }"
+
 
 def _strip_legacy_range(body: bytes, start: bytes, end: bytes) -> bytes:
     """Remove one migrated compatibility responsibility by stable markers."""
@@ -127,6 +136,16 @@ def patch_modular_shell_response(target: str, response: ApiResponse) -> ApiRespo
 
     body = response.body.replace(_LEGACY_HISTORY_ROUTING_PATCH, b"", 1)
     body = _strip_legacy_range(body, _LEGACY_PORTFOLIO_START, _LEGACY_PORTFOLIO_END)
+    body = _strip_legacy_range(
+        body,
+        _PROJECT_COCKPIT_PORTFOLIO_RENDER_START,
+        _PROJECT_COCKPIT_PORTFOLIO_RENDER_END,
+    )
+    body = _strip_legacy_range(
+        body,
+        _PROJECT_COCKPIT_PORTFOLIO_WIRING_START,
+        _PROJECT_COCKPIT_PORTFOLIO_WIRING_END,
+    )
     if _MODULAR_SHELL_BOOTSTRAP not in body:
         body += _MODULAR_SHELL_BOOTSTRAP
     if body == response.body:

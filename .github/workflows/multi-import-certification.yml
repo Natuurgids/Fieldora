@@ -28,6 +28,7 @@ jobs:
         run: >-
           python -m ruff check
           tests/test_browser_multi_import_http.py
+          tests/test_directory_intake_background_web.py
           tests/test_staged_library_publication.py
           src/natureai_next/server/browser_functionality_web.py
           src/natureai_next/server/directory_intake_web.py
@@ -36,5 +37,7 @@ jobs:
           src/natureai_next/server/http.py
       - name: Browser multi import over real HTTP
         run: python -m pytest -q tests/test_browser_multi_import_http.py
+      - name: Durable background folder import observability
+        run: python -m pytest -q tests/test_directory_intake_background_web.py
       - name: Staged folder publishes into governed Library
         run: python -m pytest -q tests/test_staged_library_publication.py

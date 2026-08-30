@@ -10,6 +10,12 @@ from collections.abc import Callable
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+from natureai_next.server.administration_management_api import (
+    dispatch_administration_management,
+)
+from natureai_next.server.administration_management_web import (
+    patch_administration_management_web_response,
+)
 from natureai_next.server.administration_workspace_web import (
     patch_administration_workspace_web_response,
 )
@@ -92,7 +98,9 @@ class ReloadingTLSServer(ThreadingHTTPServer):
         super().__init__(server_address, handler)
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         context.minimum_version = ssl.TLSVersion.TLSv1_2
-        self.certificate_chain = ReloadingCertificateChain(context, certificate, private_key)
+        self.certificate_chain = ReloadingCertificateChain(
+            context, certificate, private_key
+        )
 
     def get_request(self) -> tuple[socket.socket, tuple[str, int]]:
         request, address = super().get_request()
@@ -120,6 +128,7 @@ def patch_managed_web_response(target: str, response):
         patch_library_collections_web_response,
         patch_science_workflow_web_response,
         patch_administration_workspace_web_response,
+        patch_administration_management_web_response,
         patch_workspace_language_web_response,
         patch_project_facility_workspace_response,
         patch_offline_models_web_response,
@@ -131,7 +140,9 @@ def patch_managed_web_response(target: str, response):
     return response
 
 
-def handler_for(application: FieldoraApi, *, tls_enabled: bool = False) -> type[BaseHTTPRequestHandler]:
+def handler_for(
+    application: FieldoraApi, *, tls_enabled: bool = False
+) -> type[BaseHTTPRequestHandler]:
     class Handler(BaseHTTPRequestHandler):
         server_version = "Fieldora"
 
@@ -160,6 +171,12 @@ def handler_for(application: FieldoraApi, *, tls_enabled: bool = False) -> type[
             body = self.rfile.read(content_length) if content_length else b""
             headers = {key.lower(): value for key, value in self.headers.items()}
             response = application.dispatch(self.command, target, headers, body)
+            if response.status == 404:
+                administration = dispatch_administration_management(
+                    application, self.command, target, headers, body
+                )
+                if administration is not None:
+                    response = administration
             response = project_help_response(application, target, headers, response)
             response = patch_managed_web_response(target, response)
             self._write(response)

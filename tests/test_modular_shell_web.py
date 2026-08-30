@@ -6,6 +6,7 @@ from natureai_next.server.modular_shell_web import (
     modular_shell_manifest,
     patch_modular_shell_response,
 )
+from natureai_next.server.navigation_web_compatibility import patch_navigation_web_response
 from natureai_next.server.offline_first_api import OfflineFirstFieldoraApi
 
 
@@ -50,40 +51,21 @@ def test_modular_shell_owns_navigation_and_browser_history_without_replacing_ren
     assert "showPage=function" not in script
 
 
-def test_final_response_removes_legacy_show_page_history_wrapper() -> None:
-    legacy = b'''
- const oldShowPage=showPage;
- const pageExists=name=>Boolean(q(`page-${name}`));
- let applyingHistory=false;
- showPage=function(name){
-  oldShowPage(name);
-  if(!applyingHistory&&pageExists(name)&&location.hash!==`#${name}`){
-   history.pushState({fieldoraPage:name},"",`#${name}`);
-  }
- };
- function routeFromLocation(){
-  const name=(location.hash||"#home").slice(1);
-  if(!pageExists(name))return;
-  applyingHistory=true;try{oldShowPage(name)}finally{applyingHistory=false}
- }
- window.addEventListener("popstate",routeFromLocation);
- window.addEventListener("hashchange",routeFromLocation);
- setTimeout(routeFromLocation,0);
-'''
-    original = ApiResponse(
-        200,
-        b"const before=true;" + legacy + b"const after=true;",
-        "text/javascript; charset=utf-8",
-    )
+def test_final_composed_response_removes_legacy_show_page_history_wrapper() -> None:
+    base = ApiResponse(200, b"const baseApp=true;", "text/javascript; charset=utf-8")
+    legacy = patch_navigation_web_response("/app.js", base)
+    assert b"showPage=function(name)" in legacy.body
 
-    patched = patch_modular_shell_response("/app.js", original)
-    script = patched.body.decode("utf-8")
+    final = patch_modular_shell_response("/app.js", legacy)
+    script = final.body.decode("utf-8")
 
-    assert "const before=true" in script
-    assert "const after=true" in script
+    assert "const baseApp=true" in script
     assert "oldShowPage=showPage" not in script
     assert "showPage=function(name)" not in script
     assert "window.FieldoraModules" in script
+    # Feature compatibility remains until those responsibilities migrate into
+    # their owning modules; this change removes routing/history coupling only.
+    assert "loadPortfolio=async function" in script
 
 
 def test_non_app_script_response_is_untouched() -> None:

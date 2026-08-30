@@ -161,13 +161,9 @@ def test_concurrent_users_linking_observation_evidence_preserve_revision_and_pba
         ).status
 
     with ThreadPoolExecutor(max_workers=2) as executor:
-        statuses = sorted(
-            (
-                executor.submit(link, "user-a", "asset-a"),
-                executor.submit(link, "user-b", "asset-b"),
-            )[index].result(timeout=20)
-            for index in range(2)
-        )
+        first = executor.submit(link, "user-a", "asset-a")
+        second = executor.submit(link, "user-b", "asset-b")
+        statuses = sorted((first.result(timeout=20), second.result(timeout=20)))
 
     assert statuses == [200, 409]
     final, revision = science.items["server_observations"][observation_id]
@@ -178,6 +174,33 @@ def test_concurrent_users_linking_observation_evidence_preserve_revision_and_pba
     assert {"user-a", "user-b"}.issubset(set(decisions.subjects))
 
 
+def test_pbac_denial_during_contention_cannot_mutate_observation() -> None:
+    science = _Science()
+    media = _Media()
+    decisions = _Decisions(denied_subject="user-denied")
+    creator = _ObservationApi(_Identity("user-a"), science, media, decisions)
+    created = creator.dispatch(
+        "POST",
+        "/api/v1/observations",
+        {},
+        b'{"project_id":"project-1","asset_id":"asset-primary","observation_type":"unknown"}',
+    )
+    observation_id = _payload(created)["item"]["id"]
+
+    denied = _ObservationApi(
+        _Identity("user-denied"), science, media, decisions
+    ).dispatch(
+        "POST",
+        f"/api/v1/observations/{observation_id}/evidence",
+        {"if-match": "1"},
+        b'{"asset_id":"asset-a"}',
+    )
+    assert denied.status == 403
+    final, revision = science.items["server_observations"][observation_id]
+    assert revision == 1
+    assert final["supporting_asset_ids"] == []
+
+
 def test_concurrent_reviewers_cannot_resolve_one_proposal_twice() -> None:
     science = _Science()
     decisions = _Decisions()
@@ -185,15 +208,23 @@ def test_concurrent_reviewers_cannot_resolve_one_proposal_twice() -> None:
     proposal = {
         "project_id": "project-1",
         "provider_key": "human-field-note",
-        "subject": {"type": "observation", "id": "obs-1"},
+        "subject": {"subject_type": "observation", "public_id": "obs-1"},
         "candidate": {
-            "type": "identification",
-            "value": {"scientific_name": "Ardea cinerea", "confidence": 0.92},
+            "shape": "taxonomy_candidate",
+            "value": {"scientific_name": "Ardea cinerea"},
+            "confidence": 0.92,
+            "target": {},
+            "external_id": "taxon:ardea-cinerea",
         },
         "source_snapshot": {
             "producer_name": "human-field-note",
             "producer_version": "1",
+            "source_name": "Field notebook",
+            "source_version": "2026.08",
             "checksum": "sha256:abc",
+            "attribution": "Fieldora",
+            "licence": "internal",
+            "created_at_us": 123456,
         },
     }
     created = creator.dispatch(

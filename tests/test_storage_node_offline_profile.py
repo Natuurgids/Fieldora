@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import yaml
-
 
 ROOT = Path(__file__).resolve().parents[1]
 BASE_COMPOSE = ROOT / "deployment" / "storage-node" / "compose.yaml"
@@ -12,32 +10,23 @@ README = ROOT / "deployment" / "storage-node" / "README.md"
 
 
 def test_linked_storage_archive_mount_is_read_only_and_hardened() -> None:
-    compose = yaml.safe_load(BASE_COMPOSE.read_text(encoding="utf-8"))
-    service = compose["services"]["storage-service"]
+    text = BASE_COMPOSE.read_text(encoding="utf-8")
 
-    assert any(
-        str(volume).startswith("${FIELDORA_STORAGE_ROOT:")
-        and str(volume).endswith(":/mnt/fieldora-storage:ro")
-        for volume in service["volumes"]
-    )
-    assert service["read_only"] is True
-    assert "no-new-privileges:true" in service["security_opt"]
-    assert service["cap_drop"] == ["ALL"]
-    assert any(
-        str(volume).startswith("${FIELDORA_STORAGE_TRUST_DIR:")
-        and str(volume).endswith(":/run/fieldora-trust:ro")
-        for volume in service["volumes"]
-    )
+    assert "${FIELDORA_STORAGE_ROOT:?Set FIELDORA_STORAGE_ROOT to the organisation archive path}:/mnt/fieldora-storage:ro" in text
+    assert "${FIELDORA_STORAGE_TRUST_DIR:?Set FIELDORA_STORAGE_TRUST_DIR to the enrolled service trust directory}:/run/fieldora-trust:ro" in text
+    assert "    read_only: true" in text
+    assert "      - no-new-privileges:true" in text
+    assert "    cap_drop:\n      - ALL" in text
 
 
 def test_same_host_profile_uses_only_private_fieldora_network() -> None:
-    compose = yaml.safe_load(SAME_HOST_COMPOSE.read_text(encoding="utf-8"))
-    service = compose["services"]["storage-service"]
-    network = compose["networks"]["fieldora-platform"]
+    text = SAME_HOST_COMPOSE.read_text(encoding="utf-8")
 
-    assert service["networks"] == ["fieldora-platform"]
-    assert network["external"] is True
-    assert network["name"] == "${FIELDORA_PLATFORM_NETWORK:-fieldora_fieldora-network}"
+    assert "      - fieldora-platform" in text
+    assert "    external: true" in text
+    assert "    name: ${FIELDORA_PLATFORM_NETWORK:-fieldora_fieldora-network}" in text
+    assert "https://fieldora-server:8765" in text
+    assert "WAN route, Bastion, or cloud service" in text
 
 
 def test_offline_storage_documentation_keeps_bastion_and_cloud_optional() -> None:

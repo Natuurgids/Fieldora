@@ -11,20 +11,11 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from natureai_next.server.access_contracts import (
-    AccessTarget,
-    AccessTargetKind,
-    ContractDraft,
-)
+from natureai_next.server.access_contracts import AccessTarget, AccessTargetKind, ContractDraft
 from natureai_next.server.media import GovernedMediaStore
 from natureai_next.server.media_links import new_association
-from natureai_next.server.platform_extensions import (
-    ProjectOptionalStagedIngestionStore,
-)
-from natureai_next.server.staged_ingestion import (
-    StagedIngestionService,
-    StagedSubmission,
-)
+from natureai_next.server.platform_extensions import ProjectOptionalStagedIngestionStore
+from natureai_next.server.staged_ingestion import StagedIngestionService, StagedSubmission
 
 
 _ACTIVE_MEDIA_STORE: GovernedMediaStore | None = None

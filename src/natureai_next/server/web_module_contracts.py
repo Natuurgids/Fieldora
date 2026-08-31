@@ -44,11 +44,17 @@ class WebModuleSpec:
         if not route:
             raise WebModuleContractError(f"module {module_id!r} requires a route")
         if not route.startswith("/"):
-            raise WebModuleContractError(f"module {module_id!r} route must start with '/': {route!r}")
+            raise WebModuleContractError(
+                f"module {module_id!r} route must start with '/': {route!r}"
+            )
         if len(set(actions)) != len(actions):
-            raise WebModuleContractError(f"module {module_id!r} declares duplicate owned actions")
+            raise WebModuleContractError(
+                f"module {module_id!r} declares duplicate owned actions"
+            )
         if len(set(dependencies)) != len(dependencies):
-            raise WebModuleContractError(f"module {module_id!r} declares duplicate dependencies")
+            raise WebModuleContractError(
+                f"module {module_id!r} declares duplicate dependencies"
+            )
         if module_id in dependencies:
             raise WebModuleContractError(f"module {module_id!r} cannot depend on itself")
 
@@ -194,6 +200,10 @@ FOUNDATION_WEB_MODULES: tuple[WebModuleSpec, ...] = (
         owns_actions=(
             "capacity.project.open",
             "capacity.project.allocations.view",
+            "capacity.availability.view",
+            "capacity.schedule.assign",
+            "capacity.absence.register",
+            "capacity.obligation.create",
         ),
         dependencies=("projects.core",),
     ),

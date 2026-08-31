@@ -8,7 +8,6 @@ from urllib.parse import parse_qs, urlsplit
 
 from natureai_next.application.authentication import AuthenticationFailed
 from natureai_next.application.project_management import PRIORITIES, RECURRENCES
-from natureai_next.application.project_task_detail import ProjectTaskDetailQuery
 from natureai_next.domain.access_control import AccessRequest
 from natureai_next.server.api import ApiResponse
 from natureai_next.server.browser_functionality_api import _session_cookie
@@ -78,24 +77,24 @@ class ProjectTaskEditModuleWebApiMixin:
         if not routed_headers.get("authorization") and cookie_token:
             routed_headers["authorization"] = f"Bearer {cookie_token}"
         task_route = route.path.startswith("/api/v1/tasks/")
+        owned_route = False
         if service is not None and route.path == "/api/v1/project-statuses" and method == "GET":
+            owned_route = True
             response = self._project_statuses(route.query, routed_headers)
         elif service is not None and task_route and method == "GET":
+            owned_route = True
             response = self._task_detail(
                 route.path.rsplit("/", 1)[-1], route.query, routed_headers
             )
         elif service is not None and task_route and method == "PATCH":
+            owned_route = True
             response = self._patch_task(
                 route.path.rsplit("/", 1)[-1], routed_headers, body
             )
         else:
             response = super().dispatch(method, target, headers, body)
         browser_session = getattr(self, "_browser_session_response", None)
-        if (
-            callable(browser_session)
-            and route.path.startswith("/api/v1/")
-            and method in {"GET", "PATCH"}
-        ):
+        if owned_route and callable(browser_session):
             response = browser_session(
                 method, route.path, routed_headers, cookie_token, response
             )
@@ -172,8 +171,11 @@ class ProjectTaskEditModuleWebApiMixin:
         )
         if not all(decision.allowed for decision in decisions):
             return ApiResponse.json(403, {"error": "forbidden"})
-        reader = ProjectTaskDetailQuery(self._project_management.database_path)
-        item = reader.get(project_id, task_id)
+        item = self._project_management.task_detail(
+            project_id,
+            task_id,
+            organization_id=identity.organization_id,
+        )
         if item is None:
             return ApiResponse.json(404, {"error": "not_found"})
         return ApiResponse.json(200, {"item": item})
@@ -199,8 +201,11 @@ class ProjectTaskEditModuleWebApiMixin:
             )
         if self._project_for_organization(identity.organization_id, project_id) is None:
             return ApiResponse.json(404, {"error": "not_found"})
-        reader = ProjectTaskDetailQuery(self._project_management.database_path)
-        if reader.get(project_id, task_id) is None:
+        if self._project_management.task_detail(
+            project_id,
+            task_id,
+            organization_id=identity.organization_id,
+        ) is None:
             return ApiResponse.json(404, {"error": "not_found"})
         purpose = headers.get("x-fieldora-purpose", "research")
         decisions = (
@@ -259,7 +264,10 @@ class ProjectTaskEditModuleWebApiMixin:
         try:
             self._validate_changes(project_id, changes)
             self._project_management.update_task(
-                task_id, actor_id=identity.identity_id, **changes
+                task_id,
+                actor_id=identity.identity_id,
+                organization_id=identity.organization_id,
+                **changes,
             )
         except KeyError:
             return ApiResponse.json(404, {"error": "not_found"})
@@ -267,7 +275,11 @@ class ProjectTaskEditModuleWebApiMixin:
             return ApiResponse.json(
                 400, {"error": "invalid_request", "detail": str(exc)}
             )
-        item = reader.get(project_id, task_id)
+        item = self._project_management.task_detail(
+            project_id,
+            task_id,
+            organization_id=identity.organization_id,
+        )
         if item is None:
             return ApiResponse.json(500, {"error": "updated_record_unavailable"})
         return ApiResponse.json(200, {"item": item})

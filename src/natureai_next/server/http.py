@@ -38,7 +38,7 @@ from natureai_next.server.linked_storage_operator_web import (
     patch_linked_storage_operator_web_response,
 )
 from natureai_next.server.linked_storage_web import patch_linked_storage_web_response
-from natureai_next.server.modular_shell_web import patch_modular_shell_response
+from natureai_next.server.modular_shell_web import finalize_modular_shell_response
 from natureai_next.server.navigation_web_compatibility import patch_navigation_web_response
 from natureai_next.server.offline_maps_web import patch_offline_maps_web_response
 from natureai_next.server.offline_models_web import patch_offline_models_web_response
@@ -136,9 +136,10 @@ def patch_managed_web_response(target: str, response):
         patch_offline_maps_web_response,
         patch_zero_trust_web_response,
         patch_aiadmin_zero_trust_response,
-        # Finalizer: migrated ownership must be evaluated after every legacy
-        # compatibility patch has had a chance to append its transitional JS.
-        patch_modular_shell_response,
+        # Finalizer is inert for non-modular applications.  When the API mixin
+        # already installed the shell, it removes migrated compatibility code
+        # after all append-only patches and moves initial mount to the very end.
+        finalize_modular_shell_response,
     ):
         response = patch(target, response)
     return response

@@ -165,6 +165,12 @@ FOUNDATION_WEB_MODULES: tuple[WebModuleSpec, ...] = (
             "projects.center.select",
             "projects.evidence.load",
             "projects.work.inspect",
+            "projects.phase.create",
+            "projects.task.create",
+            "projects.milestone.create",
+            "projects.subtask.create",
+            "projects.sprint.create",
+            "projects.allocation.create",
         ),
     ),
     WebModuleSpec(

@@ -187,7 +187,26 @@ FOUNDATION_WEB_MODULES: tuple[WebModuleSpec, ...] = (
         ),
         dependencies=("projects.core",),
     ),
-    WebModuleSpec("research.dossiers", "/research", "Research"),
+    WebModuleSpec(
+        "capacity",
+        "/capacity",
+        "Capacity",
+        owns_actions=(
+            "capacity.project.open",
+            "capacity.project.allocations.view",
+        ),
+        dependencies=("projects.core",),
+    ),
+    WebModuleSpec(
+        "research.dossiers",
+        "/research",
+        "Research",
+        owns_actions=(
+            "research.project.open",
+            "research.project.records.view",
+        ),
+        dependencies=("projects.core",),
+    ),
     WebModuleSpec("knowledge.center", "/knowledge", "Knowledge & AI"),
     WebModuleSpec(
         "admin.shell",

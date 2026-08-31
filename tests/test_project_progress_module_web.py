@@ -43,6 +43,8 @@ def test_progress_projection_uses_governed_project_task_and_status_apis() -> Non
     assert "Realized / estimated effort" in script
     assert "task.status_category" in script
     assert "task.progress" in script
+    assert "task.effective_estimate_hours??task.estimate_hours??task.manual_estimate" in script
+    assert "task.realized_hours??task.realized??task.actual_hours" in script
 
 
 def test_kanban_moves_are_capability_aware_and_use_authorized_task_patch() -> None:
@@ -62,6 +64,11 @@ def test_kanban_moves_are_capability_aware_and_use_authorized_task_patch() -> No
     assert "JSON.stringify({project_id:state.projectId,status_id:statusId})" in script
     assert "text/x-fieldora-task-id" in script
     assert "fieldora:project-work-changed" in script
+    success = script.split('async function moveTask(taskId,statusId){', 1)[1].split(
+        '}catch(error)', 1
+    )[0]
+    assert "await refresh()" not in success
+    assert 'catch(error){emitError(error,"Task status could not be changed.");await refresh()}' in script
 
 
 def test_gantt_matches_desktop_date_fallback_and_opens_task_editor() -> None:

@@ -9,6 +9,7 @@ from natureai_next.server.modular_shell_web import (
 )
 from natureai_next.server.navigation_web_compatibility import patch_navigation_web_response
 from natureai_next.server.offline_first_api import OfflineFirstFieldoraApi
+from natureai_next.server.project_core_module_web import ProjectCoreModuleWebApiMixin
 from natureai_next.server.project_facility_workspace_web import (
     patch_project_facility_workspace_response,
 )
@@ -18,6 +19,13 @@ def test_manifest_exposes_distinct_project_and_portfolio_owners() -> None:
     by_id = {item["module_id"]: item for item in modular_shell_manifest()}
 
     assert by_id["projects.core"]["route"] == "/projects"
+    assert by_id["projects.core"]["owns_actions"] == [
+        "projects.context.select",
+        "projects.scope.select",
+        "projects.center.select",
+        "projects.evidence.load",
+        "projects.work.inspect",
+    ]
     assert by_id["portfolio"]["route"] == "/portfolio"
     assert by_id["portfolio"]["dependencies"] == ["projects.core"]
     assert by_id["portfolio"]["owns_actions"] == [
@@ -75,18 +83,16 @@ def test_final_composed_response_removes_migrated_navigation_and_portfolio_wirin
     assert "showPage=function(name)" not in script
     assert "loadPortfolio=async function" not in script
     assert "window.FieldoraModules" in script
-    # Knowledge and other feature compatibility remain until those modules own
-    # their responsibilities. Portfolio has now been explicitly extracted.
     assert "loadKnowledge=async function" in script
 
 
-def test_final_composed_response_removes_project_cockpit_portfolio_overlap() -> None:
+def test_final_composed_response_removes_project_cockpit_owned_behavior() -> None:
     base = ApiResponse(200, b"const baseApp=true;", "text/javascript; charset=utf-8")
     cockpit = patch_project_facility_workspace_response("/app.js", base)
     before = cockpit.body.decode("utf-8")
 
+    assert "function renderProjectTree()" in before
     assert "function portfolioData()" in before
-    assert "applyPortfolioView()" in before
     assert "const oldPortfolio=loadPortfolio" in before
     assert "project-desktop-cockpit" in before
     assert "facility-desktop-cockpit" in before
@@ -94,22 +100,17 @@ def test_final_composed_response_removes_project_cockpit_portfolio_overlap() -> 
     final = patch_modular_shell_response("/app.js", cockpit)
     script = final.body.decode("utf-8")
 
+    assert "function renderProjectTree()" not in script
+    assert "function selectCockpitProject" not in script
     assert "function portfolioData()" not in script
     assert "applyPortfolioView()" not in script
     assert "const oldPortfolio=loadPortfolio" not in script
-    # Projects and Facilities remain intact; only Portfolio-owned presentation
-    # and wiring is removed from this transitional combined cockpit patch.
+    assert 'q("portfolio-scope").value=b.dataset.projectScope' not in script
     assert "project-desktop-cockpit" in script
     assert "facility-desktop-cockpit" in script
-    assert "function setProjectCenter(view)" in script
-    assert "renderProjectTree();" in script
 
 
 def test_production_patch_order_finalizes_after_legacy_append_only_patches() -> None:
-    # The API mixin may have already appended the modular shell before the HTTP
-    # adapter adds legacy compatibility fragments.  Production finalization must
-    # still remove migrated Portfolio/history ownership after those fragments are
-    # appended, and it must keep exactly one shell bridge.
     early = patch_modular_shell_response(
         "/app.js", ApiResponse(200, b"const baseApp=true;", "text/javascript; charset=utf-8")
     )
@@ -120,11 +121,15 @@ def test_production_patch_order_finalizes_after_legacy_append_only_patches() -> 
     assert "oldShowPage=showPage" not in script
     assert "showPage=function(name)" not in script
     assert "loadPortfolio=async function" not in script
+    assert "function renderProjectTree()" not in script
     assert "function portfolioData()" not in script
     assert "const oldPortfolio=loadPortfolio" not in script
     assert "loadKnowledge=async function" in script
     assert "project-desktop-cockpit" in script
     assert "facility-desktop-cockpit" in script
+    assert script.rfind("WEB-MODULAR-SHELL: registry-owned navigation bridge") > script.find(
+        "facility-desktop-cockpit"
+    )
 
 
 def test_non_app_script_response_is_untouched() -> None:
@@ -137,3 +142,4 @@ def test_modular_shell_is_outermost_managed_web_mixin() -> None:
     mro = OfflineFirstFieldoraApi.__mro__
 
     assert mro[1] is ModularShellWebApiMixin
+    assert mro[2] is ProjectCoreModuleWebApiMixin

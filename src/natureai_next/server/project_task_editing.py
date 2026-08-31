@@ -54,6 +54,10 @@ class ProjectTaskEditingFacade:
     def __getattr__(self, name: str) -> Any:
         return getattr(self._delegate, name)
 
+    @property
+    def _is_local_sqlite(self) -> bool:
+        return getattr(self._delegate, "database_path", None) is not None
+
     def task_detail(
         self,
         project_id: str,
@@ -114,6 +118,28 @@ class ProjectTaskEditingFacade:
             "realized_hours": float(row[22]),
         }
 
+    def status_ids(self, project_id: str) -> set[str]:
+        return {
+            str(item.get("status_id") or item.get("id") or "")
+            for item in self._delegate.statuses(project_id)
+        }
+
+    def phase_ids(self, project_id: str, *, organization_id: str = "") -> set[str]:
+        scope = project_id if self._is_local_sqlite else organization_id
+        return {
+            str(item.get("phase_id") or item.get("id") or "")
+            for item in self._delegate.phases(scope)
+            if self._is_local_sqlite or str(item.get("project_id") or "") == project_id
+        }
+
+    def sprint_ids(self, project_id: str, *, organization_id: str = "") -> set[str]:
+        scope = project_id if self._is_local_sqlite else organization_id
+        return {
+            str(item.get("sprint_id") or item.get("id") or "")
+            for item in self._delegate.sprints(scope)
+            if self._is_local_sqlite or str(item.get("project_id") or "") == project_id
+        }
+
     def update_task(
         self,
         task_id: str,
@@ -125,8 +151,7 @@ class ProjectTaskEditingFacade:
         values = {key: value for key, value in changes.items() if key in _EDITABLE_FIELDS}
         if not values:
             return
-        database_path = getattr(self._delegate, "database_path", None)
-        if database_path is not None:
+        if self._is_local_sqlite:
             self._delegate.update_task(task_id, actor_id=actor_id, **values)
             return
         connect = getattr(self._delegate, "_connect", None)
@@ -210,7 +235,8 @@ class ProjectTaskEditingFacade:
                     (child_id, project_id),
                 )
                 if cursor.fetchone() is None:
-                    raise ValueError(f"{column.removesuffix('_id')} does not belong to project")
+                    label = column.removesuffix("_id")
+                    raise ValueError(f"{label} does not belong to project")
 
 
 def wrap_project_task_editing(service: Any) -> Any:

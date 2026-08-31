@@ -31,7 +31,7 @@ def test_project_research_adapter_is_idempotent_and_uses_public_contracts() -> N
     assert "WEB-PROJECT-RESEARCH-INTEGRATION" in script
     assert 'ownerModule="research.dossiers"' in script
     assert 'projectModule="projects.core"' in script
-    assert 'id="project-open-research"' not in script
+    assert '<button id="project-open-research"' not in script
     assert 'button.id="project-open-research"' in script
     assert 'button.dataset.fieldoraAction="research.project.open"' in script
     assert 'navigate?.("/research","project-research-integration","push")' in script

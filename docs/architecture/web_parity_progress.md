@@ -47,7 +47,7 @@ Every module must document and test:
 - [ ] Platform notification/error boundary
 - [~] Module contract test harness
 
-**Iteration 1 evidence:** `src/natureai_next/server/web_module_contracts.py` defines framework-independent module metadata, route/action ownership and dependency validation, with separate ownership for `projects.core` and `portfolio`. `src/natureai_next/server/web_module_runtime.py` provides explicit mount/unmount lifecycle state and failure isolation. `src/natureai_next/server/modular_shell_web.py` bridges that registry into the served browser shell, owns route normalization plus browser history for registered modules, emits module lifecycle events, strips the legacy `showPage` history wrapper, and removes migrated Portfolio behavior from both shared navigation compatibility and the older combined Projects/Facilities cockpit in the final served `/app.js`. The Projects and Facilities cockpit structures remain present; only Portfolio-owned rendering/wiring is removed. `tests/test_web_module_contracts.py`, `tests/test_web_module_runtime.py`, `tests/test_modular_shell_web.py`, and `tests/test_portfolio_module_web.py` cover the contract, runtime, final composed routing response and first feature extraction. Other compatibility modules still contain feature-specific cross-screen wiring, and CI/browser certification is still required before these items can be marked complete.
+**Iteration 1 evidence:** `src/natureai_next/server/web_module_contracts.py` defines framework-independent module metadata, route/action ownership and dependency validation, with separate ownership for `projects.core` and `portfolio`. `src/natureai_next/server/web_module_runtime.py` provides explicit mount/unmount lifecycle state and failure isolation. `src/natureai_next/server/modular_shell_web.py` bridges that registry into the served browser shell and removes migrated compatibility responsibilities. A production-order audit found that HTTP compatibility patches are appended after the API mixin response, so `src/natureai_next/server/http.py` now runs `patch_modular_shell_response` as the final managed-browser finalizer. The finalizer relocates the unique shell bootstrap to the end of `/app.js`, ensuring legacy DOM construction and feature adapters exist before initial module-mount events fire. `tests/test_modular_shell_web.py` now covers this real production patch order rather than only synthetic patch order. CI/browser certification is still required before these items can be marked complete.
 
 ### Iteration 2 — Identity, session and capabilities
 - [ ] Local credential sign-in parity
@@ -82,15 +82,17 @@ Every module must document and test:
 ### Iteration 6 — Projects core — desktop-familiar workflow
 Projects are a high-fidelity parity area. The web workflow, hierarchy and terminology should remain recognizable to desktop users while implementation boundaries stay modular.
 
-- [ ] Project list and project context
+- [~] Project list and project context
 - [ ] Project create/edit lifecycle
 - [ ] Desktop-similar work hierarchy
-- [ ] Phases/tasks/work-item navigation and editing
+- [~] Phases/tasks/work-item navigation and editing
 - [ ] Project status/progress behavior
-- [ ] Project-to-evidence/observation/research links
-- [ ] Project module owns its actions; no unrelated DOM coupling
+- [~] Project-to-evidence/observation/research links
+- [~] Project module owns its actions; no unrelated DOM coupling
 - [ ] Project API authorization and persistence verified
-- [ ] Project workflow parity tests
+- [~] Project workflow parity tests
+
+**Iteration 6 evidence:** `src/natureai_next/server/project_core_module_web.py` is now the first independently owned Projects/Core browser adapter. It owns project context selection, project-tree filtering and saved project scope, Work/Evidence center switching, inspector feedback and project evidence loading, publishes `fieldora:project-context-changed`, and mounts/unmounts through the shell lifecycle. `web_module_contracts.py` assigns `projects.context.select`, `projects.scope.select`, `projects.center.select`, `projects.evidence.load`, and `projects.work.inspect` to `projects.core`. The final shell removes the former `renderProjectTree`, `selectCockpitProject`, direct Project-to-Portfolio scope mutation and other migrated project behavior from `project_facility_workspace_web.py` while preserving the desktop-density Projects cockpit markup and the separate Facilities cockpit. `tests/test_project_core_module_web.py` covers adapter idempotence, ownership boundaries and final composition. The current Work center still uses the older `portfolio-list` DOM/data as a transitional integration, and create/edit lifecycle, hierarchy, status/progress, server authorization/persistence trace and desktop parity remain to be certified; therefore no Projects requirement is marked complete yet.
 
 ### Iteration 7 — Portfolio and project integrations
 - [~] Portfolio views
@@ -100,7 +102,7 @@ Projects are a high-fidelity parity area. The web workflow, hierarchy and termin
 - [ ] Portable project package exchange
 - [ ] Project reporting/export integration through public contracts
 
-**Iteration 7 evidence:** `src/natureai_next/server/portfolio_module_web.py` is the first feature-owned browser adapter. It owns Portfolio view selection, scope selection, lifecycle mount/unmount, project-open interaction and user-visible module errors without replacing `loadPortfolio`, `showPage`, or another feature global. `web_module_contracts.py` assigns `portfolio.view.select`, `portfolio.scope.select`, and `portfolio.project.open` to `portfolio`; `portfolio` remains dependent on but separate from `projects.core`. `modular_shell_web.py` now removes both the former Portfolio override from shared navigation compatibility and the duplicate Portfolio renderer/global `loadPortfolio` wrapper embedded in `project_facility_workspace_web.py` from the final served client. The desktop-density Projects cockpit and Facilities cockpit remain intact, giving the final browser response one Portfolio presentation/action owner while source-level compatibility code can be retired incrementally. The existing loader is still called as a transitional data integration adapter. CI and browser/final-DOM certification are still required, so these items remain in progress rather than complete.
+**Iteration 7 evidence:** `src/natureai_next/server/portfolio_module_web.py` owns Portfolio view selection, scope selection, lifecycle mount/unmount, project-open interaction and user-visible module errors without replacing `loadPortfolio`, `showPage`, or another feature global. `web_module_contracts.py` assigns `portfolio.view.select`, `portfolio.scope.select`, and `portfolio.project.open` to `portfolio`; `portfolio` remains dependent on but separate from `projects.core`. `modular_shell_web.py` removes both the former Portfolio override from shared navigation compatibility and the duplicate Portfolio renderer/global `loadPortfolio` wrapper embedded in `project_facility_workspace_web.py` from the final served client. The existing loader remains a transitional data integration adapter. CI and browser/final-DOM certification are still required, so these items remain in progress rather than complete.
 
 ### Iteration 8 — Capacity, research and dossiers
 - [ ] Schedules/absences/allocations

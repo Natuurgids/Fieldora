@@ -11,6 +11,7 @@ representation from those published datasets.  Once the underlying Portfolio
 API/view-model boundary is extracted, that transitional dependency can be
 removed without changing the shell contract.
 """
+
 from __future__ import annotations
 
 from urllib.parse import urlsplit

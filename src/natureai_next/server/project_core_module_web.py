@@ -1,0 +1,142 @@
+"""Module-owned Projects browser adapter for the managed Fieldora web client.
+
+The desktop-density cockpit markup remains transitional while Projects/Core takes
+ownership of project context selection, tree filtering, center-view switching,
+inspector feedback and project evidence loading.  The adapter deliberately does
+not mutate Portfolio controls or replace global feature renderers.
+"""
+
+from __future__ import annotations
+
+from urllib.parse import urlsplit
+
+from natureai_next.server.api import ApiResponse
+
+
+_PROJECT_CORE_MODULE_PATCH = bytes(
+    r"""
+
+/* WEB-PROJECT-CORE-MODULE: module-owned Projects browser adapter. */
+(()=>{
+ if(window.__fieldoraProjectCoreModuleWired)return;window.__fieldoraProjectCoreModuleWired=true;
+ const moduleId="projects.core",q=id=>document.getElementById(id);
+ const state={mounted:false,controller:null,projectId:"",centerView:"work",scope:"all",evidence:[]};
+ const escProject=value=>String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+ const projectItems=()=>Array.isArray(projects)?projects:[];
+ const projectById=id=>projectItems().find(project=>project.id===id)||null;
+ function status(message,error=false){
+  const page=q("page-projects");if(!page)return;
+  let node=q("project-core-module-status");
+  if(!node){node=document.createElement("p");node.id="project-core-module-status";node.className="status";page.querySelector(".top")?.after(node)}
+  node.textContent=message||"";node.classList.toggle("error",Boolean(error));
+ }
+ function visibleProjects(){
+  const needle=(q("project-tree-filter")?.value||"").trim().toLowerCase();
+  let visible=projectItems();
+  if(state.scope==="mine"&&typeof me!=="undefined"&&me?.identity_id){
+   const mine=visible.filter(project=>project.owner_id===me.identity_id||project.created_by_id===me.identity_id||project.manager_id===me.identity_id);
+   if(mine.length)visible=mine;
+  }
+  return needle?visible.filter(project=>JSON.stringify(project).toLowerCase().includes(needle)):visible;
+ }
+ function renderTree(){
+  const host=q("project-cockpit-tree");if(!host)return;
+  const visible=visibleProjects();
+  host.innerHTML=`<div class="tree-group"><div class="tree-label">Projects</div>${visible.map(project=>`<button type="button" class="tree-item" data-project-tree="${escProject(project.id)}" aria-selected="${project.id===state.projectId}"><span class="tree-icon">▦</span><span>${escProject(project.name||project.title||project.id)}</span></button>`).join("")||'<div class="empty">No accessible projects.</div>'}</div><div class="tree-group"><div class="tree-label">Saved views</div><button type="button" class="tree-item" data-project-scope="mine" aria-selected="${state.scope==="mine"}"><span class="tree-icon">★</span>My work</button><button type="button" class="tree-item" data-project-scope="all" aria-selected="${state.scope==="all"}"><span class="tree-icon">≡</span>All accessible</button></div>`;
+ }
+ function selectInspector(key){
+  const host=q("project-desktop-cockpit")?.querySelector(".cockpit-right");if(!host)return;
+  host.querySelectorAll(".inspector-tabs [data-inspector]").forEach(button=>button.setAttribute("aria-selected",String(button.dataset.inspector===key)));
+  host.querySelectorAll('.inspector-panel[id^="project-inspector-"]').forEach(panel=>panel.hidden=panel.id!==`project-inspector-${key}`);
+ }
+ function renderInspector(record){
+  const metadata=q("project-inspector-metadata"),map=q("project-inspector-map"),activity=q("project-inspector-activity"),title=q("project-cockpit-title");
+  if(title)title.textContent=record?.name||record?.title||"Project workspace";
+  if(!record){
+   if(metadata)metadata.innerHTML='<div class="empty">Select a project or work item.</div>';
+   if(map)map.innerHTML='<div class="empty">Select a project to inspect its spatial context.</div>';
+   if(activity)activity.innerHTML='<div class="empty">Select a record.</div>';
+   return;
+  }
+  if(metadata)metadata.innerHTML=`<h3>${escProject(record.name||record.title||record.id)}</h3><pre>${escProject(JSON.stringify(record,null,2))}</pre>`;
+  if(map)map.innerHTML=`<div class="facility-map-stage"><h3>Project map</h3><p>${escProject(record.name||record.title||record.id)}</p><p class="muted">${escProject(record.research_area||record.location||record.geography||"No spatial boundary has been recorded for this project yet.")}</p><p class="muted">Map packages remain governed by Fieldora map installation and offline-map services.</p></div>`;
+  if(activity)activity.innerHTML=`<h3>Record activity</h3><p><strong>Status</strong> ${escProject(record.status||"active")}</p><p><strong>Created</strong> ${escProject(record.created_at||record.created||"—")}</p><p><strong>Updated</strong> ${escProject(record.updated_at||record.modified_at||record.updated||"—")}</p><p class="muted">Authoritative security and change history remains in the governed audit log.</p>`;
+ }
+ function renderEvidence(){
+  const host=q("project-workspace-evidence");if(!host)return;
+  host.innerHTML=state.evidence.length?`<div class="project-evidence-grid">${state.evidence.map(item=>`<article class="project-evidence" data-media="${escProject(item.media_id)}"><div class="thumb">${String(item.mime_type||"").startsWith("image/")?"▧":String(item.mime_type||"").startsWith("audio/")?"≋":String(item.mime_type||"").startsWith("video/")?"▷":"▤"}</div><strong>${escProject(item.filename||item.name||item.media_id)}</strong><small class="muted">${escProject(item.mime_type||"")}</small></article>`).join("")}</div>`:'<div class="empty">No evidence is linked to the selected project.</div>';
+ }
+ async function loadEvidence(){
+  state.evidence=[];renderEvidence();if(!state.projectId)return;
+  try{
+   const result=await api("/api/v1/media?limit=500");
+   state.evidence=(result.items||[]).filter(item=>item.project_id===state.projectId);renderEvidence();status("");
+  }catch(error){renderEvidence();status(error?.message||"Project evidence could not be loaded.",true);document.dispatchEvent(new CustomEvent("fieldora:module-error",{detail:{module_id:moduleId,error:String(error?.message||error)}}))}
+ }
+ async function selectProject(id){
+  state.projectId=id||"";
+  if(typeof selectedProject!=="undefined")selectedProject=state.projectId;
+  if(q("work-project"))q("work-project").value=state.projectId;
+  renderTree();renderInspector(projectById(state.projectId));selectInspector("properties");
+  await loadEvidence();
+  document.dispatchEvent(new CustomEvent("fieldora:project-context-changed",{detail:{module_id:moduleId,project_id:state.projectId}}));
+ }
+ function setCenter(view){
+  state.centerView=view==="evidence"?"evidence":"work";
+  const work=q("project-workspace-work"),evidence=q("project-workspace-evidence");
+  if(work)work.hidden=state.centerView!=="work";if(evidence)evidence.hidden=state.centerView!=="evidence";
+  document.querySelectorAll("[data-project-center]").forEach(button=>button.classList.toggle("primary",button.dataset.projectCenter===state.centerView));
+  if(state.centerView==="evidence"&&!state.evidence.length&&state.projectId)loadEvidence();
+ }
+ function inspectWorkItem(target){
+  const row=target?.closest?.("[data-portfolio-id]");if(!row)return false;
+  const kind=row.dataset.kind,id=row.dataset.portfolioId;
+  const data=kind==="project"?projectItems():JSON.parse(q("portfolio-list")?.dataset[kind==="phase"?"phases":"tasks"]||"[]");
+  const record=(data||[]).find(item=>item.id===id);if(!record)return false;
+  if(kind==="project")state.projectId=id;renderInspector(record);selectInspector("properties");return true;
+ }
+ function mount(){
+  if(state.mounted)return;state.mounted=true;state.controller=new AbortController();const signal=state.controller.signal;
+  q("project-tree-filter")?.addEventListener("input",renderTree,{signal});
+  q("project-cockpit-tree")?.addEventListener("click",event=>{const project=event.target.closest?.("[data-project-tree]"),scope=event.target.closest?.("[data-project-scope]");if(project)selectProject(project.dataset.projectTree);else if(scope){state.scope=scope.dataset.projectScope==="mine"?"mine":"all";renderTree()}},{signal});
+  q("project-desktop-cockpit")?.addEventListener("click",event=>{const center=event.target.closest?.("[data-project-center]");if(center)setCenter(center.dataset.projectCenter)},{signal});
+  q("portfolio-list")?.addEventListener("click",event=>inspectWorkItem(event.target),{signal});
+  renderTree();setCenter(state.centerView);
+  if(!state.projectId&&projectItems().length)selectProject(projectItems()[0].id);else renderInspector(projectById(state.projectId));
+ }
+ function unmount(){if(!state.mounted)return;state.controller?.abort();state.controller=null;state.mounted=false;status("")}
+ document.addEventListener("fieldora:module-mount",event=>{if(event.detail?.module?.module_id===moduleId)mount()});
+ document.addEventListener("fieldora:module-unmount",event=>{if(event.detail?.module?.module_id===moduleId)unmount()});
+ window.FieldoraProjects=Object.freeze({mount,unmount,selectProject,setCenter,currentProject:()=>state.projectId,currentView:()=>state.centerView});
+ if(window.FieldoraModules?.current?.()?.module_id===moduleId)mount();
+})();
+""",
+    "utf-8",
+)
+
+
+def patch_project_core_module_response(target: str, response: ApiResponse) -> ApiResponse:
+    """Append the module-owned Projects adapter exactly once."""
+
+    if (
+        urlsplit(target).path != "/app.js"
+        or response.status != 200
+        or _PROJECT_CORE_MODULE_PATCH in response.body
+    ):
+        return response
+    return ApiResponse(
+        response.status,
+        response.body + _PROJECT_CORE_MODULE_PATCH,
+        response.content_type,
+        response.headers,
+    )
+
+
+class ProjectCoreModuleWebApiMixin:
+    """Compose the independently owned Projects browser adapter."""
+
+    def dispatch(
+        self, method: str, target: str, headers: dict[str, str], body: bytes
+    ) -> ApiResponse:
+        response = super().dispatch(method, target, headers, body)
+        return patch_project_core_module_response(target, response)

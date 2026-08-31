@@ -44,6 +44,8 @@ _LEGACY_HISTORY_ROUTING_PATCH = bytes(
 """,
     "utf-8",
 )
+_LEGACY_HISTORY_ROUTING_START = b" const oldShowPage=showPage;"
+_LEGACY_HISTORY_ROUTING_END = b" function selectTab(buttons,selected){"
 
 _LEGACY_PORTFOLIO_START = b" /* Projects & Portfolio used to change only the selected button.  Render a\n"
 _LEGACY_PORTFOLIO_END = b" /* Knowledge tabs previously had no state or handlers at all. */"
@@ -155,33 +157,41 @@ def _rewrite_owned_browser_response(body: bytes) -> bytes:
     """Remove only responsibilities whose replacement owner is present."""
 
     body = body.replace(_LEGACY_HISTORY_ROUTING_PATCH, b"", 1)
+    body = _strip_legacy_range(
+        body, _LEGACY_HISTORY_ROUTING_START, _LEGACY_HISTORY_ROUTING_END
+    )
     if _PORTFOLIO_OWNER_MARKER in body:
         body = _strip_legacy_range(
             body, _LEGACY_PORTFOLIO_START, _LEGACY_PORTFOLIO_END
         )
+    if _PROJECT_OWNER_MARKER in body:
+        # Managed Project APIs remain authoritative; only browser competitors are
+        # retired after their Projects/Core replacements are present. Strip the
+        # leading Project cockpit behavior before Portfolio consumes its end marker.
+        body = body.replace(_PROJECT_HIERARCHY_PATCH, b"", 1)
+        body = _strip_legacy_range(
+            body, _PROJECT_COCKPIT_BEHAVIOR_START, _PROJECT_COCKPIT_BEHAVIOR_END
+        )
+    if _PORTFOLIO_OWNER_MARKER in body:
         body = _strip_legacy_range(
             body,
             _PROJECT_COCKPIT_PORTFOLIO_RENDER_START,
             _PROJECT_COCKPIT_PORTFOLIO_RENDER_END,
         )
-        body = _strip_legacy_range(
-            body,
-            _PROJECT_COCKPIT_PORTFOLIO_WIRING_START,
-            _PROJECT_COCKPIT_PORTFOLIO_WIRING_END,
-        )
     if _PROJECT_OWNER_MARKER in body:
-        # Managed Project APIs remain authoritative; only browser competitors are
-        # retired after their Projects/Core replacements are present.
-        body = body.replace(_PROJECT_HIERARCHY_PATCH, b"", 1)
-        body = _strip_legacy_range(
-            body, _PROJECT_COCKPIT_BEHAVIOR_START, _PROJECT_COCKPIT_BEHAVIOR_END
-        )
         body = _strip_legacy_range(
             body, _PROJECT_COCKPIT_CENTER_START, _PROJECT_COCKPIT_CENTER_END
         )
         body = _strip_legacy_range(
             body, _PROJECT_COCKPIT_WIRING_START, _PROJECT_COCKPIT_WIRING_END
         )
+    if _PORTFOLIO_OWNER_MARKER in body:
+        body = _strip_legacy_range(
+            body,
+            _PROJECT_COCKPIT_PORTFOLIO_WIRING_START,
+            _PROJECT_COCKPIT_PORTFOLIO_WIRING_END,
+        )
+    if _PROJECT_OWNER_MARKER in body:
         body = _strip_legacy_range(
             body,
             _PROJECT_COCKPIT_WORK_WIRING_START,

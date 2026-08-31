@@ -54,13 +54,15 @@ _PROJECT_OWNER_MARKER = b"WEB-PROJECT-CORE-MODULE"
 _PROJECT_COCKPIT_PORTFOLIO_RENDER_START = b" function portfolioData(){"
 _PROJECT_COCKPIT_PORTFOLIO_RENDER_END = b" function setProjectCenter(view){"
 _PROJECT_COCKPIT_PORTFOLIO_WIRING_START = b"  const oldPortfolio=loadPortfolio;"
-_PROJECT_COCKPIT_PORTFOLIO_WIRING_END = b"  renderProjectTree();\n }"
+_PROJECT_COCKPIT_PORTFOLIO_WIRING_END = b'  q("portfolio-list").addEventListener("click"'
 _PROJECT_COCKPIT_BEHAVIOR_START = b' let cockpitProjectId="";'
 _PROJECT_COCKPIT_BEHAVIOR_END = b" function portfolioData(){"
 _PROJECT_COCKPIT_CENTER_START = b" function setProjectCenter(view){"
 _PROJECT_COCKPIT_CENTER_END = b' if(projectPage&&!q("project-desktop-cockpit")){'
 _PROJECT_COCKPIT_WIRING_START = b'  q("project-tree-filter").oninput=renderProjectTree;'
-_PROJECT_COCKPIT_WIRING_END = b" }\n\n /* ---- Facility / CMDB cockpit"
+_PROJECT_COCKPIT_WIRING_END = b"  const oldPortfolio=loadPortfolio;"
+_PROJECT_COCKPIT_WORK_WIRING_START = b'  q("portfolio-list").addEventListener("click"'
+_PROJECT_COCKPIT_WORK_WIRING_END = b" }\n\n /* ---- Facility / CMDB cockpit"
 
 
 def _strip_legacy_range(body: bytes, start: bytes, end: bytes) -> bytes:
@@ -167,6 +169,11 @@ def _rewrite_owned_browser_response(body: bytes) -> bytes:
             body,
             _PROJECT_COCKPIT_WIRING_START,
             _PROJECT_COCKPIT_WIRING_END,
+        )
+        body = _strip_legacy_range(
+            body,
+            _PROJECT_COCKPIT_WORK_WIRING_START,
+            _PROJECT_COCKPIT_WORK_WIRING_END,
         )
     body = body.replace(_MODULAR_SHELL_BOOTSTRAP, b"", 1)
     return body + _MODULAR_SHELL_BOOTSTRAP

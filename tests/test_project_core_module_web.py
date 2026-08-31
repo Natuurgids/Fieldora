@@ -18,7 +18,9 @@ def test_project_core_adapter_is_idempotent_and_owns_project_interactions() -> N
     assert "window.FieldoraProjects" in script
     assert 'moduleId="projects.core"' in script
     assert "fieldora:project-context-changed" in script
-    assert 'api("/api/v1/media?limit=500")' in script
+    assert "/api/v1/media?project_id=${pid}&limit=200" in script
+    assert "fieldora:project-evidence-changed" in script
+    assert "refreshEvidence:loadEvidence" in script
     assert 'api(`/api/v1/phases?project_id=${pid}`' in script
     assert 'api(`/api/v1/tasks?project_id=${pid}`' in script
     assert 'api(`/api/v1/sprints?project_id=${pid}`' in script
@@ -84,6 +86,17 @@ def test_projects_work_surface_uses_governed_hierarchy_apis_not_portfolio_data()
     assert "/api/v1/allocations?project_id=" in script
     assert "JSON.parse(q(\"portfolio-list\")" not in script
     assert "data-project-work-kind" in script
+
+
+def test_project_evidence_surface_uses_association_aware_endpoint() -> None:
+    patched = patch_project_core_module_response(
+        "/app.js", ApiResponse(200, b"", "text/javascript; charset=utf-8")
+    )
+    script = patched.body.decode("utf-8")
+
+    assert "/api/v1/media?project_id=${pid}&limit=200" in script
+    assert 'filter(item=>item.project_id===state.projectId)' not in script
+    assert "fieldora:project-evidence-changed" in script
 
 
 def test_non_app_script_response_is_untouched() -> None:

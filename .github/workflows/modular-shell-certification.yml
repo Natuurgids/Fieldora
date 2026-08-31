@@ -11,6 +11,7 @@ on:
       - "src/natureai_next/server/project_evidence_actions_module_web.py"
       - "src/natureai_next/server/project_work_actions_module_web.py"
       - "src/natureai_next/server/project_lifecycle_module_web.py"
+      - "src/natureai_next/server/project_runtime_web.py"
       - "src/natureai_next/server/portfolio_module_web.py"
       - "src/natureai_next/server/project_facility_workspace_web.py"
       - "src/natureai_next/server/offline_first_api.py"

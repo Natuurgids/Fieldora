@@ -160,6 +160,7 @@ FOUNDATION_WEB_MODULES: tuple[WebModuleSpec, ...] = (
         "/projects",
         "Projects",
         owns_actions=(
+            "projects.create",
             "projects.context.select",
             "projects.scope.select",
             "projects.center.select",

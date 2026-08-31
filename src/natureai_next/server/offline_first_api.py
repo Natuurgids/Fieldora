@@ -35,9 +35,14 @@ from natureai_next.server.project_capacity_integration_web import (
 )
 from natureai_next.server.project_core_module_web import ProjectCoreModuleWebApiMixin
 from natureai_next.server.project_creation_module_web import ProjectCreationModuleWebApiMixin
-from natureai_next.server.project_evidence_actions_module_web import ProjectEvidenceActionsModuleWebApiMixin
+from natureai_next.server.project_evidence_actions_module_web import (
+    ProjectEvidenceActionsModuleWebApiMixin,
+)
 from natureai_next.server.project_hierarchy_web import ProjectHierarchyWebApiMixin
-from natureai_next.server.project_idempotency import ProjectIdempotencyApiMixin, wrap_project_management
+from natureai_next.server.project_idempotency import (
+    ProjectIdempotencyApiMixin,
+    wrap_project_management,
+)
 from natureai_next.server.project_idempotency_web import ProjectIdempotencyWebApiMixin
 from natureai_next.server.project_lifecycle_module_web import ProjectLifecycleModuleWebApiMixin
 from natureai_next.server.project_lifecycle_web import ProjectLifecycleWebApiMixin

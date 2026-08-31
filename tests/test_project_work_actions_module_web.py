@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 from natureai_next.server.api import ApiResponse
+from natureai_next.server.modular_shell_web import patch_modular_shell_response
 from natureai_next.server.offline_first_api import OfflineFirstFieldoraApi
+from natureai_next.server.project_core_module_web import patch_project_core_module_response
+from natureai_next.server.project_hierarchy_web import ProjectHierarchyWebApiMixin
 from natureai_next.server.project_work_actions_module_web import (
     ProjectWorkActionsModuleWebApiMixin,
     patch_project_work_actions_module_response,
@@ -74,13 +77,29 @@ def test_capability_projection_only_controls_browser_discoverability() -> None:
     assert 'method:"POST",purpose:"research"' in script
 
 
+def test_final_shell_keeps_new_actions_and_retires_old_hierarchy_browser_owner() -> None:
+    base = ApiResponse(200, b"const baseApp=true;", "text/javascript; charset=utf-8")
+    legacy = ProjectHierarchyWebApiMixin._patch_project_hierarchy_response("/app.js", base)
+    core = patch_project_core_module_response("/app.js", legacy)
+    actions = patch_project_work_actions_module_response("/app.js", core)
+
+    final = patch_modular_shell_response("/app.js", actions)
+    script = final.body.decode("utf-8")
+
+    assert "WEB-PROJECT-CORE-MODULE" in script
+    assert "WEB-PROJECT-WORK-ACTIONS-MODULE" in script
+    assert "WEB-032: contextual Project hierarchy creation" not in script
+    assert "const priorLoadPortfolio=loadPortfolio" not in script
+    assert 'data-project-work-create="phase"' in script
+    assert 'id="project-core-work-list"' in script
+
+
 def test_work_actions_mixin_is_composed_before_project_core_adapter() -> None:
     mro = OfflineFirstFieldoraApi.__mro__
 
     assert ProjectWorkActionsModuleWebApiMixin in mro
-    assert mro.index(ProjectWorkActionsModuleWebApiMixin) < mro.index(
-        next(base for base in mro if base.__name__ == "ProjectCoreModuleWebApiMixin")
-    )
+    project_core = next(base for base in mro if base.__name__ == "ProjectCoreModuleWebApiMixin")
+    assert mro.index(ProjectWorkActionsModuleWebApiMixin) < mro.index(project_core)
 
 
 def test_non_app_response_is_untouched() -> None:

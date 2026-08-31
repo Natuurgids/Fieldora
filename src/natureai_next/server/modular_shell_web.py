@@ -49,7 +49,15 @@ _LEGACY_PORTFOLIO_START = b" /* Projects & Portfolio used to change only the sel
 _LEGACY_PORTFOLIO_END = b" /* Knowledge tabs previously had no state or handlers at all. */"
 _PORTFOLIO_OWNER_MARKER = b"WEB-PORTFOLIO-MODULE"
 _PROJECT_OWNER_MARKER = b"WEB-PROJECT-CORE-MODULE"
+_PROJECT_CREATION_OWNER_MARKER = b"WEB-PROJECT-CREATION-MODULE"
 _PROJECT_LIFECYCLE_OWNER_MARKER = b"WEB-PROJECT-LIFECYCLE-MODULE"
+
+# Project creation first shipped inside the general browser-functionality patch.
+# Remove only that bounded fragment once Projects/Core has its dedicated owner.
+_LEGACY_PROJECT_CREATION_START = (
+    b" /* Project creation belongs in Projects & Portfolio as well as Research. */"
+)
+_LEGACY_PROJECT_CREATION_END = b" function setIndicator(id,text){"
 
 # The desktop-density Projects/Facilities cockpit predates explicit module
 # ownership. Portfolio and Projects/Core are removed in separate marker-bounded
@@ -176,6 +184,10 @@ def _rewrite_owned_browser_response(body: bytes) -> bytes:
             body,
             _PROJECT_COCKPIT_WORK_WIRING_START,
             _PROJECT_COCKPIT_WORK_WIRING_END,
+        )
+    if _PROJECT_CREATION_OWNER_MARKER in body:
+        body = _strip_legacy_range(
+            body, _LEGACY_PROJECT_CREATION_START, _LEGACY_PROJECT_CREATION_END
         )
     if _PROJECT_LIFECYCLE_OWNER_MARKER in body:
         body = body.replace(_PROJECT_LIFECYCLE_WEB_PATCH, b"", 1)

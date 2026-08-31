@@ -7,6 +7,7 @@ on:
       - "src/natureai_next/server/web_module_runtime.py"
       - "src/natureai_next/server/modular_shell_web.py"
       - "src/natureai_next/server/project_core_module_web.py"
+      - "src/natureai_next/server/project_work_actions_module_web.py"
       - "src/natureai_next/server/portfolio_module_web.py"
       - "src/natureai_next/server/project_facility_workspace_web.py"
       - "src/natureai_next/server/offline_first_api.py"
@@ -15,6 +16,7 @@ on:
       - "tests/test_web_module_runtime.py"
       - "tests/test_modular_shell_web.py"
       - "tests/test_project_core_module_web.py"
+      - "tests/test_project_work_actions_module_web.py"
       - "tests/test_portfolio_module_web.py"
       - ".github/workflows/modular-shell-certification.yml"
   workflow_dispatch:
@@ -50,6 +52,7 @@ jobs:
           python -m ruff check
           src/natureai_next/server/modular_shell_web.py
           src/natureai_next/server/project_core_module_web.py
+          src/natureai_next/server/project_work_actions_module_web.py
           src/natureai_next/server/portfolio_module_web.py
           src/natureai_next/server/offline_first_api.py
           src/natureai_next/server/http.py
@@ -60,6 +63,7 @@ jobs:
           tests/test_web_module_runtime.py
           tests/test_modular_shell_web.py
           tests/test_project_core_module_web.py
+          tests/test_project_work_actions_module_web.py
           tests/test_portfolio_module_web.py
       - name: Modular shell contract tests
         run: >-
@@ -68,4 +72,5 @@ jobs:
           tests/test_web_module_runtime.py
           tests/test_modular_shell_web.py
           tests/test_project_core_module_web.py
+          tests/test_project_work_actions_module_web.py
           tests/test_portfolio_module_web.py

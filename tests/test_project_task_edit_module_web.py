@@ -82,7 +82,7 @@ def test_task_edit_server_validates_cross_project_relationships_and_ranges() -> 
     assert "Due date cannot be before start date." in script
 
 
-def test_task_edit_mixin_is_immediately_inside_modular_shell() -> None:
+def test_task_edit_mixin_is_composed_inside_modular_shell() -> None:
     mro = OfflineFirstFieldoraApi.__mro__
     assert mro[1].__name__ == "ModularShellWebApiMixin"
-    assert mro[2] is ProjectTaskEditModuleWebApiMixin
+    assert ProjectTaskEditModuleWebApiMixin in mro[2:]

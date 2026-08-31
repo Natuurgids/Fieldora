@@ -84,15 +84,15 @@ Projects are a high-fidelity parity area. The web workflow, hierarchy and termin
 
 - [~] Project list and project context
 - [ ] Project create/edit lifecycle
-- [ ] Desktop-similar work hierarchy
+- [~] Desktop-similar work hierarchy
 - [~] Phases/tasks/work-item navigation and editing
 - [ ] Project status/progress behavior
 - [~] Project-to-evidence/observation/research links
 - [~] Project module owns its actions; no unrelated DOM coupling
-- [ ] Project API authorization and persistence verified
+- [~] Project API authorization and persistence verified
 - [~] Project workflow parity tests
 
-**Iteration 6 evidence:** `src/natureai_next/server/project_core_module_web.py` is now the first independently owned Projects/Core browser adapter. It owns project context selection, project-tree filtering and saved project scope, Work/Evidence center switching, inspector feedback and project evidence loading, publishes `fieldora:project-context-changed`, and mounts/unmounts through the shell lifecycle. `web_module_contracts.py` assigns `projects.context.select`, `projects.scope.select`, `projects.center.select`, `projects.evidence.load`, and `projects.work.inspect` to `projects.core`. The final shell removes the former `renderProjectTree`, `selectCockpitProject`, direct Project-to-Portfolio scope mutation and other migrated project behavior from `project_facility_workspace_web.py` while preserving the desktop-density Projects cockpit markup and the separate Facilities cockpit. `tests/test_project_core_module_web.py` covers adapter idempotence, ownership boundaries and final composition. The current Work center still uses the older `portfolio-list` DOM/data as a transitional integration, and create/edit lifecycle, hierarchy, status/progress, server authorization/persistence trace and desktop parity remain to be certified; therefore no Projects requirement is marked complete yet.
+**Iteration 6 evidence:** `src/natureai_next/server/project_core_module_web.py` now owns a dedicated Projects work hierarchy surface instead of reading phases/tasks from `portfolio-list` DOM datasets. For the selected project it loads the governed `/api/v1/phases`, `/api/v1/tasks`, `/api/v1/sprints`, and `/api/v1/allocations` endpoints, renders phases/tasks/milestones/subtasks plus sprint/allocation context, maintains work selection in module state, and feeds the shared desktop-density inspector. The older Portfolio list card is hidden only while Projects/Core is mounted and restored on unmount, preserving independent Portfolio ownership. `src/natureai_next/server/modular_shell_web.py` now retires the old WEB-032 hierarchy browser patch whenever the Projects/Core owner is present; the managed hierarchy API itself remains authoritative and continues enforcing authentication, PBAC decisions and Project Management persistence. `tests/test_project_core_module_web.py` verifies the owned hierarchy API calls, absence of Portfolio DOM-data dependence, and final removal of the former hierarchy browser owner. Create/edit UI ownership, status/progress behavior, full persistence trace, browser certification and desktop parity are still outstanding, so these requirements remain in progress rather than complete.
 
 ### Iteration 7 — Portfolio and project integrations
 - [~] Portfolio views

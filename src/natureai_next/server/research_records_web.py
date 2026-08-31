@@ -13,7 +13,7 @@ _RESEARCH_RECORDS_PATCH = bytes(
  window.__fieldoraResearchRecordsWired=true;
  const byId=id=>document.getElementById(id);
  const html=value=>String(value??"").replace(/[&<>"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
- let governedResearchRecords=[],editingResearchRecord=null;
+ let governedResearchRecords=[],editingResearchRecord=null,integrationProjectId="";
  const list=byId("research-domain-list"),save=byId("science-save"),recordsCard=list?.closest(".card");
  if(!list||!save||!recordsCard)return;
 
@@ -24,7 +24,7 @@ _RESEARCH_RECORDS_PATCH = bytes(
  }
  loadResearchDomain=async function(){
   try{
-   const project=byId("science-project")?.value||selectedProject||"";
+   const project=integrationProjectId||byId("science-project")?.value||selectedProject||"";
    const suffix=project?`?project_id=${encodeURIComponent(project)}`:"";
    governedResearchRecords=(await api(`/api/v1/${researchDomain}${suffix}`)).items||[];render();
   }catch(error){list.innerHTML=`<div class="empty">${html(error.message)}</div>`}
@@ -33,7 +33,7 @@ _RESEARCH_RECORDS_PATCH = bytes(
  async function openRecord(id){
   try{
    const payload=await api(`/api/v1/${researchDomain}/${encodeURIComponent(id)}`),item=payload.item;
-   editingResearchRecord={...item,revision:payload.revision||item.revision||1};
+   editingResearchRecord={...item,revision:payload.revision||item.revision||1};integrationProjectId=item.project_id||integrationProjectId;
    if(byId("science-project")){byId("science-project").value=item.project_id||"";byId("science-project").disabled=true}
    byId("science-name").value=item.name||"";byId("science-status").value=item.status||"active";byId("science-parent").value=item.parent_id||"";byId("science-description").value=item.description||"";
    save.textContent="Update research record";
@@ -43,7 +43,7 @@ _RESEARCH_RECORDS_PATCH = bytes(
  }
  list.onclick=event=>{const row=event.target.closest("[data-research-record]");if(row)openRecord(row.dataset.researchRecord)};
  async function saveRecord(){
-  const project=byId("science-project")?.value||"",name=byId("science-name")?.value.trim()||"";
+  const project=integrationProjectId||byId("science-project")?.value||"",name=byId("science-name")?.value.trim()||"";
   if(!project||!name)return status("science-save-status","Project and name are required.",true);
   const record={project_id:project,name,status:byId("science-status")?.value.trim()||"active",parent_id:byId("science-parent")?.value.trim()||"",description:byId("science-description")?.value.trim()||"",payload:{}};
   try{
@@ -57,9 +57,16 @@ _RESEARCH_RECORDS_PATCH = bytes(
    if(byId("science-project"))byId("science-project").disabled=false;clearEditor();detail.hidden=true;await loadResearchDomain();
   }catch(error){status("science-save-status",error.message,true)}
  }
+ async function openProject(projectId){
+  const project=String(projectId||"").trim();if(!project)return false;
+  integrationProjectId=project;editingResearchRecord=null;
+  const selector=byId("science-project");if(selector){selector.disabled=false;selector.value=project}
+  detail.hidden=true;clearEditor();await loadResearchDomain();return true;
+ }
  save.onclick=saveRecord;
- byId("science-project")?.addEventListener("change",()=>{if(!editingResearchRecord)loadResearchDomain()});
+ byId("science-project")?.addEventListener("change",()=>{if(!editingResearchRecord){integrationProjectId=byId("science-project")?.value||"";loadResearchDomain()}});
  document.querySelectorAll("[data-research-domain]").forEach(button=>button.addEventListener("click",()=>{editingResearchRecord=null;if(byId("science-project"))byId("science-project").disabled=false;detail.hidden=true;clearEditor()}));
+ window.FieldoraResearchRecords=Object.freeze({openProject,refresh:()=>loadResearchDomain(),currentProject:()=>integrationProjectId||byId("science-project")?.value||""});
 })();
 """,
     "utf-8",

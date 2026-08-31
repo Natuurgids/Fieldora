@@ -106,7 +106,8 @@ _PROJECT_CORE_MODULE_PATCH = bytes(
  }
  async function loadEvidence(){
   state.evidence=[];renderEvidence();if(!state.projectId)return;
-  try{const result=await api("/api/v1/media?limit=500");state.evidence=(result.items||[]).filter(item=>item.project_id===state.projectId);renderEvidence();status("")}catch(error){renderEvidence();moduleError(error,"Project evidence could not be loaded.")}
+  const pid=encodeURIComponent(state.projectId);
+  try{const result=await api(`/api/v1/media?project_id=${pid}&limit=200`,{purpose:"research"});state.evidence=result.items||[];renderEvidence();status("")}catch(error){renderEvidence();moduleError(error,"Project evidence could not be loaded.")}
  }
  async function selectProject(id){
   state.projectId=id||"";state.workSelection=null;
@@ -135,13 +136,14 @@ _PROJECT_CORE_MODULE_PATCH = bytes(
   q("project-tree-filter")?.addEventListener("input",renderTree,{signal});
   q("project-cockpit-tree")?.addEventListener("click",event=>{const project=event.target.closest?.("[data-project-tree]"),scope=event.target.closest?.("[data-project-scope]");if(project)selectProject(project.dataset.projectTree);else if(scope){state.scope=scope.dataset.projectScope==="mine"?"mine":"all";renderTree()}},{signal});
   q("project-desktop-cockpit")?.addEventListener("click",event=>{const center=event.target.closest?.("[data-project-center]");if(center)setCenter(center.dataset.projectCenter);else inspectWorkItem(event.target)},{signal});
-  renderTree();setCenter(state.centerView);if(!state.projectId&&projectItems().length)selectProject(projectItems()[0].id);else{renderInspector(projectById(state.projectId));loadWork()}
+  renderTree();setCenter(state.centerView);if(!state.projectId&&projectItems().length)selectProject(projectItems()[0].id);else{renderInspector(projectById(state.projectId));loadWork();loadEvidence()}
  }
  function unmount(){if(!state.mounted)return;state.controller?.abort();state.controller=null;state.mounted=false;const legacy=q("portfolio-list")?.closest(".card");if(legacy&&"projectCoreLegacyHidden" in legacy.dataset){legacy.hidden=legacy.dataset.projectCoreLegacyHidden==="true";delete legacy.dataset.projectCoreLegacyHidden}status("")}
  document.addEventListener("fieldora:module-mount",event=>{if(event.detail?.module?.module_id===moduleId)mount()});
  document.addEventListener("fieldora:module-unmount",event=>{if(event.detail?.module?.module_id===moduleId)unmount()});
  document.addEventListener("fieldora:project-work-changed",event=>{if(event.detail?.project_id===state.projectId)loadWork()});
- window.FieldoraProjects=Object.freeze({mount,unmount,selectProject,setCenter,refreshWork:loadWork,currentProject:()=>state.projectId,currentView:()=>state.centerView});
+ document.addEventListener("fieldora:project-evidence-changed",event=>{if(event.detail?.project_id===state.projectId)loadEvidence()});
+ window.FieldoraProjects=Object.freeze({mount,unmount,selectProject,setCenter,refreshWork:loadWork,refreshEvidence:loadEvidence,currentProject:()=>state.projectId,currentView:()=>state.centerView});
  if(window.FieldoraModules?.current?.()?.module_id===moduleId)mount();
 })();
 """,

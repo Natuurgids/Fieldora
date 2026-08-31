@@ -11,7 +11,6 @@ from urllib.parse import urlsplit
 
 from natureai_next.server.api import ApiResponse
 
-
 _PROJECT_PROGRESS_MODULE_PATCH = bytes(
     r"""
 

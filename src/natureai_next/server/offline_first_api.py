@@ -37,6 +37,7 @@ from natureai_next.server.project_lifecycle_web import ProjectLifecycleWebApiMix
 from natureai_next.server.project_progress_module_web import ProjectProgressModuleWebApiMixin
 from natureai_next.server.project_runtime_web import ProjectRuntimeWebApiMixin
 from natureai_next.server.project_task_edit_module_web import ProjectTaskEditModuleWebApiMixin
+from natureai_next.server.project_task_editing import wrap_project_task_editing
 from natureai_next.server.project_work_actions_module_web import ProjectWorkActionsModuleWebApiMixin
 from natureai_next.server.research_records_api import ResearchRecordsApiMixin
 from natureai_next.server.structured_errors import StructuredErrorApiMixin
@@ -101,7 +102,9 @@ class OfflineFirstFieldoraApi(
             media=getattr(self, "_media", None),
             science=getattr(self, "_science", None),
         )
-        self._project_management = wrap_project_management(project_management)
+        self._project_management = wrap_project_task_editing(
+            wrap_project_management(project_management)
+        )
         sync_factory = type(self)._offline_sync_factory
         linked_factory = type(self)._linked_storage_factory
         self._offline_sync = None if sync_factory is None else sync_factory()

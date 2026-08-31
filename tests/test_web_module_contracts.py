@@ -30,6 +30,26 @@ def test_foundation_registry_has_separate_projects_and_portfolio_ownership() -> 
     assert portfolio.dependencies == ("projects.core",)
 
 
+def test_project_integrations_are_owned_by_bounded_modules() -> None:
+    registry = foundation_registry()
+
+    projects = registry.resolve("/projects")
+    capacity = registry.resolve("/capacity")
+    research = registry.resolve("/research")
+
+    assert projects is not None
+    assert capacity is not None
+    assert research is not None
+    assert capacity.module_id == "capacity"
+    assert capacity.dependencies == ("projects.core",)
+    assert research.module_id == "research.dossiers"
+    assert research.dependencies == ("projects.core",)
+    assert registry.action_owner("capacity.project.allocations.view") is capacity
+    assert registry.action_owner("research.project.records.view") is research
+    assert "capacity.project.allocations.view" not in projects.owns_actions
+    assert "research.project.records.view" not in projects.owns_actions
+
+
 def test_registry_rejects_duplicate_route_ownership() -> None:
     registry = WebModuleRegistry(
         (WebModuleSpec("projects.core", "/projects", "Projects"),)

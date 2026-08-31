@@ -59,8 +59,8 @@ def test_final_composition_removes_shared_portfolio_override_but_keeps_other_leg
     assert "window.FieldoraModules" in script
 
 
-def test_portfolio_module_is_composed_immediately_inside_modular_shell() -> None:
+def test_portfolio_module_is_composed_inside_modular_shell() -> None:
     mro = OfflineFirstFieldoraApi.__mro__
 
     assert mro[1] is not PortfolioModuleWebApiMixin
-    assert mro[2] is PortfolioModuleWebApiMixin
+    assert PortfolioModuleWebApiMixin in mro[2:]

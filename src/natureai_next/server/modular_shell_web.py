@@ -47,13 +47,16 @@ _LEGACY_PORTFOLIO_START = b" /* Projects & Portfolio used to change only the sel
 _LEGACY_PORTFOLIO_END = b" /* Knowledge tabs previously had no state or handlers at all. */"
 
 # The desktop-density Projects/Facilities cockpit predates explicit module
-# ownership and contains a second Portfolio renderer plus a global loadPortfolio
-# wrapper.  Portfolio now has an owning module, so the final served script removes
-# those overlapping responsibilities while retaining the Projects cockpit itself.
+# ownership.  Portfolio and Projects/Core are migrated independently while the
+# cockpit markup itself remains transitional and Facilities keeps its ownership.
 _PROJECT_COCKPIT_PORTFOLIO_RENDER_START = b" function portfolioData(){"
 _PROJECT_COCKPIT_PORTFOLIO_RENDER_END = b" function setProjectCenter(view){"
 _PROJECT_COCKPIT_PORTFOLIO_WIRING_START = b"  const oldPortfolio=loadPortfolio;"
 _PROJECT_COCKPIT_PORTFOLIO_WIRING_END = b"  renderProjectTree();\n }"
+_PROJECT_COCKPIT_BEHAVIOR_START = b' let cockpitProjectId="";'
+_PROJECT_COCKPIT_BEHAVIOR_END = b' if(projectPage&&!q("project-desktop-cockpit")){'
+_PROJECT_COCKPIT_WIRING_START = b'  q("project-tree-filter").oninput=renderProjectTree;'
+_PROJECT_COCKPIT_WIRING_END = b" }\n\n /* ---- Facility / CMDB cockpit"
 
 
 def _strip_legacy_range(body: bytes, start: bytes, end: bytes) -> bytes:
@@ -146,6 +149,16 @@ def patch_modular_shell_response(target: str, response: ApiResponse) -> ApiRespo
         body,
         _PROJECT_COCKPIT_PORTFOLIO_WIRING_START,
         _PROJECT_COCKPIT_PORTFOLIO_WIRING_END,
+    )
+    body = _strip_legacy_range(
+        body,
+        _PROJECT_COCKPIT_BEHAVIOR_START,
+        _PROJECT_COCKPIT_BEHAVIOR_END,
+    )
+    body = _strip_legacy_range(
+        body,
+        _PROJECT_COCKPIT_WIRING_START,
+        _PROJECT_COCKPIT_WIRING_END,
     )
     # The API mixin may append the shell before the HTTP compatibility layer adds
     # its transitional fragments.  Always relocate the unique shell bootstrap to

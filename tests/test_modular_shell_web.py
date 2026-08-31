@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from natureai_next.server.api import ApiResponse
+from natureai_next.server.http import patch_managed_web_response
 from natureai_next.server.modular_shell_web import (
     ModularShellWebApiMixin,
     modular_shell_manifest,
@@ -102,6 +103,28 @@ def test_final_composed_response_removes_project_cockpit_portfolio_overlap() -> 
     assert "facility-desktop-cockpit" in script
     assert "function setProjectCenter(view)" in script
     assert "renderProjectTree();" in script
+
+
+def test_production_patch_order_finalizes_after_legacy_append_only_patches() -> None:
+    # The API mixin may have already appended the modular shell before the HTTP
+    # adapter adds legacy compatibility fragments.  Production finalization must
+    # still remove migrated Portfolio/history ownership after those fragments are
+    # appended, and it must keep exactly one shell bridge.
+    early = patch_modular_shell_response(
+        "/app.js", ApiResponse(200, b"const baseApp=true;", "text/javascript; charset=utf-8")
+    )
+    final = patch_managed_web_response("/app.js", early)
+    script = final.body.decode("utf-8")
+
+    assert script.count("WEB-MODULAR-SHELL: registry-owned navigation bridge") == 1
+    assert "oldShowPage=showPage" not in script
+    assert "showPage=function(name)" not in script
+    assert "loadPortfolio=async function" not in script
+    assert "function portfolioData()" not in script
+    assert "const oldPortfolio=loadPortfolio" not in script
+    assert "loadKnowledge=async function" in script
+    assert "project-desktop-cockpit" in script
+    assert "facility-desktop-cockpit" in script
 
 
 def test_non_app_script_response_is_untouched() -> None:

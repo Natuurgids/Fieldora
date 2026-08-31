@@ -25,6 +25,7 @@ def test_task_editor_patch_is_lifecycle_owned_and_governed() -> None:
     assert 'moduleId="projects.core"' in script
     assert "window.FieldoraProjectTaskEdit" in script
     assert "/api/v1/project-statuses?project_id=" in script
+    assert "/api/v1/tasks/${tid}?project_id=${pid}" in script
     assert 'method:"PATCH"' in script
     assert "/api/v1/tasks/${encodeURIComponent(state.taskId)}" in script
     assert "fieldora:project-work-changed" in script
@@ -34,13 +35,14 @@ def test_task_editor_patch_is_lifecycle_owned_and_governed() -> None:
     assert "showPage=" not in script
 
 
-def test_task_editor_covers_desktop_planning_fields_without_overwriting_unloaded_fields() -> None:
+def test_task_editor_covers_lossless_desktop_planning_fields() -> None:
     response = ProjectTaskEditModuleWebApiMixin._patch_browser(
         "/app.js", ApiResponse(200, b"", "text/javascript; charset=utf-8")
     )
     script = response.body.decode("utf-8")
     for label in (
         "Title",
+        "Description",
         "Owner",
         "Status",
         "Priority",
@@ -49,14 +51,35 @@ def test_task_editor_covers_desktop_planning_fields_without_overwriting_unloaded
         "Manual estimate (h)",
         "Realized (h)",
         "Progress %",
+        "Budget",
         "Phase",
         "Sprint",
+        "Recurrence",
+        "Recurrence ends",
         "Milestone",
     ):
         assert label in script
-    assert "project-core-task-edit-description" not in script
-    assert "project-core-task-edit-budget" not in script
-    assert "project-core-task-edit-recurrence" not in script
+    assert "project-core-task-edit-description" in script
+    assert "project-core-task-edit-budget" in script
+    assert "project-core-task-edit-recurrence" in script
+    assert "task.description" in script
+    assert "task.budget" in script
+    assert "task.recurrence" in script
+
+
+def test_task_edit_server_validates_cross_project_relationships_and_ranges() -> None:
+    source = __import__(
+        "natureai_next.server.project_task_edit_module_web",
+        fromlist=["ProjectTaskEditModuleWebApiMixin"],
+    )
+    text = source.__file__
+    assert text
+    response = ProjectTaskEditModuleWebApiMixin._patch_browser(
+        "/app.js", ApiResponse(200, b"", "text/javascript; charset=utf-8")
+    )
+    script = response.body.decode("utf-8")
+    assert "Progress must be a whole number from 0 to 100." in script
+    assert "Due date cannot be before start date." in script
 
 
 def test_task_edit_mixin_is_immediately_inside_modular_shell() -> None:

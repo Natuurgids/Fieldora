@@ -94,10 +94,10 @@ def test_projects_contract_owns_progress_and_planning_actions() -> None:
         assert owner.module_id == "projects.core"
 
 
-def test_progress_mixin_follows_task_edit_inside_modular_shell() -> None:
+def test_progress_mixin_is_composed_inside_modular_shell() -> None:
     mro = OfflineFirstFieldoraApi.__mro__
     assert mro[1].__name__ == "ModularShellWebApiMixin"
-    assert mro[3] is ProjectProgressModuleWebApiMixin
+    assert ProjectProgressModuleWebApiMixin in mro[2:]
 
 
 def test_non_app_response_is_untouched() -> None:

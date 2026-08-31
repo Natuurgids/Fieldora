@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict, is_dataclass
+from datetime import date
 from urllib.parse import parse_qs, urlsplit
 
 from natureai_next.application.authentication import AuthenticationFailed
@@ -20,7 +21,8 @@ def _mapping(value: object) -> dict[str, object]:
     return dict(vars(value))
 
 
-_PROJECT_TASK_EDIT_PATCH = bytes(r'''
+_PROJECT_TASK_EDIT_PATCH = bytes(
+    r'''
 
 /* WEB-PROJECT-TASK-EDIT-MODULE: desktop-parity task editing. */
 (()=>{
@@ -38,16 +40,16 @@ _PROJECT_TASK_EDIT_PATCH = bytes(r'''
    const [tasks,statuses,phases,sprints]=await Promise.all([api(`/api/v1/tasks?project_id=${pid}`,{purpose:"research"}),api(`/api/v1/project-statuses?project_id=${pid}`,{purpose:"research"}),api(`/api/v1/phases?project_id=${pid}`,{purpose:"research"}),api(`/api/v1/sprints?project_id=${pid}`,{purpose:"research"})]);
    const task=(tasks.items||[]).find(item=>String(item.id||item.task_id)===String(taskId));if(!task)throw new Error("Task is no longer available.");
    const options=(items,idKey,labelKey,selected,empty)=>`${empty||""}`+(items||[]).map(item=>`<option value="${esc(item[idKey]||item.id)}" ${String(item[idKey]||item.id)===String(selected||"")?"selected":""}>${esc(item[labelKey]||item.name)}</option>`).join("");
-   const host=q("project-core-task-editor");host.hidden=false;host.innerHTML=`<div class="top"><div><h2>Edit task</h2><p class="muted">Projects/Core owns this editor; the server independently authorizes every save.</p></div><button id="project-core-task-edit-close" type="button">Close</button></div><div class="form-grid"><label>Title<input id="project-core-task-edit-title" value="${esc(task.title||task.name||"")}"></label><label>Owner<input id="project-core-task-edit-owner" value="${esc(task.owner_id||task.assignee_id||"")}"></label><label>Status<select id="project-core-task-edit-status">${options(statuses.items,"status_id","name",task.status_id)}</select></label><label>Priority<select id="project-core-task-edit-priority">${["critical","high","normal","low"].map(v=>`<option ${v===task.priority?"selected":""}>${v}</option>`).join("")}</select></label><label>Start<input id="project-core-task-edit-start" type="date" value="${esc(task.start_date||"")}"></label><label>Strict deadline<input id="project-core-task-edit-due" type="date" value="${esc(task.due_date||"")}"></label><label>Manual estimate (h)<input id="project-core-task-edit-estimate" type="number" min="0" step="0.25" value="${Number(task.manual_estimate_hours??task.estimate_hours??0)}"></label><label>Realized (h)<input id="project-core-task-edit-realized" type="number" min="0" step="0.25" value="${Number(task.realized_hours??task.actual_hours??0)}"></label><label>Progress %<input id="project-core-task-edit-progress" type="number" min="0" max="100" step="1" value="${Number(task.progress||0)}"></label><label>Budget<input id="project-core-task-edit-budget" type="number" min="0" step="0.01" value="${Number(task.budget||0)}"></label><label>Phase<select id="project-core-task-edit-phase">${options(phases.items,"phase_id","name",task.phase_id,'<option value="">No phase</option>')}</select></label><label>Sprint<select id="project-core-task-edit-sprint">${options(sprints.items,"sprint_id","name",task.sprint_id,'<option value="">No sprint</option>')}</select></label><label>Recurrence<select id="project-core-task-edit-recurrence">${["none","daily","weekly","monthly"].map(v=>`<option ${v===(task.recurrence||"none")?"selected":""}>${v}</option>`).join("")}</select></label><label>Recurrence ends<input id="project-core-task-edit-recurrence-end" type="date" value="${esc(task.recurrence_end||"")}"></label><label><input id="project-core-task-edit-milestone" type="checkbox" ${task.milestone?"checked":""}> Milestone</label><label class="span-2">Description<textarea id="project-core-task-edit-description">${esc(task.description||"")}</textarea></label></div><div class="actions section"><button id="project-core-task-edit-save" class="primary" type="button">Save task</button></div><p id="project-core-task-edit-message" class="status"></p>`;
+   const host=q("project-core-task-editor");host.hidden=false;host.innerHTML=`<div class="top"><div><h2>Edit task</h2><p class="muted">Task planning fields from the desktop workflow. The server independently authorizes every save.</p></div><button id="project-core-task-edit-close" type="button">Close</button></div><div class="form-grid"><label>Title<input id="project-core-task-edit-title" value="${esc(task.title||task.name||"")}"></label><label>Owner<input id="project-core-task-edit-owner" value="${esc(task.owner_id||task.assignee_id||"")}"></label><label>Status<select id="project-core-task-edit-status">${options(statuses.items,"status_id","name",task.status_id)}</select></label><label>Priority<select id="project-core-task-edit-priority">${["critical","high","normal","low"].map(v=>`<option ${v===task.priority?"selected":""}>${v}</option>`).join("")}</select></label><label>Start<input id="project-core-task-edit-start" type="date" value="${esc(task.start_date||"")}"></label><label>Strict deadline<input id="project-core-task-edit-due" type="date" value="${esc(task.due_date||"")}"></label><label>Manual estimate (h)<input id="project-core-task-edit-estimate" type="number" min="0" step="0.25" value="${Number(task.manual_estimate_hours??task.estimate_hours??0)}"></label><label>Realized (h)<input id="project-core-task-edit-realized" type="number" min="0" step="0.25" value="${Number(task.realized_hours??task.actual_hours??0)}"></label><label>Progress %<input id="project-core-task-edit-progress" type="number" min="0" max="100" step="1" value="${Number(task.progress||0)}"></label><label>Phase<select id="project-core-task-edit-phase">${options(phases.items,"phase_id","name",task.phase_id,'<option value="">No phase</option>')}</select></label><label>Sprint<select id="project-core-task-edit-sprint">${options(sprints.items,"sprint_id","name",task.sprint_id,'<option value="">No sprint</option>')}</select></label><label><input id="project-core-task-edit-milestone" type="checkbox" ${task.milestone?"checked":""}> Milestone</label></div><div class="actions section"><button id="project-core-task-edit-save" class="primary" type="button">Save task</button></div><p id="project-core-task-edit-message" class="status"></p>`;
    q("project-core-task-edit-close").onclick=()=>{host.hidden=true};q("project-core-task-edit-save").onclick=save;
   }catch(error){emitError(error,"Task editor could not be loaded.")}
  }
  async function save(){
-  if(!state.taskId||!state.projectId||!state.canEdit)return;const start=q("project-core-task-edit-start").value,due=q("project-core-task-edit-due").value,recEnd=q("project-core-task-edit-recurrence-end").value;
+  if(!state.taskId||!state.projectId||!state.canEdit)return;const start=q("project-core-task-edit-start").value,due=q("project-core-task-edit-due").value;
   if(!q("project-core-task-edit-title").value.trim())return fail("Task title is required.");if(start&&due&&due<start)return fail("Due date cannot be before start date.");
-  const estimate=Number(q("project-core-task-edit-estimate").value),realized=Number(q("project-core-task-edit-realized").value),progress=Number(q("project-core-task-edit-progress").value),budget=Number(q("project-core-task-edit-budget").value);
-  if([estimate,realized,budget].some(v=>!Number.isFinite(v)||v<0))return fail("Hours and budget must be zero or greater.");if(!Number.isInteger(progress)||progress<0||progress>100)return fail("Progress must be a whole number from 0 to 100.");
-  const record={project_id:state.projectId,title:q("project-core-task-edit-title").value.trim(),description:q("project-core-task-edit-description").value.trim(),owner_id:q("project-core-task-edit-owner").value.trim(),status_id:q("project-core-task-edit-status").value,priority:q("project-core-task-edit-priority").value,start_date:start,due_date:due,estimate_hours:estimate,realized_hours:realized,progress,budget,phase_id:q("project-core-task-edit-phase").value||null,sprint_id:q("project-core-task-edit-sprint").value||null,recurrence:q("project-core-task-edit-recurrence").value,recurrence_end:recEnd,milestone:q("project-core-task-edit-milestone").checked};
+  const estimate=Number(q("project-core-task-edit-estimate").value),realized=Number(q("project-core-task-edit-realized").value),progress=Number(q("project-core-task-edit-progress").value);
+  if([estimate,realized].some(v=>!Number.isFinite(v)||v<0))return fail("Hours must be zero or greater.");if(!Number.isInteger(progress)||progress<0||progress>100)return fail("Progress must be a whole number from 0 to 100.");
+  const record={project_id:state.projectId,title:q("project-core-task-edit-title").value.trim(),owner_id:q("project-core-task-edit-owner").value.trim(),status_id:q("project-core-task-edit-status").value,priority:q("project-core-task-edit-priority").value,start_date:start,due_date:due,estimate_hours:estimate,realized_hours:realized,progress,phase_id:q("project-core-task-edit-phase").value||null,sprint_id:q("project-core-task-edit-sprint").value||null,milestone:q("project-core-task-edit-milestone").checked};
   try{const result=await api(`/api/v1/tasks/${encodeURIComponent(state.taskId)}`,{method:"PATCH",purpose:"research",body:JSON.stringify(record)});q("project-core-task-editor").hidden=true;document.dispatchEvent(new CustomEvent("fieldora:project-work-changed",{detail:{module_id:moduleId,project_id:state.projectId,kind:"task",item:result.item}}))}catch(error){fail(error?.message||"Task could not be saved.");emitError(error,"Task could not be saved.")}
  }
  function mount(){if(state.mounted)return;if(!ensureSurface())return;state.mounted=true;state.controller=new AbortController();const signal=state.controller.signal;state.projectId=window.FieldoraProjects?.currentProject?.()||"";authority();q("project-desktop-cockpit")?.addEventListener("dblclick",event=>{const row=event.target.closest?.('[data-project-work-kind="task"]');if(row)open(row.dataset.projectWorkId)},{signal});document.addEventListener("fieldora:project-task-edit-request",event=>open(event.detail?.task_id||""),{signal})}
@@ -55,13 +57,17 @@ _PROJECT_TASK_EDIT_PATCH = bytes(r'''
  document.addEventListener("fieldora:project-context-changed",event=>{state.projectId=event.detail?.project_id||"";authority()});document.addEventListener("fieldora:module-mount",event=>{if(event.detail?.module?.module_id===moduleId)mount()});document.addEventListener("fieldora:module-unmount",event=>{if(event.detail?.module?.module_id===moduleId)unmount()});
  window.FieldoraProjectTaskEdit=Object.freeze({mount,unmount,open,refreshAuthority:authority});if(window.FieldoraModules?.current?.()?.module_id===moduleId)mount();
 })();
-''',"utf-8")
+''',
+    "utf-8",
+)
 
 
 class ProjectTaskEditModuleWebApiMixin:
     """Expose governed task-edit transport and the Projects/Core editor."""
 
-    def dispatch(self, method: str, target: str, headers: dict[str, str], body: bytes) -> ApiResponse:
+    def dispatch(
+        self, method: str, target: str, headers: dict[str, str], body: bytes
+    ) -> ApiResponse:
         route = urlsplit(target)
         service = getattr(self, "_project_management", None)
         routed_headers = dict(headers)
@@ -92,12 +98,52 @@ class ProjectTaskEditModuleWebApiMixin:
         project_id = parse_qs(query).get("project_id", [""])[0].strip()
         if not project_id or self._project_for_organization(identity.organization_id, project_id) is None:
             return ApiResponse.json(404, {"error": "not_found"})
-        decision = self._decisions.decide(AccessRequest(identity.identity_id, "view", "project", project_id, identity.organization_id, project_id, headers.get("x-fieldora-purpose", "research")))
+        decision = self._decisions.decide(
+            AccessRequest(
+                identity.identity_id,
+                "view",
+                "project",
+                project_id,
+                identity.organization_id,
+                project_id,
+                headers.get("x-fieldora-purpose", "research"),
+            )
+        )
         if not decision.allowed:
             return ApiResponse.json(403, {"error": "forbidden"})
-        return ApiResponse.json(200, {"items": [dict(row) for row in self._project_management.statuses(project_id)]})
+        items = [dict(row) for row in self._project_management.statuses(project_id)]
+        return ApiResponse.json(200, {"items": items, "count": len(items)})
 
-    def _patch_task(self, task_id: str, headers: dict[str, str], body: bytes) -> ApiResponse:
+    @staticmethod
+    def _validate_changes(record: dict[str, object]) -> None:
+        title = record.get("title")
+        if title is not None and not str(title).strip():
+            raise ValueError("task title is required")
+        priority = record.get("priority")
+        if priority is not None and priority not in {"critical", "high", "normal", "low"}:
+            raise ValueError("invalid task priority")
+        for key in ("start_date", "due_date"):
+            value = str(record.get(key) or "")
+            if value:
+                try:
+                    date.fromisoformat(value)
+                except ValueError as exc:
+                    raise ValueError(f"{key} must use YYYY-MM-DD") from exc
+        start = str(record.get("start_date") or "")
+        due = str(record.get("due_date") or "")
+        if start and due and due < start:
+            raise ValueError("due date cannot be before start date")
+        for key in ("estimate_hours", "realized_hours"):
+            if key in record and float(record[key] or 0) < 0:
+                raise ValueError(f"{key} must be zero or greater")
+        if "progress" in record:
+            progress = int(record["progress"])
+            if progress < 0 or progress > 100:
+                raise ValueError("progress must be between 0 and 100")
+
+    def _patch_task(
+        self, task_id: str, headers: dict[str, str], body: bytes
+    ) -> ApiResponse:
         if len(body) > 1_048_576:
             return ApiResponse.json(413, {"error": "request_too_large"})
         identity, error = self._identity_or_401(headers)
@@ -110,36 +156,72 @@ class ProjectTaskEditModuleWebApiMixin:
             project_id = str(record.pop("project_id", "")).strip()
             if not project_id:
                 raise ValueError("project_id is required")
-        except (json.JSONDecodeError, ValueError) as exc:
+            self._validate_changes(record)
+        except (json.JSONDecodeError, TypeError, ValueError) as exc:
             return ApiResponse.json(400, {"error": "invalid_request", "detail": str(exc)})
         if self._project_for_organization(identity.organization_id, project_id) is None:
             return ApiResponse.json(404, {"error": "not_found"})
         tasks = [_mapping(item) for item in self._project_management.tasks(project_id)]
-        current = next((item for item in tasks if str(item.get("task_id") or item.get("id")) == task_id), None)
+        current = next(
+            (item for item in tasks if str(item.get("task_id") or item.get("id")) == task_id),
+            None,
+        )
         if current is None:
             return ApiResponse.json(404, {"error": "not_found"})
         purpose = headers.get("x-fieldora-purpose", "research")
         decisions = (
-            self._decisions.decide(AccessRequest(identity.identity_id, "edit", "project", project_id, identity.organization_id, project_id, purpose)),
-            self._decisions.decide(AccessRequest(identity.identity_id, "edit", "task", task_id, identity.organization_id, project_id, purpose)),
+            self._decisions.decide(
+                AccessRequest(identity.identity_id, "edit", "project", project_id, identity.organization_id, project_id, purpose)
+            ),
+            self._decisions.decide(
+                AccessRequest(identity.identity_id, "edit", "task", task_id, identity.organization_id, project_id, purpose)
+            ),
         )
         if not all(decision.allowed for decision in decisions):
             return ApiResponse.json(403, {"error": "forbidden"})
-        allowed = {"title", "description", "status_id", "owner_id", "priority", "start_date", "due_date", "estimate_hours", "budget", "progress", "recurrence", "recurrence_end", "milestone", "phase_id", "sprint_id", "realized_hours"}
+        phase_id = record.get("phase_id")
+        if phase_id and str(phase_id) not in {str(row["phase_id"]) for row in self._project_management.phases(project_id)}:
+            return ApiResponse.json(400, {"error": "invalid_request", "detail": "phase does not belong to this project"})
+        sprint_id = record.get("sprint_id")
+        if sprint_id and str(sprint_id) not in {str(row["sprint_id"]) for row in self._project_management.sprints(project_id)}:
+            return ApiResponse.json(400, {"error": "invalid_request", "detail": "sprint does not belong to this project"})
+        allowed = {
+            "title", "status_id", "owner_id", "priority", "start_date", "due_date",
+            "estimate_hours", "progress", "milestone", "phase_id", "sprint_id",
+            "realized_hours",
+        }
         changes = {key: value for key, value in record.items() if key in allowed}
         if not changes:
             return ApiResponse.json(400, {"error": "invalid_request", "detail": "no editable task fields supplied"})
         try:
-            self._project_management.update_task(task_id, actor_id=identity.identity_id, **changes)
+            self._project_management.update_task(
+                task_id, actor_id=identity.identity_id, **changes
+            )
         except KeyError:
             return ApiResponse.json(404, {"error": "not_found"})
         except (TypeError, ValueError) as exc:
             return ApiResponse.json(400, {"error": "invalid_request", "detail": str(exc)})
-        item = next((_mapping(value) for value in self._project_management.tasks(project_id) if str(_mapping(value).get("task_id") or _mapping(value).get("id")) == task_id), None)
+        item = next(
+            (
+                _mapping(value)
+                for value in self._project_management.tasks(project_id)
+                if str(_mapping(value).get("task_id") or _mapping(value).get("id")) == task_id
+            ),
+            None,
+        )
         return ApiResponse.json(200, {"item": item})
 
     @staticmethod
     def _patch_browser(target: str, response: ApiResponse) -> ApiResponse:
-        if urlsplit(target).path != "/app.js" or response.status != 200 or _PROJECT_TASK_EDIT_PATCH in response.body:
+        if (
+            urlsplit(target).path != "/app.js"
+            or response.status != 200
+            or _PROJECT_TASK_EDIT_PATCH in response.body
+        ):
             return response
-        return ApiResponse(response.status, response.body + _PROJECT_TASK_EDIT_PATCH, response.content_type, response.headers)
+        return ApiResponse(
+            response.status,
+            response.body + _PROJECT_TASK_EDIT_PATCH,
+            response.content_type,
+            response.headers,
+        )

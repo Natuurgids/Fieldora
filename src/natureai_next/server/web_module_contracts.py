@@ -171,6 +171,9 @@ FOUNDATION_WEB_MODULES: tuple[WebModuleSpec, ...] = (
             "projects.subtask.create",
             "projects.sprint.create",
             "projects.allocation.create",
+            "projects.details.edit",
+            "projects.status.change",
+            "projects.archive",
         ),
     ),
     WebModuleSpec(

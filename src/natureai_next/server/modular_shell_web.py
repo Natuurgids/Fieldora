@@ -49,14 +49,16 @@ _PORTFOLIO_OWNER_MARKER = b"WEB-PORTFOLIO-MODULE"
 _PROJECT_OWNER_MARKER = b"WEB-PROJECT-CORE-MODULE"
 
 # The desktop-density Projects/Facilities cockpit predates explicit module
-# ownership.  Portfolio and Projects/Core are migrated independently while the
-# cockpit markup itself remains transitional and Facilities keeps its ownership.
+# ownership. Portfolio and Projects/Core are removed in separate marker-bounded
+# ranges so either module can be replaced without deleting the other's fallback.
 _PROJECT_COCKPIT_PORTFOLIO_RENDER_START = b" function portfolioData(){"
 _PROJECT_COCKPIT_PORTFOLIO_RENDER_END = b" function setProjectCenter(view){"
 _PROJECT_COCKPIT_PORTFOLIO_WIRING_START = b"  const oldPortfolio=loadPortfolio;"
 _PROJECT_COCKPIT_PORTFOLIO_WIRING_END = b"  renderProjectTree();\n }"
 _PROJECT_COCKPIT_BEHAVIOR_START = b' let cockpitProjectId="";'
-_PROJECT_COCKPIT_BEHAVIOR_END = b' if(projectPage&&!q("project-desktop-cockpit")){'
+_PROJECT_COCKPIT_BEHAVIOR_END = b" function portfolioData(){"
+_PROJECT_COCKPIT_CENTER_START = b" function setProjectCenter(view){"
+_PROJECT_COCKPIT_CENTER_END = b' if(projectPage&&!q("project-desktop-cockpit")){'
 _PROJECT_COCKPIT_WIRING_START = b'  q("project-tree-filter").oninput=renderProjectTree;'
 _PROJECT_COCKPIT_WIRING_END = b" }\n\n /* ---- Facility / CMDB cockpit"
 
@@ -155,6 +157,11 @@ def _rewrite_owned_browser_response(body: bytes) -> bytes:
             body,
             _PROJECT_COCKPIT_BEHAVIOR_START,
             _PROJECT_COCKPIT_BEHAVIOR_END,
+        )
+        body = _strip_legacy_range(
+            body,
+            _PROJECT_COCKPIT_CENTER_START,
+            _PROJECT_COCKPIT_CENTER_END,
         )
         body = _strip_legacy_range(
             body,

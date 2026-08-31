@@ -44,6 +44,7 @@ from natureai_next.server.project_lifecycle_module_web import (
     ProjectLifecycleModuleWebApiMixin,
 )
 from natureai_next.server.project_lifecycle_web import ProjectLifecycleWebApiMixin
+from natureai_next.server.project_progress_module_web import ProjectProgressModuleWebApiMixin
 from natureai_next.server.project_runtime_web import ProjectRuntimeWebApiMixin
 from natureai_next.server.project_work_actions_module_web import (
     ProjectWorkActionsModuleWebApiMixin,
@@ -55,6 +56,7 @@ from natureai_next.server.visible_control_audit_api import VisibleControlAuditAp
 
 class OfflineFirstFieldoraApi(
     ModularShellWebApiMixin,
+    ProjectProgressModuleWebApiMixin,
     ProjectCreationModuleWebApiMixin,
     ProjectLifecycleModuleWebApiMixin,
     ProjectEvidenceActionsModuleWebApiMixin,

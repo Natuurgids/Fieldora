@@ -139,7 +139,10 @@ class ProjectTaskEditingFacade:
                            t.due_date,t.estimate_hours,t.realized_hours,t.progress,t.budget,
                            t.recurrence,t.recurrence_end,t.milestone,t.position,t.phase_id,
                            COALESCE(ph.name,''),t.sprint_id,COALESCE(sp.name,t.sprint,''),
-                           s.category='blocked'
+                           EXISTS(SELECT 1 FROM pm_task_dependencies d
+                                  JOIN pm_tasks blocker ON blocker.task_id=d.depends_on_task_id
+                                  JOIN pm_statuses bs ON bs.status_id=blocker.status_id
+                                  WHERE d.task_id=t.task_id AND bs.category!='done')
                     FROM pm_tasks t
                     JOIN pm_projects p ON p.project_id=t.project_id
                     JOIN pm_statuses s ON s.status_id=t.status_id
@@ -339,6 +342,16 @@ class ProjectTaskEditingFacade:
             status = cursor.fetchone()
             if status is None:
                 raise ValueError("status does not belong to project")
+            if str(status[0]) == "active":
+                cursor.execute(
+                    """SELECT COUNT(*) FROM pm_task_dependencies d
+                       JOIN pm_tasks p ON p.task_id=d.depends_on_task_id
+                       JOIN pm_statuses s ON s.status_id=p.status_id
+                       WHERE d.task_id=%s AND s.category!='done'""",
+                    (task_id,),
+                )
+                if int(cursor.fetchone()[0]):
+                    raise ValueError("task cannot start until all dependencies are done")
             if status[1] is not None:
                 cursor.execute(
                     "SELECT COUNT(*) FROM pm_tasks WHERE status_id=%s AND task_id<>%s",

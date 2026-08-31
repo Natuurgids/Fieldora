@@ -9,7 +9,11 @@ from natureai_next.server.modular_shell_web import (
 )
 from natureai_next.server.navigation_web_compatibility import patch_navigation_web_response
 from natureai_next.server.offline_first_api import OfflineFirstFieldoraApi
-from natureai_next.server.project_core_module_web import ProjectCoreModuleWebApiMixin
+from natureai_next.server.portfolio_module_web import patch_portfolio_module_response
+from natureai_next.server.project_core_module_web import (
+    ProjectCoreModuleWebApiMixin,
+    patch_project_core_module_response,
+)
 from natureai_next.server.project_facility_workspace_web import (
     patch_project_facility_workspace_response,
 )
@@ -70,7 +74,8 @@ def test_modular_shell_owns_navigation_and_browser_history_without_replacing_ren
 
 def test_final_composed_response_removes_migrated_navigation_and_portfolio_wiring() -> None:
     base = ApiResponse(200, b"const baseApp=true;", "text/javascript; charset=utf-8")
-    legacy = patch_navigation_web_response("/app.js", base)
+    owned = patch_portfolio_module_response("/app.js", base)
+    legacy = patch_navigation_web_response("/app.js", owned)
     assert b"showPage=function(name)" in legacy.body
     assert b"loadPortfolio=async function" in legacy.body
     assert b"loadKnowledge=async function" in legacy.body
@@ -83,12 +88,15 @@ def test_final_composed_response_removes_migrated_navigation_and_portfolio_wirin
     assert "showPage=function(name)" not in script
     assert "loadPortfolio=async function" not in script
     assert "window.FieldoraModules" in script
+    assert "WEB-PORTFOLIO-MODULE" in script
     assert "loadKnowledge=async function" in script
 
 
 def test_final_composed_response_removes_project_cockpit_owned_behavior() -> None:
     base = ApiResponse(200, b"const baseApp=true;", "text/javascript; charset=utf-8")
-    cockpit = patch_project_facility_workspace_response("/app.js", base)
+    owned = patch_project_core_module_response("/app.js", base)
+    owned = patch_portfolio_module_response("/app.js", owned)
+    cockpit = patch_project_facility_workspace_response("/app.js", owned)
     before = cockpit.body.decode("utf-8")
 
     assert "function renderProjectTree()" in before
@@ -106,14 +114,17 @@ def test_final_composed_response_removes_project_cockpit_owned_behavior() -> Non
     assert "applyPortfolioView()" not in script
     assert "const oldPortfolio=loadPortfolio" not in script
     assert 'q("portfolio-scope").value=b.dataset.projectScope' not in script
+    assert "WEB-PROJECT-CORE-MODULE" in script
+    assert "WEB-PORTFOLIO-MODULE" in script
     assert "project-desktop-cockpit" in script
     assert "facility-desktop-cockpit" in script
 
 
 def test_production_patch_order_finalizes_after_legacy_append_only_patches() -> None:
-    early = patch_modular_shell_response(
-        "/app.js", ApiResponse(200, b"const baseApp=true;", "text/javascript; charset=utf-8")
-    )
+    base = ApiResponse(200, b"const baseApp=true;", "text/javascript; charset=utf-8")
+    owned = patch_project_core_module_response("/app.js", base)
+    owned = patch_portfolio_module_response("/app.js", owned)
+    early = patch_modular_shell_response("/app.js", owned)
     final = patch_managed_web_response("/app.js", early)
     script = final.body.decode("utf-8")
 
@@ -130,6 +141,16 @@ def test_production_patch_order_finalizes_after_legacy_append_only_patches() -> 
     assert script.rfind("WEB-MODULAR-SHELL: registry-owned navigation bridge") > script.find(
         "facility-desktop-cockpit"
     )
+
+
+def test_managed_web_finalizer_is_inert_without_modular_shell() -> None:
+    original = ApiResponse(200, b"const plainFieldora=true;", "text/javascript; charset=utf-8")
+    final = patch_managed_web_response("/app.js", original)
+    script = final.body.decode("utf-8")
+
+    assert "WEB-MODULAR-SHELL: registry-owned navigation bridge" not in script
+    assert "showPage=function(name)" in script
+    assert "function renderProjectTree()" in script
 
 
 def test_non_app_script_response_is_untouched() -> None:

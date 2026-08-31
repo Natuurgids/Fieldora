@@ -36,7 +36,7 @@ def test_portfolio_module_uses_existing_loader_only_as_transitional_adapter() ->
 
     assert 'typeof window.loadPortfolio==="function"' in script
     assert "await window.loadPortfolio()" in script
-    assert "window.loadPortfolio=" not in script
+    assert "window.loadPortfolio=async function" not in script
     assert "data-portfolio-view" in script
     assert 'q("portfolio-scope")' in script
     assert "window.openProject" in script

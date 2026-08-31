@@ -17,6 +17,7 @@ import json
 from urllib.parse import urlsplit
 
 from natureai_next.server.api import ApiResponse
+from natureai_next.server.project_hierarchy_web import _PROJECT_HIERARCHY_PATCH
 from natureai_next.server.web_module_contracts import foundation_registry
 
 
@@ -144,37 +145,16 @@ def _rewrite_owned_browser_response(body: bytes) -> bytes:
     body = body.replace(_LEGACY_HISTORY_ROUTING_PATCH, b"", 1)
     if _PORTFOLIO_OWNER_MARKER in body:
         body = _strip_legacy_range(body, _LEGACY_PORTFOLIO_START, _LEGACY_PORTFOLIO_END)
-        body = _strip_legacy_range(
-            body,
-            _PROJECT_COCKPIT_PORTFOLIO_RENDER_START,
-            _PROJECT_COCKPIT_PORTFOLIO_RENDER_END,
-        )
-        body = _strip_legacy_range(
-            body,
-            _PROJECT_COCKPIT_PORTFOLIO_WIRING_START,
-            _PROJECT_COCKPIT_PORTFOLIO_WIRING_END,
-        )
+        body = _strip_legacy_range(body, _PROJECT_COCKPIT_PORTFOLIO_RENDER_START, _PROJECT_COCKPIT_PORTFOLIO_RENDER_END)
+        body = _strip_legacy_range(body, _PROJECT_COCKPIT_PORTFOLIO_WIRING_START, _PROJECT_COCKPIT_PORTFOLIO_WIRING_END)
     if _PROJECT_OWNER_MARKER in body:
-        body = _strip_legacy_range(
-            body,
-            _PROJECT_COCKPIT_BEHAVIOR_START,
-            _PROJECT_COCKPIT_BEHAVIOR_END,
-        )
-        body = _strip_legacy_range(
-            body,
-            _PROJECT_COCKPIT_CENTER_START,
-            _PROJECT_COCKPIT_CENTER_END,
-        )
-        body = _strip_legacy_range(
-            body,
-            _PROJECT_COCKPIT_WIRING_START,
-            _PROJECT_COCKPIT_WIRING_END,
-        )
-        body = _strip_legacy_range(
-            body,
-            _PROJECT_COCKPIT_WORK_WIRING_START,
-            _PROJECT_COCKPIT_WORK_WIRING_END,
-        )
+        # The managed hierarchy API remains authoritative; only its old browser
+        # patch is retired now that Projects/Core owns the hierarchy surface.
+        body = body.replace(_PROJECT_HIERARCHY_PATCH, b"", 1)
+        body = _strip_legacy_range(body, _PROJECT_COCKPIT_BEHAVIOR_START, _PROJECT_COCKPIT_BEHAVIOR_END)
+        body = _strip_legacy_range(body, _PROJECT_COCKPIT_CENTER_START, _PROJECT_COCKPIT_CENTER_END)
+        body = _strip_legacy_range(body, _PROJECT_COCKPIT_WIRING_START, _PROJECT_COCKPIT_WIRING_END)
+        body = _strip_legacy_range(body, _PROJECT_COCKPIT_WORK_WIRING_START, _PROJECT_COCKPIT_WORK_WIRING_END)
     body = body.replace(_MODULAR_SHELL_BOOTSTRAP, b"", 1)
     return body + _MODULAR_SHELL_BOOTSTRAP
 
@@ -184,7 +164,6 @@ def patch_modular_shell_response(target: str, response: ApiResponse) -> ApiRespo
 
     if urlsplit(target).path != "/app.js" or response.status != 200:
         return response
-
     body = _rewrite_owned_browser_response(response.body)
     if body == response.body:
         return response
@@ -194,11 +173,7 @@ def patch_modular_shell_response(target: str, response: ApiResponse) -> ApiRespo
 def finalize_modular_shell_response(target: str, response: ApiResponse) -> ApiResponse:
     """Finalize an already-modular response after HTTP compatibility patches."""
 
-    if (
-        urlsplit(target).path != "/app.js"
-        or response.status != 200
-        or _MODULAR_SHELL_BOOTSTRAP not in response.body
-    ):
+    if urlsplit(target).path != "/app.js" or response.status != 200 or _MODULAR_SHELL_BOOTSTRAP not in response.body:
         return response
     body = _rewrite_owned_browser_response(response.body)
     if body == response.body:
@@ -209,8 +184,6 @@ def finalize_modular_shell_response(target: str, response: ApiResponse) -> ApiRe
 class ModularShellWebApiMixin:
     """Outermost API mixin exposing the module registry to the real shell."""
 
-    def dispatch(
-        self, method: str, target: str, headers: dict[str, str], body: bytes
-    ) -> ApiResponse:
+    def dispatch(self, method: str, target: str, headers: dict[str, str], body: bytes) -> ApiResponse:
         response = super().dispatch(method, target, headers, body)
         return patch_modular_shell_response(target, response)

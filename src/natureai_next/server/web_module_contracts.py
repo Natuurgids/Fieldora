@@ -165,6 +165,7 @@ FOUNDATION_WEB_MODULES: tuple[WebModuleSpec, ...] = (
             "projects.scope.select",
             "projects.center.select",
             "projects.evidence.load",
+            "projects.evidence.link",
             "projects.work.inspect",
             "projects.phase.create",
             "projects.task.create",

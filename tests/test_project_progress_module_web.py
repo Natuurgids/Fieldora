@@ -27,7 +27,7 @@ def test_progress_adapter_is_idempotent_and_projects_owned() -> None:
     assert "showPage=" not in script
 
 
-def test_progress_projection_uses_governed_project_and_task_apis() -> None:
+def test_progress_projection_uses_governed_project_task_and_status_apis() -> None:
     patched = patch_project_progress_module_response(
         "/app.js", ApiResponse(200, b"", "text/javascript; charset=utf-8")
     )
@@ -35,6 +35,7 @@ def test_progress_projection_uses_governed_project_and_task_apis() -> None:
 
     assert 'api("/api/v1/projects",{purpose:"research"})' in script
     assert "api(`/api/v1/tasks?project_id=${encoded}`" in script
+    assert "api(`/api/v1/project-statuses?project_id=${encoded}`" in script
     assert "Average task progress" in script
     assert "Blocked tasks" in script
     assert "Overdue tasks" in script
@@ -44,10 +45,53 @@ def test_progress_projection_uses_governed_project_and_task_apis() -> None:
     assert "task.progress" in script
 
 
-def test_projects_contract_owns_progress_refresh() -> None:
-    owner = foundation_registry().action_owner("projects.progress.refresh")
-    assert owner is not None
-    assert owner.module_id == "projects.core"
+def test_kanban_moves_are_capability_aware_and_use_authorized_task_patch() -> None:
+    patched = patch_project_progress_module_response(
+        "/app.js", ApiResponse(200, b"", "text/javascript; charset=utf-8")
+    )
+    script = patched.body.decode("utf-8")
+
+    assert 'data-project-planning-view="kanban"' in script
+    assert 'data-project-kanban-drop="${esc(id)}"' in script
+    assert 'data-project-kanban-status="${esc(task.id)}"' in script
+    assert "/capabilities`" in script
+    assert "caps?.actions?.edit===true" in script
+    assert "if(!state.canEdit||!taskId||!statusId)return" in script
+    assert "api(`/api/v1/tasks/${encodeURIComponent(taskId)}`" in script
+    assert 'method:"PATCH"' in script
+    assert "JSON.stringify({project_id:state.projectId,status_id:statusId})" in script
+    assert "text/x-fieldora-task-id" in script
+    assert "fieldora:project-work-changed" in script
+
+
+def test_gantt_matches_desktop_date_fallback_and_opens_task_editor() -> None:
+    patched = patch_project_progress_module_response(
+        "/app.js", ApiResponse(200, b"", "text/javascript; charset=utf-8")
+    )
+    script = patched.body.decode("utf-8")
+
+    assert 'data-project-planning-view="gantt"' in script
+    assert "task.start_date||task.due_date" in script
+    assert "task.due_date||task.start_date" in script
+    assert "end:Math.max(a,b)" in script
+    assert "Add task dates to build the Gantt timeline." in script
+    assert "taskProgress(row.task)" in script
+    assert "isBlocked(row.task)" in script
+    assert "isDone(row.task)" in script
+    assert "fieldora:project-task-edit-request" in script
+
+
+def test_projects_contract_owns_progress_and_planning_actions() -> None:
+    registry = foundation_registry()
+    for action in (
+        "projects.progress.refresh",
+        "projects.planning.view.select",
+        "projects.task.status.move",
+        "projects.gantt.inspect",
+    ):
+        owner = registry.action_owner(action)
+        assert owner is not None
+        assert owner.module_id == "projects.core"
 
 
 def test_progress_mixin_follows_task_edit_inside_modular_shell() -> None:

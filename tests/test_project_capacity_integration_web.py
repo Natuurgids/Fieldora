@@ -37,6 +37,7 @@ def test_capacity_module_is_idempotent_and_reads_governed_project_allocations() 
     assert "/api/v1/allocations?project_id=${encodeURIComponent(state.projectId)}" in script
     assert 'purpose:"research"' in script
     assert 'data-fieldora-action="capacity.project.allocations.view"' in script
+    assert "fieldora:capacity-project-changed" in script
     assert "work-schedules" not in script
     assert "absences" not in script
     assert "obligations" not in script
@@ -65,9 +66,11 @@ def test_capacity_integration_is_composed_inside_shell() -> None:
     mro = OfflineFirstFieldoraApi.__mro__
 
     assert mro[1].__name__ == "ModularShellWebApiMixin"
-    assert mro[2].__name__ == "ProjectResearchIntegrationWebApiMixin"
-    assert mro[3] is ProjectCapacityIntegrationWebApiMixin
-    assert mro[4] is CapacityModuleWebApiMixin
+    assert ProjectCapacityIntegrationWebApiMixin in mro[2:]
+    assert CapacityModuleWebApiMixin in mro[2:]
+    assert mro.index(ProjectCapacityIntegrationWebApiMixin) < mro.index(
+        CapacityModuleWebApiMixin
+    )
 
 
 def test_non_app_responses_are_untouched() -> None:

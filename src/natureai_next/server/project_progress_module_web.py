@@ -51,7 +51,7 @@ _PROJECT_PROGRESS_MODULE_PATCH = bytes(
   const today=localIsoDate(),total=tasks.length,done=tasks.filter(isDone).length,blocked=tasks.filter(isBlocked).length,late=tasks.filter(task=>overdue(task,today)).length;
   const progress=total?Math.round(tasks.reduce((sum,task)=>sum+taskProgress(task),0)/total):0;
   const milestones=tasks.filter(task=>task.milestone===true),milestonesDone=milestones.filter(isDone).length;
-  const estimate=tasks.reduce((sum,task)=>sum+number(task.effective_estimate_hours||task.estimate_hours||task.manual_estimate),0),realized=tasks.reduce((sum,task)=>sum+number(task.realized_hours||task.realized||task.actual_hours),0);
+  const estimate=tasks.reduce((sum,task)=>sum+number(task.effective_estimate_hours??task.estimate_hours??task.manual_estimate),0),realized=tasks.reduce((sum,task)=>sum+number(task.realized_hours??task.realized??task.actual_hours),0);
   const schedule=[project.start_date||"—",project.due_date||"—"].join(" → ");
   host.innerHTML=`<div class="project-stats"><div class="card"><strong>${esc(project.status||"active")}</strong><small class="muted">Project status</small></div><div class="card"><strong>${progress}%</strong><small class="muted">Average task progress</small></div><div class="card"><strong>${done}/${total}</strong><small class="muted">Tasks complete</small></div><div class="card"><strong>${blocked}</strong><small class="muted">Blocked tasks</small></div><div class="card"><strong>${late}</strong><small class="muted">Overdue tasks</small></div><div class="card"><strong>${milestonesDone}/${milestones.length}</strong><small class="muted">Milestones complete</small></div><div class="card"><strong>${esc(schedule)}</strong><small class="muted">Project schedule</small></div><div class="card"><strong>${realized.toFixed(1)} / ${estimate.toFixed(1)} h</strong><small class="muted">Realized / estimated effort</small></div></div>`;
  }
@@ -87,7 +87,6 @@ _PROJECT_PROGRESS_MODULE_PATCH = bytes(
   try{
    await api(`/api/v1/tasks/${encodeURIComponent(taskId)}`,{method:"PATCH",purpose:"research",body:JSON.stringify({project_id:state.projectId,status_id:statusId})});
    document.dispatchEvent(new CustomEvent("fieldora:project-work-changed",{detail:{module_id:moduleId,project_id:state.projectId,kind:"task",item_id:taskId}}));
-   await refresh();
   }catch(error){emitError(error,"Task status could not be changed.");await refresh()}
  }
  async function refresh(){

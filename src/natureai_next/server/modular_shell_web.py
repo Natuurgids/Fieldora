@@ -10,6 +10,7 @@ The final-response migration step removes compatibility fragments only after an
 owning module exists for that responsibility.  The shell may call the existing
 renderer during migration, but it never replaces that global function.
 """
+
 from __future__ import annotations
 
 import json
@@ -122,7 +123,7 @@ def _bootstrap_script() -> bytes:
         " window.FieldoraModules=Object.freeze({specs:Object.freeze(specs.map(spec=>Object.freeze(spec))),activate,navigate,resolve:value=>byRoute.get(normalize(value))||null,current:()=>state.active});\n"
         " const initial=activate(location.hash||'/home','bootstrap');if(initial){render(initial);if(!location.hash)writeHistory(initial,'replace');}\n"
         "})();\n"
-    ).encode("utf-8")
+    ).encode()
 
 
 _MODULAR_SHELL_BOOTSTRAP = _bootstrap_script()

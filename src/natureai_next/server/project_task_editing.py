@@ -118,26 +118,66 @@ class ProjectTaskEditingFacade:
             "realized_hours": float(row[22]),
         }
 
+    def phases(self, scope_id: str) -> tuple[dict[str, object], ...]:
+        """Accept the local project scope or the managed organization/project scope."""
+        if self._is_local_sqlite:
+            return tuple(dict(item) for item in self._delegate.phases(scope_id))
+        organization_rows = tuple(dict(item) for item in self._delegate.phases(scope_id))
+        if organization_rows or tuple(self._delegate.projects(scope_id)):
+            return organization_rows
+        return self._managed_children("pm_phases", "phase_id", scope_id)
+
+    def sprints(self, scope_id: str) -> tuple[dict[str, object], ...]:
+        """Accept the local project scope or the managed organization/project scope."""
+        if self._is_local_sqlite:
+            return tuple(dict(item) for item in self._delegate.sprints(scope_id))
+        organization_rows = tuple(dict(item) for item in self._delegate.sprints(scope_id))
+        if organization_rows or tuple(self._delegate.projects(scope_id)):
+            return organization_rows
+        return self._managed_children("pm_sprints", "sprint_id", scope_id)
+
+    def _managed_children(
+        self, table: str, id_column: str, project_id: str
+    ) -> tuple[dict[str, object], ...]:
+        allowed = {
+            ("pm_phases", "phase_id"),
+            ("pm_sprints", "sprint_id"),
+        }
+        if (table, id_column) not in allowed:
+            raise ValueError("unsupported Project child table")
+        connect = getattr(self._delegate, "_connect", None)
+        if not callable(connect):
+            return ()
+        with connect() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    f"SELECT {id_column},project_id,name FROM {table} WHERE project_id=%s",  # noqa: S608
+                    (project_id,),
+                )
+                rows = cursor.fetchall()
+        return tuple(
+            {"id": str(row[0]), id_column: str(row[0]), "project_id": str(row[1]), "name": str(row[2])}
+            for row in rows
+        )
+
     def status_ids(self, project_id: str) -> set[str]:
         return {
             str(item.get("status_id") or item.get("id") or "")
             for item in self._delegate.statuses(project_id)
         }
 
-    def phase_ids(self, project_id: str, *, organization_id: str = "") -> set[str]:
-        scope = project_id if self._is_local_sqlite else organization_id
+    def phase_ids(self, project_id: str) -> set[str]:
         return {
             str(item.get("phase_id") or item.get("id") or "")
-            for item in self._delegate.phases(scope)
-            if self._is_local_sqlite or str(item.get("project_id") or "") == project_id
+            for item in self.phases(project_id)
+            if str(item.get("project_id") or project_id) == project_id
         }
 
-    def sprint_ids(self, project_id: str, *, organization_id: str = "") -> set[str]:
-        scope = project_id if self._is_local_sqlite else organization_id
+    def sprint_ids(self, project_id: str) -> set[str]:
         return {
             str(item.get("sprint_id") or item.get("id") or "")
-            for item in self._delegate.sprints(scope)
-            if self._is_local_sqlite or str(item.get("project_id") or "") == project_id
+            for item in self.sprints(project_id)
+            if str(item.get("project_id") or project_id) == project_id
         }
 
     def update_task(

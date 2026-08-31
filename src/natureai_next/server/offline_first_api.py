@@ -7,6 +7,7 @@ from collections.abc import Callable
 
 from natureai_next.server.administration_actions_api import AdministrationActionsApiMixin
 from natureai_next.server.bounded_upload_web import BoundedUploadWebApiMixin
+from natureai_next.server.capacity_module_web import CapacityModuleWebApiMixin
 from natureai_next.server.facility_actions_api import FacilityActionsApiMixin
 from natureai_next.server.filtering import FilteringApiMixin
 from natureai_next.server.knowledge_parity_api import KnowledgeParityApiMixin
@@ -26,6 +27,9 @@ from natureai_next.server.original_derivative_api import OriginalDerivativeApiMi
 from natureai_next.server.pagination_api import PaginationApiMixin
 from natureai_next.server.portfolio_module_web import PortfolioModuleWebApiMixin
 from natureai_next.server.postgres_web_indexes import ensure_managed_web_postgres_indexes
+from natureai_next.server.project_capacity_integration_web import (
+    ProjectCapacityIntegrationWebApiMixin,
+)
 from natureai_next.server.project_core_module_web import ProjectCoreModuleWebApiMixin
 from natureai_next.server.project_creation_module_web import ProjectCreationModuleWebApiMixin
 from natureai_next.server.project_evidence_actions_module_web import ProjectEvidenceActionsModuleWebApiMixin
@@ -50,6 +54,8 @@ from natureai_next.server.visible_control_audit_api import VisibleControlAuditAp
 class OfflineFirstFieldoraApi(
     ModularShellWebApiMixin,
     ProjectResearchIntegrationWebApiMixin,
+    ProjectCapacityIntegrationWebApiMixin,
+    CapacityModuleWebApiMixin,
     ProjectTaskEditModuleWebApiMixin,
     ProjectProgressModuleWebApiMixin,
     ProjectCreationModuleWebApiMixin,

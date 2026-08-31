@@ -7,6 +7,7 @@ on:
       - "src/natureai_next/server/web_module_contracts.py"
       - "src/natureai_next/server/web_module_runtime.py"
       - "src/natureai_next/server/modular_shell_web.py"
+      - "src/natureai_next/server/capacity_availability_module_web.py"
       - "src/natureai_next/server/capacity_module_web.py"
       - "src/natureai_next/server/project_capacity_integration_web.py"
       - "src/natureai_next/server/project_core_module_web.py"
@@ -27,6 +28,7 @@ on:
       - "tests/test_web_module_contracts.py"
       - "tests/test_web_module_runtime.py"
       - "tests/test_modular_shell_web.py"
+      - "tests/test_capacity_availability_module_web.py"
       - "tests/test_project_capacity_integration_web.py"
       - "tests/test_project_core_module_web.py"
       - "tests/test_project_creation_module_web.py"
@@ -73,6 +75,7 @@ jobs:
           python -m ruff check
           src/natureai_next/application/project_task_detail.py
           src/natureai_next/server/modular_shell_web.py
+          src/natureai_next/server/capacity_availability_module_web.py
           src/natureai_next/server/capacity_module_web.py
           src/natureai_next/server/project_capacity_integration_web.py
           src/natureai_next/server/project_core_module_web.py
@@ -94,6 +97,7 @@ jobs:
           tests/test_web_module_contracts.py
           tests/test_web_module_runtime.py
           tests/test_modular_shell_web.py
+          tests/test_capacity_availability_module_web.py
           tests/test_project_capacity_integration_web.py
           tests/test_project_core_module_web.py
           tests/test_project_creation_module_web.py
@@ -112,6 +116,7 @@ jobs:
           tests/test_web_module_contracts.py
           tests/test_web_module_runtime.py
           tests/test_modular_shell_web.py
+          tests/test_capacity_availability_module_web.py
           tests/test_project_capacity_integration_web.py
           tests/test_project_core_module_web.py
           tests/test_project_creation_module_web.py

@@ -19,6 +19,7 @@ from urllib.parse import urlsplit
 from natureai_next.server.api import ApiResponse
 from natureai_next.server.project_hierarchy_web import _PROJECT_HIERARCHY_PATCH
 from natureai_next.server.project_lifecycle_web import _PROJECT_LIFECYCLE_WEB_PATCH
+from natureai_next.server.project_runtime_web import _PROJECT_RUNTIME_WEB_PATCH
 from natureai_next.server.web_module_contracts import foundation_registry
 
 
@@ -51,6 +52,8 @@ _PORTFOLIO_OWNER_MARKER = b"WEB-PORTFOLIO-MODULE"
 _PROJECT_OWNER_MARKER = b"WEB-PROJECT-CORE-MODULE"
 _PROJECT_CREATION_OWNER_MARKER = b"WEB-PROJECT-CREATION-MODULE"
 _PROJECT_LIFECYCLE_OWNER_MARKER = b"WEB-PROJECT-LIFECYCLE-MODULE"
+_PROJECT_WORK_ACTIONS_OWNER_MARKER = b"WEB-PROJECT-WORK-ACTIONS-MODULE"
+_PROJECT_EVIDENCE_ACTIONS_OWNER_MARKER = b"WEB-PROJECT-EVIDENCE-ACTIONS-MODULE"
 
 # Project creation first shipped inside the general browser-functionality patch.
 # Remove only that bounded fragment once Projects/Core has its dedicated owner.
@@ -191,6 +194,11 @@ def _rewrite_owned_browser_response(body: bytes) -> bytes:
         )
     if _PROJECT_LIFECYCLE_OWNER_MARKER in body:
         body = body.replace(_PROJECT_LIFECYCLE_WEB_PATCH, b"", 1)
+    if (
+        _PROJECT_WORK_ACTIONS_OWNER_MARKER in body
+        and _PROJECT_EVIDENCE_ACTIONS_OWNER_MARKER in body
+    ):
+        body = body.replace(_PROJECT_RUNTIME_WEB_PATCH, b"", 1)
     body = body.replace(_MODULAR_SHELL_BOOTSTRAP, b"", 1)
     return body + _MODULAR_SHELL_BOOTSTRAP
 

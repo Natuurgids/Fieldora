@@ -7,6 +7,7 @@ contract that can be used while those features are migrated one at a time.
 It has no browser or web-framework imports so release tooling and tests can
 validate the registry without booting the server or constructing the DOM.
 """
+
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
@@ -154,7 +155,18 @@ FOUNDATION_WEB_MODULES: tuple[WebModuleSpec, ...] = (
     WebModuleSpec("home.activity", "/home", "Home"),
     WebModuleSpec("library.catalog", "/library", "Library"),
     WebModuleSpec("observations.core", "/observations", "Observations"),
-    WebModuleSpec("projects.core", "/projects", "Projects"),
+    WebModuleSpec(
+        "projects.core",
+        "/projects",
+        "Projects",
+        owns_actions=(
+            "projects.context.select",
+            "projects.scope.select",
+            "projects.center.select",
+            "projects.evidence.load",
+            "projects.work.inspect",
+        ),
+    ),
     WebModuleSpec(
         "portfolio",
         "/portfolio",

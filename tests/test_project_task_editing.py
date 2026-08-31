@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from natureai_next.application.project_management import ProjectManagementService
 from natureai_next.server.api import ApiResponse
 from natureai_next.server.project_task_edit_module_web import ProjectTaskEditModuleWebApiMixin
@@ -143,7 +145,9 @@ def test_managed_task_list_exposes_desktop_planning_fidelity() -> None:
     tasks = facade.tasks("org-1")
 
     assert delegate.cursor.params == ("org-1",)
-    assert "s.category='blocked'" in delegate.cursor.query
+    assert "pm_task_dependencies" in delegate.cursor.query
+    assert "bs.category!='done'" in delegate.cursor.query
+    assert "s.category='blocked'" not in delegate.cursor.query
     assert len(tasks) == 1
     task = tasks[0]
     assert task["status_id"] == "status-blocked"
@@ -162,6 +166,32 @@ def test_managed_task_list_exposes_desktop_planning_fidelity() -> None:
     assert task["sprint_name"] == "Autumn sprint"
     assert task["recurrence"] == "weekly"
     assert task["budget"] == 80.0
+
+
+class _ManagedValidationCursor:
+    def __init__(self) -> None:
+        self.rows = [("active", None), (1,)]
+        self.queries: list[str] = []
+
+    def execute(self, query: str, _params: tuple[object, ...]) -> None:
+        self.queries.append(query)
+
+    def fetchone(self):
+        return self.rows.pop(0)
+
+
+def test_managed_active_status_rejects_unfinished_dependencies() -> None:
+    cursor = _ManagedValidationCursor()
+
+    with pytest.raises(ValueError, match="all dependencies are done"):
+        ProjectTaskEditingFacade._validate_managed_values(
+            cursor,
+            "project-1",
+            "task-1",
+            {"status_id": "status-active"},
+        )
+
+    assert any("pm_task_dependencies" in query for query in cursor.queries)
 
 
 def test_task_edit_wrapper_is_idempotent(tmp_path) -> None:

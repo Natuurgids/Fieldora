@@ -5,6 +5,7 @@ on:
     paths:
       - "src/natureai_next/application/project_management.py"
       - "src/natureai_next/server/postgres_project_management.py"
+      - "src/natureai_next/server/project_task_editing.py"
       - "src/natureai_next/server/browser_functionality_api.py"
       - "src/natureai_next/server/browser_functionality_web.py"
       - "src/natureai_next/server/project_lifecycle_api.py"
@@ -13,6 +14,7 @@ on:
       - "src/natureai_next/server/http.py"
       - "src/natureai_next/bootstrap/platform_server_cli.py"
       - "tests/test_postgres_project_management.py"
+      - "tests/test_project_task_editing.py"
       - "tests/test_browser_project_management_api.py"
       - "tests/test_browser_project_management_http.py"
       - "tests/test_browser_project_lifecycle_http.py"
@@ -63,6 +65,7 @@ jobs:
         run: >-
           python -m ruff check
           src/natureai_next/server/postgres_project_management.py
+          src/natureai_next/server/project_task_editing.py
           src/natureai_next/server/browser_functionality_api.py
           src/natureai_next/server/browser_functionality_web.py
           src/natureai_next/server/project_lifecycle_api.py
@@ -71,6 +74,7 @@ jobs:
           src/natureai_next/server/http.py
           src/natureai_next/bootstrap/platform_server_cli.py
           tests/test_postgres_project_management.py
+          tests/test_project_task_editing.py
           tests/test_browser_project_management_api.py
           tests/test_browser_project_management_http.py
           tests/test_browser_project_lifecycle_http.py
@@ -79,6 +83,7 @@ jobs:
         run: >-
           pytest -q
           tests/test_postgres_project_management.py
+          tests/test_project_task_editing.py
           tests/test_browser_project_management_api.py
           tests/test_browser_project_management_http.py
           tests/test_browser_project_lifecycle_http.py

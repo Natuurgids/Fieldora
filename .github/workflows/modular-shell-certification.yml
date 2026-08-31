@@ -11,6 +11,7 @@ on:
       - "src/natureai_next/server/project_creation_module_web.py"
       - "src/natureai_next/server/project_evidence_actions_module_web.py"
       - "src/natureai_next/server/project_progress_module_web.py"
+      - "src/natureai_next/server/project_research_integration_web.py"
       - "src/natureai_next/server/project_task_edit_module_web.py"
       - "src/natureai_next/server/project_task_editing.py"
       - "src/natureai_next/server/project_work_actions_module_web.py"
@@ -18,6 +19,7 @@ on:
       - "src/natureai_next/server/project_runtime_web.py"
       - "src/natureai_next/server/portfolio_module_web.py"
       - "src/natureai_next/server/project_facility_workspace_web.py"
+      - "src/natureai_next/server/research_records_web.py"
       - "src/natureai_next/server/offline_first_api.py"
       - "src/natureai_next/server/http.py"
       - "tests/test_web_module_contracts.py"
@@ -27,6 +29,7 @@ on:
       - "tests/test_project_creation_module_web.py"
       - "tests/test_project_evidence_actions_module_web.py"
       - "tests/test_project_progress_module_web.py"
+      - "tests/test_project_research_integration_web.py"
       - "tests/test_project_task_detail.py"
       - "tests/test_project_task_edit_module_web.py"
       - "tests/test_project_task_editing.py"
@@ -71,11 +74,13 @@ jobs:
           src/natureai_next/server/project_creation_module_web.py
           src/natureai_next/server/project_evidence_actions_module_web.py
           src/natureai_next/server/project_progress_module_web.py
+          src/natureai_next/server/project_research_integration_web.py
           src/natureai_next/server/project_task_edit_module_web.py
           src/natureai_next/server/project_task_editing.py
           src/natureai_next/server/project_work_actions_module_web.py
           src/natureai_next/server/project_lifecycle_module_web.py
           src/natureai_next/server/portfolio_module_web.py
+          src/natureai_next/server/research_records_web.py
           src/natureai_next/server/offline_first_api.py
           src/natureai_next/server/http.py
       - name: Ruff modular shell tests
@@ -88,6 +93,7 @@ jobs:
           tests/test_project_creation_module_web.py
           tests/test_project_evidence_actions_module_web.py
           tests/test_project_progress_module_web.py
+          tests/test_project_research_integration_web.py
           tests/test_project_task_detail.py
           tests/test_project_task_edit_module_web.py
           tests/test_project_task_editing.py
@@ -104,6 +110,7 @@ jobs:
           tests/test_project_creation_module_web.py
           tests/test_project_evidence_actions_module_web.py
           tests/test_project_progress_module_web.py
+          tests/test_project_research_integration_web.py
           tests/test_project_task_detail.py
           tests/test_project_task_edit_module_web.py
           tests/test_project_task_editing.py

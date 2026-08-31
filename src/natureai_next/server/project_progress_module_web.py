@@ -38,16 +38,17 @@ _PROJECT_PROGRESS_MODULE_PATCH = bytes(
  }
  function number(value){const parsed=Number(value);return Number.isFinite(parsed)?parsed:0}
  function taskProgress(task){
-  if(Number.isFinite(Number(task.progress)))return Math.max(0,Math.min(100,Number(task.progress)));
+  if(task.progress!==null&&task.progress!==undefined&&task.progress!==""&&Number.isFinite(Number(task.progress)))return Math.max(0,Math.min(100,Number(task.progress)));
   const category=String(task.status_category||task.status||"").toLowerCase();return category==="done"||category==="completed"?100:0;
  }
  function isBlocked(task){return task.blocked===true||String(task.status_category||task.status||"").toLowerCase()==="blocked"}
  function isDone(task){return taskProgress(task)>=100||["done","completed","closed"].includes(String(task.status_category||task.status||"").toLowerCase())}
  function overdue(task,today){const due=String(task.due_date||"");return Boolean(due&&!isDone(task)&&due<today)}
+ function localIsoDate(){const now=new Date(),year=now.getFullYear(),month=String(now.getMonth()+1).padStart(2,"0"),day=String(now.getDate()).padStart(2,"0");return `${year}-${month}-${day}`}
  function render(project,tasks){
   const host=q("project-core-progress-body");if(!host)return;
   if(!project){host.innerHTML='<div class="empty">Select a project to view progress.</div>';return}
-  const today=new Date().toISOString().slice(0,10),total=tasks.length,done=tasks.filter(isDone).length,blocked=tasks.filter(isBlocked).length,late=tasks.filter(task=>overdue(task,today)).length;
+  const today=localIsoDate(),total=tasks.length,done=tasks.filter(isDone).length,blocked=tasks.filter(isBlocked).length,late=tasks.filter(task=>overdue(task,today)).length;
   const progress=total?Math.round(tasks.reduce((sum,task)=>sum+taskProgress(task),0)/total):0;
   const milestones=tasks.filter(task=>task.milestone===true),milestonesDone=milestones.filter(isDone).length;
   const estimate=tasks.reduce((sum,task)=>sum+number(task.effective_estimate_hours||task.estimate_hours),0),realized=tasks.reduce((sum,task)=>sum+number(task.realized_hours||task.actual_hours),0);

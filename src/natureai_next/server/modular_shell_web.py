@@ -22,7 +22,6 @@ from natureai_next.server.project_lifecycle_web import _PROJECT_LIFECYCLE_WEB_PA
 from natureai_next.server.project_runtime_web import _PROJECT_RUNTIME_WEB_PATCH
 from natureai_next.server.web_module_contracts import foundation_registry
 
-
 _LEGACY_HISTORY_ROUTING_PATCH = bytes(
     r"""
  const oldShowPage=showPage;

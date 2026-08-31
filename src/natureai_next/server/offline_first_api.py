@@ -29,6 +29,7 @@ from natureai_next.server.original_derivative_api import OriginalDerivativeApiMi
 from natureai_next.server.pagination_api import PaginationApiMixin
 from natureai_next.server.portfolio_module_web import PortfolioModuleWebApiMixin
 from natureai_next.server.postgres_web_indexes import ensure_managed_web_postgres_indexes
+from natureai_next.server.project_core_module_web import ProjectCoreModuleWebApiMixin
 from natureai_next.server.project_hierarchy_web import ProjectHierarchyWebApiMixin
 from natureai_next.server.project_idempotency import (
     ProjectIdempotencyApiMixin,
@@ -44,6 +45,7 @@ from natureai_next.server.visible_control_audit_api import VisibleControlAuditAp
 
 class OfflineFirstFieldoraApi(
     ModularShellWebApiMixin,
+    ProjectCoreModuleWebApiMixin,
     PortfolioModuleWebApiMixin,
     BoundedUploadWebApiMixin,
     ProjectLifecycleWebApiMixin,

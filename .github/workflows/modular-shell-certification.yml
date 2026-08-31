@@ -3,6 +3,7 @@ name: Fieldora modular shell certification
 on:
   pull_request:
     paths:
+      - "src/natureai_next/application/project_task_detail.py"
       - "src/natureai_next/server/web_module_contracts.py"
       - "src/natureai_next/server/web_module_runtime.py"
       - "src/natureai_next/server/modular_shell_web.py"
@@ -25,6 +26,7 @@ on:
       - "tests/test_project_creation_module_web.py"
       - "tests/test_project_evidence_actions_module_web.py"
       - "tests/test_project_progress_module_web.py"
+      - "tests/test_project_task_detail.py"
       - "tests/test_project_task_edit_module_web.py"
       - "tests/test_project_work_actions_module_web.py"
       - "tests/test_project_lifecycle_module_web.py"
@@ -61,6 +63,7 @@ jobs:
       - name: Ruff shell and feature adapters
         run: >-
           python -m ruff check
+          src/natureai_next/application/project_task_detail.py
           src/natureai_next/server/modular_shell_web.py
           src/natureai_next/server/project_core_module_web.py
           src/natureai_next/server/project_creation_module_web.py
@@ -82,6 +85,7 @@ jobs:
           tests/test_project_creation_module_web.py
           tests/test_project_evidence_actions_module_web.py
           tests/test_project_progress_module_web.py
+          tests/test_project_task_detail.py
           tests/test_project_task_edit_module_web.py
           tests/test_project_work_actions_module_web.py
           tests/test_project_lifecycle_module_web.py
@@ -96,6 +100,7 @@ jobs:
           tests/test_project_creation_module_web.py
           tests/test_project_evidence_actions_module_web.py
           tests/test_project_progress_module_web.py
+          tests/test_project_task_detail.py
           tests/test_project_task_edit_module_web.py
           tests/test_project_work_actions_module_web.py
           tests/test_project_lifecycle_module_web.py

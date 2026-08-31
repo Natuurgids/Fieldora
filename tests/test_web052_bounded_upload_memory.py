@@ -13,6 +13,7 @@ from natureai_next.server.bounded_upload_web import (
     BoundedUploadWebApiMixin,
     patch_bounded_upload_response,
 )
+from natureai_next.server.modular_shell_web import ModularShellWebApiMixin
 from natureai_next.server.offline_first_api import OfflineFirstFieldoraApi
 
 _FULL_BUFFER_SCRIPT = b'''async function upload(file){
@@ -37,8 +38,10 @@ class _PatchedApi(BoundedUploadWebApiMixin, _BaseApi):
     pass
 
 
-def test_web052_composition_is_outermost_and_removes_whole_file_upload_buffers() -> None:
-    assert OfflineFirstFieldoraApi.__mro__[1] is BoundedUploadWebApiMixin
+def test_web052_composition_runs_after_feature_patches_and_before_shell_finalization() -> None:
+    mro = OfflineFirstFieldoraApi.__mro__
+    assert mro[1] is ModularShellWebApiMixin
+    assert mro[2] is BoundedUploadWebApiMixin
     response = patch_bounded_upload_response(
         "/app.js", ApiResponse(200, _FULL_BUFFER_SCRIPT, "text/javascript")
     )

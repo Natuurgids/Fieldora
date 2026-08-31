@@ -7,8 +7,8 @@ import threading
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-import pytest
 from playwright.sync_api import Route, sync_playwright
+import pytest
 
 from natureai_next.server.api import ApiResponse
 from natureai_next.server.http import patch_managed_web_response

@@ -7,6 +7,9 @@ from collections.abc import Callable
 
 from natureai_next.server.administration_actions_api import AdministrationActionsApiMixin
 from natureai_next.server.bounded_upload_web import BoundedUploadWebApiMixin
+from natureai_next.server.capacity_availability_module_web import (
+    CapacityAvailabilityModuleWebApiMixin,
+)
 from natureai_next.server.capacity_module_web import CapacityModuleWebApiMixin
 from natureai_next.server.facility_actions_api import FacilityActionsApiMixin
 from natureai_next.server.filtering import FilteringApiMixin
@@ -55,6 +58,7 @@ class OfflineFirstFieldoraApi(
     ModularShellWebApiMixin,
     ProjectResearchIntegrationWebApiMixin,
     ProjectCapacityIntegrationWebApiMixin,
+    CapacityAvailabilityModuleWebApiMixin,
     CapacityModuleWebApiMixin,
     ProjectTaskEditModuleWebApiMixin,
     ProjectProgressModuleWebApiMixin,

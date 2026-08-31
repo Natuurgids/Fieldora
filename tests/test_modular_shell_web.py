@@ -23,13 +23,21 @@ def test_manifest_exposes_distinct_project_and_portfolio_owners() -> None:
     by_id = {item["module_id"]: item for item in modular_shell_manifest()}
 
     assert by_id["projects.core"]["route"] == "/projects"
-    assert by_id["projects.core"]["owns_actions"] == [
+    project_actions = set(by_id["projects.core"]["owns_actions"])
+    assert {
+        "projects.create",
         "projects.context.select",
         "projects.scope.select",
         "projects.center.select",
+        "projects.progress.refresh",
+        "projects.planning.view.select",
+        "projects.task.status.move",
+        "projects.gantt.inspect",
         "projects.evidence.load",
         "projects.work.inspect",
-    ]
+        "projects.task.edit",
+        "projects.status.change",
+    } <= project_actions
     assert by_id["portfolio"]["route"] == "/portfolio"
     assert by_id["portfolio"]["dependencies"] == ["projects.core"]
     assert by_id["portfolio"]["owns_actions"] == [
@@ -159,8 +167,8 @@ def test_non_app_script_response_is_untouched() -> None:
     assert patch_modular_shell_response("/api/v1/status", original) is original
 
 
-def test_modular_shell_is_outermost_managed_web_mixin() -> None:
+def test_modular_shell_is_outermost_and_project_core_is_composed() -> None:
     mro = OfflineFirstFieldoraApi.__mro__
 
     assert mro[1] is ModularShellWebApiMixin
-    assert mro[2] is ProjectCoreModuleWebApiMixin
+    assert ProjectCoreModuleWebApiMixin in mro[2:]

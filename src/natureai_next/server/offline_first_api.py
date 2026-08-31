@@ -35,6 +35,9 @@ from natureai_next.server.project_idempotency_web import ProjectIdempotencyWebAp
 from natureai_next.server.project_lifecycle_module_web import ProjectLifecycleModuleWebApiMixin
 from natureai_next.server.project_lifecycle_web import ProjectLifecycleWebApiMixin
 from natureai_next.server.project_progress_module_web import ProjectProgressModuleWebApiMixin
+from natureai_next.server.project_research_integration_web import (
+    ProjectResearchIntegrationWebApiMixin,
+)
 from natureai_next.server.project_runtime_web import ProjectRuntimeWebApiMixin
 from natureai_next.server.project_task_edit_module_web import ProjectTaskEditModuleWebApiMixin
 from natureai_next.server.project_task_editing import wrap_project_task_editing
@@ -46,6 +49,7 @@ from natureai_next.server.visible_control_audit_api import VisibleControlAuditAp
 
 class OfflineFirstFieldoraApi(
     ModularShellWebApiMixin,
+    ProjectResearchIntegrationWebApiMixin,
     ProjectTaskEditModuleWebApiMixin,
     ProjectProgressModuleWebApiMixin,
     ProjectCreationModuleWebApiMixin,

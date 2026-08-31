@@ -130,7 +130,7 @@ _MODULAR_SHELL_BOOTSTRAP = _bootstrap_script()
 
 
 def patch_modular_shell_response(target: str, response: ApiResponse) -> ApiResponse:
-    """Remove migrated compatibility wiring and append the shell exactly once."""
+    """Remove migrated wiring and make the shell the final browser bootstrap."""
 
     if urlsplit(target).path != "/app.js" or response.status != 200:
         return response
@@ -147,8 +147,12 @@ def patch_modular_shell_response(target: str, response: ApiResponse) -> ApiRespo
         _PROJECT_COCKPIT_PORTFOLIO_WIRING_START,
         _PROJECT_COCKPIT_PORTFOLIO_WIRING_END,
     )
-    if _MODULAR_SHELL_BOOTSTRAP not in body:
-        body += _MODULAR_SHELL_BOOTSTRAP
+    # The API mixin may append the shell before the HTTP compatibility layer adds
+    # its transitional fragments.  Always relocate the unique shell bootstrap to
+    # the end so feature adapters and legacy DOM construction have initialized
+    # before the first module-mount event is emitted.
+    body = body.replace(_MODULAR_SHELL_BOOTSTRAP, b"", 1)
+    body += _MODULAR_SHELL_BOOTSTRAP
     if body == response.body:
         return response
     return ApiResponse(response.status, body, response.content_type, response.headers)

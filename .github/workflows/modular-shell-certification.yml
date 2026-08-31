@@ -9,6 +9,7 @@ on:
       - "src/natureai_next/server/portfolio_module_web.py"
       - "src/natureai_next/server/project_facility_workspace_web.py"
       - "src/natureai_next/server/offline_first_api.py"
+      - "src/natureai_next/server/http.py"
       - "tests/test_web_module_contracts.py"
       - "tests/test_web_module_runtime.py"
       - "tests/test_modular_shell_web.py"
@@ -48,6 +49,7 @@ jobs:
           src/natureai_next/server/modular_shell_web.py
           src/natureai_next/server/portfolio_module_web.py
           src/natureai_next/server/offline_first_api.py
+          src/natureai_next/server/http.py
       - name: Ruff modular shell tests
         run: >-
           python -m ruff check

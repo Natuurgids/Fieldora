@@ -11,10 +11,7 @@ from natureai_next.server.facility_actions_api import FacilityActionsApiMixin
 from natureai_next.server.filtering import FilteringApiMixin
 from natureai_next.server.knowledge_parity_api import KnowledgeParityApiMixin
 from natureai_next.server.library_collections_api import LibraryCollectionsApiMixin
-from natureai_next.server.linked_storage_api import (
-    LinkedStorageApiMixin,
-    LinkedStorageRepository,
-)
+from natureai_next.server.linked_storage_api import LinkedStorageApiMixin, LinkedStorageRepository
 from natureai_next.server.linked_storage_browser_api import LinkedStorageBrowserFieldoraApi
 from natureai_next.server.linked_storage_operator_api import LinkedStorageOperatorApiMixin
 from natureai_next.server.linked_storage_sources_api import LinkedStorageSourcesApiMixin
@@ -31,24 +28,16 @@ from natureai_next.server.portfolio_module_web import PortfolioModuleWebApiMixin
 from natureai_next.server.postgres_web_indexes import ensure_managed_web_postgres_indexes
 from natureai_next.server.project_core_module_web import ProjectCoreModuleWebApiMixin
 from natureai_next.server.project_creation_module_web import ProjectCreationModuleWebApiMixin
-from natureai_next.server.project_evidence_actions_module_web import (
-    ProjectEvidenceActionsModuleWebApiMixin,
-)
+from natureai_next.server.project_evidence_actions_module_web import ProjectEvidenceActionsModuleWebApiMixin
 from natureai_next.server.project_hierarchy_web import ProjectHierarchyWebApiMixin
-from natureai_next.server.project_idempotency import (
-    ProjectIdempotencyApiMixin,
-    wrap_project_management,
-)
+from natureai_next.server.project_idempotency import ProjectIdempotencyApiMixin, wrap_project_management
 from natureai_next.server.project_idempotency_web import ProjectIdempotencyWebApiMixin
-from natureai_next.server.project_lifecycle_module_web import (
-    ProjectLifecycleModuleWebApiMixin,
-)
+from natureai_next.server.project_lifecycle_module_web import ProjectLifecycleModuleWebApiMixin
 from natureai_next.server.project_lifecycle_web import ProjectLifecycleWebApiMixin
 from natureai_next.server.project_progress_module_web import ProjectProgressModuleWebApiMixin
 from natureai_next.server.project_runtime_web import ProjectRuntimeWebApiMixin
-from natureai_next.server.project_work_actions_module_web import (
-    ProjectWorkActionsModuleWebApiMixin,
-)
+from natureai_next.server.project_task_edit_module_web import ProjectTaskEditModuleWebApiMixin
+from natureai_next.server.project_work_actions_module_web import ProjectWorkActionsModuleWebApiMixin
 from natureai_next.server.research_records_api import ResearchRecordsApiMixin
 from natureai_next.server.structured_errors import StructuredErrorApiMixin
 from natureai_next.server.visible_control_audit_api import VisibleControlAuditApiMixin
@@ -56,6 +45,7 @@ from natureai_next.server.visible_control_audit_api import VisibleControlAuditAp
 
 class OfflineFirstFieldoraApi(
     ModularShellWebApiMixin,
+    ProjectTaskEditModuleWebApiMixin,
     ProjectProgressModuleWebApiMixin,
     ProjectCreationModuleWebApiMixin,
     ProjectLifecycleModuleWebApiMixin,
@@ -96,15 +86,11 @@ class OfflineFirstFieldoraApi(
     _linked_storage_factory: Callable[[], LinkedStorageRepository] | None = None
 
     @classmethod
-    def configure_offline_sync(
-        cls, factory: Callable[[], OfflineSyncRepository] | None
-    ) -> None:
+    def configure_offline_sync(cls, factory: Callable[[], OfflineSyncRepository] | None) -> None:
         cls._offline_sync_factory = factory
 
     @classmethod
-    def configure_linked_storage(
-        cls, factory: Callable[[], LinkedStorageRepository] | None
-    ) -> None:
+    def configure_linked_storage(cls, factory: Callable[[], LinkedStorageRepository] | None) -> None:
         cls._linked_storage_factory = factory
 
     def __init__(self, *args, **kwargs) -> None:
@@ -122,11 +108,7 @@ class OfflineFirstFieldoraApi(
         self._linked_storage = None if linked_factory is None else linked_factory()
         enabled = os.environ.get("FIELDORA_STORAGE_SERVICE_ENABLED", "").strip().casefold()
         listener_enabled = enabled in {"1", "true", "yes", "on"}
-        self._runtime_profile["storage_service_listener"] = (
-            "listening" if listener_enabled else "disabled"
-        )
+        self._runtime_profile["storage_service_listener"] = "listening" if listener_enabled else "disabled"
         self._runtime_profile["storage_service_mtls"] = "required"
         if listener_enabled:
-            self._runtime_profile["storage_service_port"] = os.environ.get(
-                "FIELDORA_STORAGE_SERVICE_PORT", "8766"
-            ).strip()
+            self._runtime_profile["storage_service_port"] = os.environ.get("FIELDORA_STORAGE_SERVICE_PORT", "8766").strip()

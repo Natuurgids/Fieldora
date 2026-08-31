@@ -118,6 +118,80 @@ class ProjectTaskEditingFacade:
             "realized_hours": float(row[22]),
         }
 
+    def tasks(self, scope_id: str):
+        """Return desktop-density task summaries for local or managed Project scope.
+
+        Managed callers pass an organization id.  The projection intentionally
+        exposes both the legacy planning aliases and the authoritative task/status
+        fields consumed by Projects/Core Kanban, Gantt and progress views.
+        """
+        if self._is_local_sqlite:
+            return self._delegate.tasks(scope_id)
+        connect = getattr(self._delegate, "_connect", None)
+        if not callable(connect):
+            return ()
+        with connect() as connection:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT t.task_id,t.project_id,t.parent_task_id,t.title,t.description,
+                           t.status_id,s.name,s.category,t.owner_id,t.priority,t.start_date,
+                           t.due_date,t.estimate_hours,t.realized_hours,t.progress,t.budget,
+                           t.recurrence,t.recurrence_end,t.milestone,t.position,t.phase_id,
+                           COALESCE(ph.name,''),t.sprint_id,COALESCE(sp.name,t.sprint,''),
+                           s.category='blocked'
+                    FROM pm_tasks t
+                    JOIN pm_projects p ON p.project_id=t.project_id
+                    JOIN pm_statuses s ON s.status_id=t.status_id
+                    LEFT JOIN pm_phases ph ON ph.phase_id=t.phase_id
+                    LEFT JOIN pm_sprints sp ON sp.sprint_id=t.sprint_id
+                    WHERE p.organization_id=%s
+                    ORDER BY t.project_id,COALESCE(ph.display_order,999999),
+                             s.display_order,t.position,t.due_date,t.task_id
+                    """,
+                    (scope_id,),
+                )
+                rows = cursor.fetchall()
+        return tuple(
+            {
+                "id": str(row[0]),
+                "task_id": str(row[0]),
+                "project_id": str(row[1]),
+                "parent_task_id": "" if row[2] is None else str(row[2]),
+                "name": str(row[3]),
+                "title": str(row[3]),
+                "description": str(row[4]),
+                "status_id": str(row[5]),
+                "status": str(row[6]),
+                "status_name": str(row[6]),
+                "status_category": str(row[7]),
+                "owner_id": str(row[8]),
+                "assignee_id": str(row[8]),
+                "priority": str(row[9]),
+                "start_date": str(row[10]),
+                "due_date": str(row[11]),
+                "estimate_hours": float(row[12]),
+                "manual_estimate": float(row[12]),
+                "manual_estimate_hours": float(row[12]),
+                "effective_estimate_hours": float(row[12]),
+                "realized_hours": float(row[13]),
+                "realized": float(row[13]),
+                "actual_hours": float(row[13]),
+                "progress": int(row[14]),
+                "budget": float(row[15]),
+                "recurrence": str(row[16]),
+                "recurrence_end": str(row[17]),
+                "milestone": bool(row[18]),
+                "position": int(row[19]),
+                "phase_id": "" if row[20] is None else str(row[20]),
+                "phase_name": str(row[21]),
+                "sprint_id": "" if row[22] is None else str(row[22]),
+                "sprint_name": str(row[23]),
+                "blocked": bool(row[24]),
+            }
+            for row in rows
+        )
+
     def phases(self, scope_id: str) -> tuple[dict[str, object], ...]:
         """Accept the local project scope or the managed organization/project scope."""
         if self._is_local_sqlite:
@@ -156,7 +230,12 @@ class ProjectTaskEditingFacade:
                 )
                 rows = cursor.fetchall()
         return tuple(
-            {"id": str(row[0]), id_column: str(row[0]), "project_id": str(row[1]), "name": str(row[2])}
+            {
+                "id": str(row[0]),
+                id_column: str(row[0]),
+                "project_id": str(row[1]),
+                "name": str(row[2]),
+            }
             for row in rows
         )
 

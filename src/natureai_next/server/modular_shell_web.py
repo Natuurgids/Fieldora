@@ -45,6 +45,8 @@ _LEGACY_HISTORY_ROUTING_PATCH = bytes(
 
 _LEGACY_PORTFOLIO_START = b" /* Projects & Portfolio used to change only the selected button.  Render a\n"
 _LEGACY_PORTFOLIO_END = b" /* Knowledge tabs previously had no state or handlers at all. */"
+_PORTFOLIO_OWNER_MARKER = b"WEB-PORTFOLIO-MODULE"
+_PROJECT_OWNER_MARKER = b"WEB-PROJECT-CORE-MODULE"
 
 # The desktop-density Projects/Facilities cockpit predates explicit module
 # ownership.  Portfolio and Projects/Core are migrated independently while the
@@ -132,40 +134,59 @@ def _bootstrap_script() -> bytes:
 _MODULAR_SHELL_BOOTSTRAP = _bootstrap_script()
 
 
+def _rewrite_owned_browser_response(body: bytes) -> bytes:
+    """Remove only responsibilities whose replacement owner is present."""
+
+    body = body.replace(_LEGACY_HISTORY_ROUTING_PATCH, b"", 1)
+    if _PORTFOLIO_OWNER_MARKER in body:
+        body = _strip_legacy_range(body, _LEGACY_PORTFOLIO_START, _LEGACY_PORTFOLIO_END)
+        body = _strip_legacy_range(
+            body,
+            _PROJECT_COCKPIT_PORTFOLIO_RENDER_START,
+            _PROJECT_COCKPIT_PORTFOLIO_RENDER_END,
+        )
+        body = _strip_legacy_range(
+            body,
+            _PROJECT_COCKPIT_PORTFOLIO_WIRING_START,
+            _PROJECT_COCKPIT_PORTFOLIO_WIRING_END,
+        )
+    if _PROJECT_OWNER_MARKER in body:
+        body = _strip_legacy_range(
+            body,
+            _PROJECT_COCKPIT_BEHAVIOR_START,
+            _PROJECT_COCKPIT_BEHAVIOR_END,
+        )
+        body = _strip_legacy_range(
+            body,
+            _PROJECT_COCKPIT_WIRING_START,
+            _PROJECT_COCKPIT_WIRING_END,
+        )
+    body = body.replace(_MODULAR_SHELL_BOOTSTRAP, b"", 1)
+    return body + _MODULAR_SHELL_BOOTSTRAP
+
+
 def patch_modular_shell_response(target: str, response: ApiResponse) -> ApiResponse:
-    """Remove migrated wiring and make the shell the final browser bootstrap."""
+    """Install the shell and remove compatibility code with replacement owners."""
 
     if urlsplit(target).path != "/app.js" or response.status != 200:
         return response
 
-    body = response.body.replace(_LEGACY_HISTORY_ROUTING_PATCH, b"", 1)
-    body = _strip_legacy_range(body, _LEGACY_PORTFOLIO_START, _LEGACY_PORTFOLIO_END)
-    body = _strip_legacy_range(
-        body,
-        _PROJECT_COCKPIT_PORTFOLIO_RENDER_START,
-        _PROJECT_COCKPIT_PORTFOLIO_RENDER_END,
-    )
-    body = _strip_legacy_range(
-        body,
-        _PROJECT_COCKPIT_PORTFOLIO_WIRING_START,
-        _PROJECT_COCKPIT_PORTFOLIO_WIRING_END,
-    )
-    body = _strip_legacy_range(
-        body,
-        _PROJECT_COCKPIT_BEHAVIOR_START,
-        _PROJECT_COCKPIT_BEHAVIOR_END,
-    )
-    body = _strip_legacy_range(
-        body,
-        _PROJECT_COCKPIT_WIRING_START,
-        _PROJECT_COCKPIT_WIRING_END,
-    )
-    # The API mixin may append the shell before the HTTP compatibility layer adds
-    # its transitional fragments.  Always relocate the unique shell bootstrap to
-    # the end so feature adapters and legacy DOM construction have initialized
-    # before the first module-mount event is emitted.
-    body = body.replace(_MODULAR_SHELL_BOOTSTRAP, b"", 1)
-    body += _MODULAR_SHELL_BOOTSTRAP
+    body = _rewrite_owned_browser_response(response.body)
+    if body == response.body:
+        return response
+    return ApiResponse(response.status, body, response.content_type, response.headers)
+
+
+def finalize_modular_shell_response(target: str, response: ApiResponse) -> ApiResponse:
+    """Finalize an already-modular response after HTTP compatibility patches."""
+
+    if (
+        urlsplit(target).path != "/app.js"
+        or response.status != 200
+        or _MODULAR_SHELL_BOOTSTRAP not in response.body
+    ):
+        return response
+    body = _rewrite_owned_browser_response(response.body)
     if body == response.body:
         return response
     return ApiResponse(response.status, body, response.content_type, response.headers)

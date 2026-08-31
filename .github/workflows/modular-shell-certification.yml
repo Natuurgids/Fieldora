@@ -10,6 +10,7 @@ on:
       - "src/natureai_next/server/project_creation_module_web.py"
       - "src/natureai_next/server/project_evidence_actions_module_web.py"
       - "src/natureai_next/server/project_progress_module_web.py"
+      - "src/natureai_next/server/project_task_edit_module_web.py"
       - "src/natureai_next/server/project_work_actions_module_web.py"
       - "src/natureai_next/server/project_lifecycle_module_web.py"
       - "src/natureai_next/server/project_runtime_web.py"
@@ -24,6 +25,7 @@ on:
       - "tests/test_project_creation_module_web.py"
       - "tests/test_project_evidence_actions_module_web.py"
       - "tests/test_project_progress_module_web.py"
+      - "tests/test_project_task_edit_module_web.py"
       - "tests/test_project_work_actions_module_web.py"
       - "tests/test_project_lifecycle_module_web.py"
       - "tests/test_portfolio_module_web.py"
@@ -64,6 +66,7 @@ jobs:
           src/natureai_next/server/project_creation_module_web.py
           src/natureai_next/server/project_evidence_actions_module_web.py
           src/natureai_next/server/project_progress_module_web.py
+          src/natureai_next/server/project_task_edit_module_web.py
           src/natureai_next/server/project_work_actions_module_web.py
           src/natureai_next/server/project_lifecycle_module_web.py
           src/natureai_next/server/portfolio_module_web.py
@@ -79,6 +82,7 @@ jobs:
           tests/test_project_creation_module_web.py
           tests/test_project_evidence_actions_module_web.py
           tests/test_project_progress_module_web.py
+          tests/test_project_task_edit_module_web.py
           tests/test_project_work_actions_module_web.py
           tests/test_project_lifecycle_module_web.py
           tests/test_portfolio_module_web.py
@@ -92,6 +96,7 @@ jobs:
           tests/test_project_creation_module_web.py
           tests/test_project_evidence_actions_module_web.py
           tests/test_project_progress_module_web.py
+          tests/test_project_task_edit_module_web.py
           tests/test_project_work_actions_module_web.py
           tests/test_project_lifecycle_module_web.py
           tests/test_portfolio_module_web.py

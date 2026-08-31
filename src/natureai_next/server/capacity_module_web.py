@@ -42,7 +42,7 @@ _CAPACITY_MODULE_PATCH = bytes(
   try{const result=await api(`/api/v1/allocations?project_id=${encodeURIComponent(state.projectId)}`,{purpose:"research"});state.allocations=result.items||[];render();const node=q("capacity-project-status");if(node){node.textContent="";node.classList.remove("error")}}
   catch(error){state.allocations=[];render();report(error,"Project allocations could not be loaded.")}
  }
- async function openProject(projectId){state.projectId=String(projectId||"");await refresh();return state.projectId}
+ async function openProject(projectId){state.projectId=String(projectId||"");document.dispatchEvent(new CustomEvent("fieldora:capacity-project-changed",{detail:{module_id:moduleId,project_id:state.projectId}}));await refresh();return state.projectId}
  function mount(){if(state.mounted)return;if(!ensureSurface())return;state.mounted=true;state.controller=new AbortController();q("capacity-project-refresh")?.addEventListener("click",refresh,{signal:state.controller.signal});render();if(state.projectId)refresh()}
  function unmount(){if(!state.mounted)return;state.controller?.abort();state.controller=null;state.mounted=false}
  document.addEventListener("fieldora:module-mount",event=>{if(event.detail?.module?.module_id===moduleId)mount()});

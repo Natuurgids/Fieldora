@@ -29,6 +29,7 @@ from natureai_next.server.optimistic_concurrency_web import OptimisticConcurrenc
 from natureai_next.server.original_derivative_api import OriginalDerivativeApiMixin
 from natureai_next.server.pagination_api import PaginationApiMixin
 from natureai_next.server.portfolio_module_web import PortfolioModuleWebApiMixin
+from natureai_next.server.postgres_project_task_schema import ensure_managed_project_task_schema
 from natureai_next.server.postgres_web_indexes import ensure_managed_web_postgres_indexes
 from natureai_next.server.project_capacity_integration_web import (
     ProjectCapacityIntegrationWebApiMixin,
@@ -121,6 +122,7 @@ class OfflineFirstFieldoraApi(
             media=getattr(self, "_media", None),
             science=getattr(self, "_science", None),
         )
+        ensure_managed_project_task_schema(project_management)
         self._project_management = wrap_project_task_editing(
             wrap_project_management(project_management)
         )

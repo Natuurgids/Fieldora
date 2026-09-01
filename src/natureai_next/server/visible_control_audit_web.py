@@ -22,9 +22,14 @@ _VISIBLE_CONTROL_AUDIT_PATCH = bytes(
     Accepted knowledge). The desktop-aligned workflow now owns navigation through
     Review knowledge / Add identification, while proposal state and explicit
     Accept/Reject/Defer actions are rendered by the governed Knowledge seam. Leaving
-    the old pair visible creates two buttons with no event/action contract. */
- const legacyKnowledgeTabs=document.querySelector("#knowledge-review-panel > section.card > .tabs");
- if(legacyKnowledgeTabs)legacyKnowledgeTabs.remove();
+    the old pair visible creates two buttons with no event/action contract. Match the
+    obsolete pair by its complete control contract rather than legacy DOM nesting,
+    which later workspace composition is free to change. */
+ document.querySelectorAll(".tabs").forEach(tabs=>{
+  const labels=[...tabs.querySelectorAll(":scope > button")]
+   .map(button=>(button.textContent||"").trim());
+  if(labels.length===2&&labels.includes("Review queue")&&labels.includes("Accepted knowledge"))tabs.remove();
+ });
 
  /* Keep the inventory attached to the final composed DOM. Most shipped controls own
     a direct onclick handler. The remaining selectors are deliberate delegated or

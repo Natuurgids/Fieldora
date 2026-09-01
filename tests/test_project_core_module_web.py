@@ -47,6 +47,18 @@ def test_project_context_rejects_ids_outside_the_accessible_project_list() -> No
     assert "return true;" in script
 
 
+def test_my_work_scope_is_strict_when_no_matching_projects_exist() -> None:
+    patched = patch_project_core_module_response(
+        "/app.js", ApiResponse(200, b"", "text/javascript; charset=utf-8")
+    )
+    script = patched.body.decode("utf-8")
+
+    assert "My work" in script
+    assert "All accessible" in script
+    assert "visible=mine;" in script
+    assert "if(mine.length)visible=mine;" not in script
+
+
 def test_final_shell_removes_legacy_project_behavior_but_keeps_cockpit_markup() -> None:
     base = ApiResponse(200, b"const baseApp=true;", "text/javascript; charset=utf-8")
     owned = patch_project_core_module_response("/app.js", base)

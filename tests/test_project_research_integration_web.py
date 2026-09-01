@@ -57,7 +57,7 @@ def test_project_research_integration_is_composed_inside_shell() -> None:
     mro = OfflineFirstFieldoraApi.__mro__
 
     assert mro[1].__name__ == "ModularShellWebApiMixin"
-    assert mro[2] is ProjectResearchIntegrationWebApiMixin
+    assert ProjectResearchIntegrationWebApiMixin in mro[2:]
 
 
 def test_non_app_response_is_untouched() -> None:

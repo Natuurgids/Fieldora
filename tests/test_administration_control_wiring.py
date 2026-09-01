@@ -16,7 +16,6 @@ from natureai_next.server.visible_control_audit_web import (
     patch_visible_control_audit_response,
 )
 
-
 ADMINISTRATION_WEB = Path(
     "src/natureai_next/server/administration_management_web.py"
 )

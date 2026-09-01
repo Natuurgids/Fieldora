@@ -52,6 +52,7 @@ _VISIBLE_CONTROL_AUDIT_PATCH = bytes(
   "button[data-contract]",
   "button[data-collection-action]",
   "button[data-collection-id]",
+  "#library-collections-parity button[data-action]",
  ];
  const listenerOwnedIds=new Set([
   "obs-save-aligned",
@@ -65,6 +66,8 @@ _VISIBLE_CONTROL_AUDIT_PATCH = bytes(
   "review-create",
   "review-determine",
   "review-accept",
+  "library-collection-create",
+  "library-collection-refresh",
  ]);
  function actionContract(button){
   if(typeof button.onclick==="function")return "direct-handler";

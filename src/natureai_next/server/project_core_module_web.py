@@ -109,12 +109,15 @@ _PROJECT_CORE_MODULE_PATCH = bytes(
   try{const result=await api(`/api/v1/media?project_id=${pid}&limit=200`,{purpose:"research"});state.evidence=result.items||[];renderEvidence();status("")}catch(error){renderEvidence();moduleError(error,"Project evidence could not be loaded.")}
  }
  async function selectProject(id){
-  state.projectId=id||"";state.workSelection=null;
+  const requested=String(id||""),project=requested?projectById(requested):null;
+  if(requested&&!project){status("That project is no longer accessible.",true);return false}
+  state.projectId=requested;state.workSelection=null;
   if(typeof selectedProject!=="undefined")selectedProject=state.projectId;
   if(q("work-project"))q("work-project").value=state.projectId;
-  renderTree();renderInspector(projectById(state.projectId));selectInspector("properties");
+  renderTree();renderInspector(project);selectInspector("properties");
   await Promise.all([loadWork(),loadEvidence()]);
   document.dispatchEvent(new CustomEvent("fieldora:project-context-changed",{detail:{module_id:moduleId,project_id:state.projectId}}));
+  return true;
  }
  function setCenter(view){
   state.centerView=view==="evidence"?"evidence":"work";const work=q("project-workspace-work"),evidence=q("project-workspace-evidence");

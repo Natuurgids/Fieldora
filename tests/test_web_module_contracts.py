@@ -25,9 +25,19 @@ def test_foundation_registry_has_separate_projects_and_portfolio_ownership() -> 
 
     assert projects is not None
     assert projects.module_id == "projects.core"
+    assert projects.provides_contracts == (
+        "projects.list.read",
+        "projects.context.select",
+    )
     assert portfolio is not None
     assert portfolio.module_id == "portfolio"
-    assert portfolio.dependencies == ("projects.core",)
+    assert portfolio.dependencies == ()
+    assert portfolio.requires_contracts == (
+        "projects.list.read",
+        "projects.context.select",
+    )
+    assert registry.contract_provider("projects.list.read") is projects
+    assert registry.contract_provider("projects.context.select") is projects
 
 
 def test_project_integrations_are_owned_by_bounded_modules() -> None:
@@ -98,6 +108,68 @@ def test_registry_rejects_unknown_dependencies() -> None:
         registry.validate_dependencies()
 
 
+def test_registry_rejects_missing_contract_provider() -> None:
+    registry = WebModuleRegistry(
+        (
+            WebModuleSpec(
+                "portfolio",
+                "/portfolio",
+                "Portfolio",
+                requires_contracts=("projects.list.read",),
+            ),
+        )
+    )
+
+    with pytest.raises(WebModuleContractError, match="missing contract providers"):
+        registry.validate_contracts()
+
+
+def test_registry_rejects_duplicate_contract_provider() -> None:
+    registry = WebModuleRegistry(
+        (
+            WebModuleSpec(
+                "projects.core",
+                "/projects",
+                "Projects",
+                provides_contracts=("projects.list.read",),
+            ),
+        )
+    )
+
+    with pytest.raises(WebModuleContractError, match="already provided"):
+        registry.register(
+            WebModuleSpec(
+                "projects.replacement",
+                "/replacement-projects",
+                "Replacement Projects",
+                provides_contracts=("projects.list.read",),
+            )
+        )
+
+
+def test_contract_consumer_can_bind_to_replacement_provider() -> None:
+    replacement = WebModuleSpec(
+        "projects.replacement",
+        "/projects",
+        "Projects replacement",
+        provides_contracts=("projects.list.read", "projects.context.select"),
+    )
+    portfolio = WebModuleSpec(
+        "portfolio",
+        "/portfolio",
+        "Portfolio",
+        requires_contracts=("projects.list.read", "projects.context.select"),
+    )
+    registry = WebModuleRegistry((replacement, portfolio))
+
+    registry.validate_dependencies()
+    registry.validate_contracts()
+
+    assert registry.contract_provider("projects.list.read") is replacement
+    assert registry.contract_provider("projects.context.select") is replacement
+    assert portfolio.dependencies == ()
+
+
 def test_capability_projection_only_controls_visibility() -> None:
     registry = WebModuleRegistry(
         (
@@ -120,7 +192,7 @@ def test_capability_projection_only_controls_visibility() -> None:
     ) == ("home.activity", "admin.shell")
 
     # The registry continues to resolve the protected module even when it is not
-    # visible.  Server/API authorization remains an independent requirement.
+    # visible. Server/API authorization remains an independent requirement.
     assert registry.resolve("/administration").module_id == "admin.shell"
 
 

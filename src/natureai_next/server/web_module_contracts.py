@@ -1,7 +1,7 @@
 """Explicit contracts for independently mounted Fieldora web modules.
 
 The current web client contains compatibility wiring that crosses feature
-boundaries.  This module provides a deliberately small, framework-independent
+boundaries. This module provides a deliberately small, framework-independent
 contract that can be used while those features are migrated one at a time.
 
 It has no browser or web-framework imports so release tooling and tests can
@@ -28,6 +28,8 @@ class WebModuleSpec:
     capability: str | None = None
     owns_actions: tuple[str, ...] = ()
     dependencies: tuple[str, ...] = ()
+    provides_contracts: tuple[str, ...] = ()
+    requires_contracts: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         module_id = self.module_id.strip()
@@ -35,7 +37,17 @@ class WebModuleSpec:
         label = self.label.strip()
         capability = self.capability.strip() if self.capability else None
         actions = tuple(_normalize_token(value, "action") for value in self.owns_actions)
-        dependencies = tuple(_normalize_token(value, "dependency") for value in self.dependencies)
+        dependencies = tuple(
+            _normalize_token(value, "dependency") for value in self.dependencies
+        )
+        provided = tuple(
+            _normalize_token(value, "provided contract")
+            for value in self.provides_contracts
+        )
+        required = tuple(
+            _normalize_token(value, "required contract")
+            for value in self.requires_contracts
+        )
 
         if not module_id:
             raise WebModuleContractError("module_id is required")
@@ -55,8 +67,21 @@ class WebModuleSpec:
             raise WebModuleContractError(
                 f"module {module_id!r} declares duplicate dependencies"
             )
+        if len(set(provided)) != len(provided):
+            raise WebModuleContractError(
+                f"module {module_id!r} declares duplicate provided contracts"
+            )
+        if len(set(required)) != len(required):
+            raise WebModuleContractError(
+                f"module {module_id!r} declares duplicate required contracts"
+            )
         if module_id in dependencies:
             raise WebModuleContractError(f"module {module_id!r} cannot depend on itself")
+        overlap = set(provided).intersection(required)
+        if overlap:
+            raise WebModuleContractError(
+                f"module {module_id!r} cannot require contracts it provides: {sorted(overlap)!r}"
+            )
 
         object.__setattr__(self, "module_id", module_id)
         object.__setattr__(self, "route", route)
@@ -64,6 +89,8 @@ class WebModuleSpec:
         object.__setattr__(self, "capability", capability)
         object.__setattr__(self, "owns_actions", actions)
         object.__setattr__(self, "dependencies", dependencies)
+        object.__setattr__(self, "provides_contracts", provided)
+        object.__setattr__(self, "requires_contracts", required)
 
 
 def _normalize_token(value: str, kind: str) -> str:
@@ -89,6 +116,7 @@ class WebModuleRegistry:
         self._specs: dict[str, WebModuleSpec] = {}
         self._routes: dict[str, str] = {}
         self._actions: dict[str, str] = {}
+        self._contracts: dict[str, str] = {}
         for spec in specs:
             self.register(spec)
 
@@ -108,12 +136,22 @@ class WebModuleRegistry:
                 raise WebModuleContractError(
                     f"action {action!r} is already owned by module {owner!r}"
                 )
+        for contract in spec.provides_contracts:
+            if contract in self._contracts:
+                owner = self._contracts[contract]
+                raise WebModuleContractError(
+                    f"contract {contract!r} is already provided by module {owner!r}"
+                )
         self._specs[spec.module_id] = spec
         self._routes[spec.route] = spec.module_id
         for action in spec.owns_actions:
             self._actions[action] = spec.module_id
+        for contract in spec.provides_contracts:
+            self._contracts[contract] = spec.module_id
 
     def validate_dependencies(self) -> None:
+        """Validate only true implementation/load-order module dependencies."""
+
         missing: dict[str, list[str]] = {}
         for spec in self._specs.values():
             unknown = [dep for dep in spec.dependencies if dep not in self._specs]
@@ -121,6 +159,21 @@ class WebModuleRegistry:
                 missing[spec.module_id] = unknown
         if missing:
             raise WebModuleContractError(f"unknown module dependencies: {missing!r}")
+
+    def validate_contracts(self) -> None:
+        """Require consumers to bind to a public contract provider."""
+
+        missing: dict[str, list[str]] = {}
+        for spec in self._specs.values():
+            unknown = [
+                contract
+                for contract in spec.requires_contracts
+                if contract not in self._contracts
+            ]
+            if unknown:
+                missing[spec.module_id] = unknown
+        if missing:
+            raise WebModuleContractError(f"missing contract providers: {missing!r}")
 
     def module(self, module_id: str) -> WebModuleSpec:
         try:
@@ -134,6 +187,10 @@ class WebModuleRegistry:
 
     def action_owner(self, action: str) -> WebModuleSpec | None:
         module_id = self._actions.get(action.strip())
+        return self._specs.get(module_id) if module_id else None
+
+    def contract_provider(self, contract: str) -> WebModuleSpec | None:
+        module_id = self._contracts.get(contract.strip())
         return self._specs.get(module_id) if module_id else None
 
     def visible_specs(self, capabilities: Iterable[str]) -> tuple[WebModuleSpec, ...]:
@@ -181,6 +238,7 @@ FOUNDATION_WEB_MODULES: tuple[WebModuleSpec, ...] = (
             "projects.status.change",
             "projects.archive",
         ),
+        provides_contracts=("projects.list.read", "projects.context.select"),
     ),
     WebModuleSpec(
         "portfolio",
@@ -191,7 +249,7 @@ FOUNDATION_WEB_MODULES: tuple[WebModuleSpec, ...] = (
             "portfolio.scope.select",
             "portfolio.project.open",
         ),
-        dependencies=("projects.core",),
+        requires_contracts=("projects.list.read", "projects.context.select"),
     ),
     WebModuleSpec(
         "capacity",
@@ -230,4 +288,5 @@ FOUNDATION_WEB_MODULES: tuple[WebModuleSpec, ...] = (
 def foundation_registry() -> WebModuleRegistry:
     registry = WebModuleRegistry(FOUNDATION_WEB_MODULES)
     registry.validate_dependencies()
+    registry.validate_contracts()
     return registry

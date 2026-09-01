@@ -34,6 +34,19 @@ def test_project_core_adapter_is_idempotent_and_owns_project_interactions() -> N
     assert "showPage=" not in script
 
 
+def test_project_context_rejects_ids_outside_the_accessible_project_list() -> None:
+    patched = patch_project_core_module_response(
+        "/app.js", ApiResponse(200, b"", "text/javascript; charset=utf-8")
+    )
+    script = patched.body.decode("utf-8")
+
+    assert 'const requested=String(id||""),project=requested?projectById(requested):null;' in script
+    assert 'if(requested&&!project){status("That project is no longer accessible.",true);return false}' in script
+    assert "state.projectId=requested;state.workSelection=null;" in script
+    assert "renderTree();renderInspector(project);selectInspector(\"properties\");" in script
+    assert "return true;" in script
+
+
 def test_final_shell_removes_legacy_project_behavior_but_keeps_cockpit_markup() -> None:
     base = ApiResponse(200, b"const baseApp=true;", "text/javascript; charset=utf-8")
     owned = patch_project_core_module_response("/app.js", base)

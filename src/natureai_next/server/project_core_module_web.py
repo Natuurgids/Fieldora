@@ -39,7 +39,7 @@ _PROJECT_CORE_MODULE_PATCH = bytes(
   if(state.scope==="mine"&&typeof me!=="undefined"&&me?.identity_id){
    const assigned=new Set(state.tasks.filter(task=>task.assignee_id===me.identity_id||task.owner_id===me.identity_id).map(task=>task.project_id));
    const mine=visible.filter(project=>project.owner_id===me.identity_id||project.created_by_id===me.identity_id||project.manager_id===me.identity_id||assigned.has(project.id));
-   if(mine.length)visible=mine;
+   visible=mine;
   }
   return needle?visible.filter(project=>JSON.stringify(project).toLowerCase().includes(needle)):visible;
  }

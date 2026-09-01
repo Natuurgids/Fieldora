@@ -39,7 +39,7 @@ def test_manifest_exposes_distinct_project_and_portfolio_owners() -> None:
         "projects.status.change",
     } <= project_actions
     assert by_id["portfolio"]["route"] == "/portfolio"
-    assert by_id["portfolio"]["dependencies"] == ["projects.core"]
+    assert by_id["portfolio"]["dependencies"] == []
     assert by_id["portfolio"]["owns_actions"] == [
         "portfolio.view.select",
         "portfolio.scope.select",

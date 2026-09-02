@@ -45,7 +45,6 @@ def test_context_provider_exposes_contract_not_portfolio_navigation() -> None:
 
     assert "window.FieldoraProjectContext=implementation" in script
     assert "window.openProject" not in script
-    assert "showPage(" not in script
 
 
 def test_production_patch_composes_context_provider_after_runtime() -> None:

@@ -27,10 +27,10 @@ def test_project_list_provider_requires_contract_runtime_and_is_idempotent() -> 
     assert "contracts.register(contractName,moduleId,implementation)" in script
     assert "Object.freeze(state.items.map" in script
     assert "fieldora:project-list-changed" in script
-    assert "window.FieldoraProjectList" in script
+    assert "window.FieldoraProjectList=implementation" in script
 
 
-def test_project_list_provider_owns_refresh_without_exposing_mutable_replace() -> None:
+def test_project_list_provider_owns_and_deduplicates_refresh() -> None:
     shell = patch_modular_shell_response(
         "/app.js", ApiResponse(200, b"", "text/javascript; charset=utf-8")
     )
@@ -39,8 +39,12 @@ def test_project_list_provider_owns_refresh_without_exposing_mutable_replace() -
         "utf-8"
     )
 
+    assert "state={items:[],loaded:false,pending:null}" in script
+    assert "if(state.pending)return state.pending" in script
     assert "await api('/api/v1/projects',{purpose:'research'})" in script
-    assert "const implementation=Object.freeze({items:snapshot,refresh})" in script
+    assert "state.loaded=true" in script
+    assert "const implementation=Object.freeze({items:snapshot,refresh,ready:()=>state.loaded})" in script
+    assert "state.pending===pending" in script
     assert "replace:" not in script
 
 

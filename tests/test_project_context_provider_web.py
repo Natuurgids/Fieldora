@@ -27,10 +27,33 @@ def test_context_provider_requires_project_owner_and_contract_runtime() -> None:
     assert patched.body == patched_again.body
     script = patched.body.decode("utf-8")
     assert script.count("WEB-PROJECT-CONTEXT-PROVIDER") == 1
+    assert script.count("WEB-PROJECT-TOOLBAR-EXTENSION-PROVIDER") == 1
     assert 'contractName="projects.context.select"' in script
-    assert "contracts.register(contractName,moduleId,implementation)" in script
+    assert 'toolbarContractName="projects.toolbar.extend"' in script
+    assert "contracts.register(name,moduleId,value)" in script
     assert "projects.selectProject(id)" in script
     assert "owner()?.currentProject?.()" in script
+
+
+def test_projects_toolbar_extension_provider_owns_cockpit_dom_boundary() -> None:
+    project = patch_project_core_module_response(
+        "/app.js", ApiResponse(200, b"", "text/javascript; charset=utf-8")
+    )
+    shell = patch_modular_shell_response("/app.js", project)
+    contracts = patch_runtime_contracts_response("/app.js", shell)
+    script = patch_project_context_provider_response("/app.js", contracts).body.decode(
+        "utf-8"
+    )
+
+    assert 'querySelector(".cockpit-center .cockpit-toolbar")' in script
+    assert "const toolbarImplementation=Object.freeze" in script
+    assert "upsert:spec=>" in script
+    assert "setEnabled:(key,enabled)=>" in script
+    assert "remove:key=>" in script
+    assert 'data-fieldora-extension-key' in script
+    assert "fieldora:module-mount" in script
+    assert "fieldora:module-unmount" in script
+    assert "window.FieldoraProjectToolbar" not in script
 
 
 def test_context_provider_exposes_contract_not_portfolio_navigation() -> None:
@@ -58,6 +81,7 @@ def test_production_patch_composes_context_provider_after_runtime() -> None:
     assert script.count("WEB-MODULE-CONTRACT-RUNTIME") == 1
     assert script.count("WEB-PROJECT-LIST-PROVIDER") == 1
     assert script.count("WEB-PROJECT-CONTEXT-PROVIDER") == 1
+    assert script.count("WEB-PROJECT-TOOLBAR-EXTENSION-PROVIDER") == 1
     assert script.rfind("WEB-PROJECT-CONTEXT-PROVIDER") > script.rfind(
         "WEB-MODULE-CONTRACT-RUNTIME"
     )

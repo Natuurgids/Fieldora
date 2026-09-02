@@ -34,6 +34,20 @@ def test_project_core_adapter_is_idempotent_and_owns_project_interactions() -> N
     assert "showPage=" not in script
 
 
+def test_project_core_consumes_project_list_contract_and_waits_for_provider() -> None:
+    patched = patch_project_core_module_response(
+        "/app.js", ApiResponse(200, b"", "text/javascript; charset=utf-8")
+    )
+    script = patched.body.decode("utf-8")
+
+    assert 'window.FieldoraModuleContracts?.resolve?.("projects.list.read")' in script
+    assert "const projectItems=()=>projectList()?.items?.()||[];" in script
+    assert "await list.refresh();renderTree();" in script
+    assert 'event.detail?.contract==="projects.list.read"&&state.mounted' in script
+    assert "fieldora:project-list-changed" in script
+    assert "Array.isArray(projects)" not in script
+
+
 def test_project_context_rejects_ids_outside_the_accessible_project_list() -> None:
     patched = patch_project_core_module_response(
         "/app.js", ApiResponse(200, b"", "text/javascript; charset=utf-8")

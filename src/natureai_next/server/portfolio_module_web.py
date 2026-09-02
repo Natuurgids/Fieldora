@@ -1,15 +1,8 @@
 """Module-owned Portfolio browser adapter for the managed Fieldora web client.
 
-The Portfolio surface is being migrated out of the shared navigation
-compatibility patch.  This adapter owns Portfolio view switching, scope refresh
-and project-open interaction without replacing global feature functions.
-
-During migration it may call the existing ``loadPortfolio`` renderer as an
-integration dependency so the authoritative server/API flow and established
-datasets remain unchanged.  The adapter then renders the selected Portfolio
-representation from those published datasets.  Once the underlying Portfolio
-API/view-model boundary is extracted, that transitional dependency can be
-removed without changing the shell contract.
+The Portfolio surface is migrated out of shared navigation compatibility wiring.
+This adapter owns Portfolio view switching, scope refresh, work-data loading and
+project-open interaction while consuming Projects only through public contracts.
 """
 
 from __future__ import annotations
@@ -58,7 +51,21 @@ _PORTFOLIO_MODULE_PATCH = bytes(
  function render(){
   const data=snapshot(),list=data.list;if(!list)return;
   list.dataset.renderedView=state.view;
-  if(state.view==="hierarchy")return;
+  if(state.view==="hierarchy"){
+   const rows=[];
+   data.visibleProjects.forEach(project=>{
+    rows.push(row(project,"project","Project",project.status||""));
+    data.phases.filter(phase=>phase.project_id===project.id).forEach(phase=>{
+     rows.push(row(phase,"phase","↳ Phase",phase.status||""));
+     const roots=data.tasks.filter(task=>task.project_id===project.id&&task.phase_id===phase.id&&!task.parent_task_id);
+     roots.forEach(task=>{
+      rows.push(row(task,"task",`↳ ${task.assignee_id||"Task"}`,task.status||""));
+      data.tasks.filter(child=>child.parent_task_id===task.id).forEach(child=>rows.push(row(child,"task",`↳ ${child.assignee_id||"Subtask"}`,child.status||"")));
+     });
+    });
+   });
+   list.innerHTML=rows.join("")||'<p class="empty">No accessible work.</p>';return;
+  }
   if(state.view==="kanban"){
    const statuses=[...new Set(data.tasks.map(task=>task.status||"unspecified"))];
    list.innerHTML=statuses.length?`<div class="grid portfolio-board">${statuses.map(statusValue=>{const matching=data.tasks.filter(task=>(task.status||"unspecified")===statusValue);return `<section class="card"><h3>${escPortfolio(statusValue)}</h3>${matching.map(task=>row(task,"task",task.assignee_id||"Unassigned",task.sprint_id||"")).join("")||'<p class="empty">No tasks.</p>'}</section>`}).join("")}</div>`:'<p class="empty">No tasks available for this scope.</p>';
@@ -82,11 +89,19 @@ _PORTFOLIO_MODULE_PATCH = bytes(
    list.innerHTML=data.visibleProjects.length?data.visibleProjects.map(project=>{const projectTasks=data.tasks.filter(task=>task.project_id===project.id),planned=projectTasks.reduce((sum,task)=>sum+Number(task.manual_estimate||0),0),realized=projectTasks.reduce((sum,task)=>sum+Number(task.realized||0),0),budget=project.budget??project.budget_amount??project.planned_budget,budgetText=budget==null?"Budget not recorded":`Budget ${budget}`;return `<article class="card" data-portfolio-id="${escPortfolio(project.id)}" data-kind="project"><h3>${escPortfolio(itemName(project))}</h3><p>${escPortfolio(budgetText)}</p><p>${planned} h planned · ${realized} h realized</p></article>`}).join(""):'<p class="empty">No accessible projects.</p>';
   }
  }
+ async function loadWorkData(){
+  const [phases,tasks,sprints]=await Promise.all([
+   api("/api/v1/phases",{purpose:"research"}),
+   api("/api/v1/tasks",{purpose:"research"}),
+   api("/api/v1/sprints",{purpose:"research"})
+  ]),list=q("portfolio-list");
+  if(!list)return;
+  list.dataset.phases=JSON.stringify(phases.items||[]);list.dataset.tasks=JSON.stringify(tasks.items||[]);list.dataset.sprints=JSON.stringify(sprints.items||[]);
+ }
  async function refresh(){
   try{
    const list=projectList();if(list?.refresh)await list.refresh();
-   if(typeof window.loadPortfolio==="function")await window.loadPortfolio();
-   render();selectTabs();status("");
+   await loadWorkData();render();selectTabs();status("");
   }catch(error){status(error?.message||"Portfolio could not be loaded.",true);document.dispatchEvent(new CustomEvent("fieldora:module-error",{detail:{module_id:moduleId,error:String(error?.message||error)}}))}
  }
  function openProjectFrom(target){

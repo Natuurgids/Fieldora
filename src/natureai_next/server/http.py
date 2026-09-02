@@ -42,6 +42,9 @@ from natureai_next.server.modular_shell_web import finalize_modular_shell_respon
 from natureai_next.server.navigation_web_compatibility import patch_navigation_web_response
 from natureai_next.server.offline_maps_web import patch_offline_maps_web_response
 from natureai_next.server.offline_models_web import patch_offline_models_web_response
+from natureai_next.server.project_context_provider_web import (
+    patch_project_context_provider_response,
+)
 from natureai_next.server.project_facility_workspace_web import (
     patch_project_facility_workspace_response,
 )
@@ -149,6 +152,8 @@ def patch_managed_web_response(target: str, response):
         patch_runtime_contracts_response,
         # Projects owns the accessible-list snapshot behind the declared read contract.
         patch_project_list_provider_response,
+        # Projects exposes context selection through a replaceable public contract.
+        patch_project_context_provider_response,
     ):
         response = patch(target, response)
     return response

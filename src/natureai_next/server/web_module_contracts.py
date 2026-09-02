@@ -280,8 +280,10 @@ FOUNDATION_WEB_MODULES: tuple[WebModuleSpec, ...] = (
             "research.project.open",
             "research.project.records.view",
         ),
-        dependencies=("projects.core",),
-        requires_contracts=("projects.context.select",),
+        requires_contracts=(
+            "projects.context.select",
+            "projects.toolbar.extend",
+        ),
     ),
     WebModuleSpec("knowledge.center", "/knowledge", "Knowledge & AI"),
     WebModuleSpec(

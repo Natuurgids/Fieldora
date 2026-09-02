@@ -28,18 +28,35 @@ def test_portfolio_module_patch_is_idempotent_and_lifecycle_owned() -> None:
     assert "showPage=function" not in script
 
 
-def test_portfolio_module_uses_existing_loader_only_as_transitional_adapter() -> None:
+def test_portfolio_module_uses_projects_contracts_and_keeps_loader_transitional() -> None:
     patched = patch_portfolio_module_response(
         "/app.js", ApiResponse(200, b"", "text/javascript; charset=utf-8")
     )
     script = patched.body.decode("utf-8")
 
+    assert 'resolve?.("projects.list.read")' in script
+    assert 'resolve?.("projects.context.select")' in script
+    assert "allProjects=projectList()?.items?.()||[]" in script
+    assert "if(list?.refresh)await list.refresh()" in script
+    assert "context.select(rowNode.dataset.portfolioId)" in script
+    assert "window.projects" not in script
+    assert "window.openProject" not in script
     assert 'typeof window.loadPortfolio==="function"' in script
     assert "await window.loadPortfolio()" in script
     assert "window.loadPortfolio=async function" not in script
     assert "data-portfolio-view" in script
     assert 'q("portfolio-scope")' in script
-    assert "window.openProject" in script
+
+
+def test_portfolio_retries_list_refresh_when_contract_registers_late() -> None:
+    patched = patch_portfolio_module_response(
+        "/app.js", ApiResponse(200, b"", "text/javascript; charset=utf-8")
+    )
+    script = patched.body.decode("utf-8")
+
+    assert "fieldora:contract-registered" in script
+    assert 'event.detail?.contract==="projects.list.read"&&state.mounted' in script
+    assert "fieldora:project-list-changed" in script
 
 
 def test_final_composition_removes_shared_portfolio_override_but_keeps_other_legacy_features() -> None:

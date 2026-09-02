@@ -19,6 +19,7 @@ _PROJECT_LIFECYCLE_MODULE_PATCH = bytes(
  if(window.__fieldoraProjectLifecycleModuleWired)return;window.__fieldoraProjectLifecycleModuleWired=true;
  const moduleId="projects.core",q=id=>document.getElementById(id);
  const state={mounted:false,controller:null,projectId:"",editingId:"",canEdit:false};
+ const projectContext=()=>window.FieldoraModuleContracts?.resolve?.("projects.context.select")||null;
  const projectItems=()=>Array.isArray(projects)?projects:[];
  const projectById=id=>projectItems().find(project=>String(project.id)===String(id))||null;
  function emitError(error,fallback){const text=error?.message||fallback;document.dispatchEvent(new CustomEvent("fieldora:module-error",{detail:{module_id:moduleId,error:String(text)}}))}
@@ -45,7 +46,7 @@ _PROJECT_LIFECYCLE_MODULE_PATCH = bytes(
  }
  async function reloadProjects(focusId=state.editingId||state.projectId){
   const result=await api("/api/v1/projects",{purpose:"research"});projects=result.items||[];if(typeof projectOptions==="function")projectOptions();
-  if(focusId&&window.FieldoraProjects?.selectProject)await window.FieldoraProjects.selectProject(focusId);
+  const context=projectContext();if(focusId&&context?.select)await context.select(focusId);
   return projectById(focusId);
  }
  async function conflict(){const current=await reloadProjects();if(current)fill(current);if(editor())editor().hidden=false;message("Project changed on the server. Latest values reloaded; review them before saving again.",true)}

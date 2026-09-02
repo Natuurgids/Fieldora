@@ -19,8 +19,9 @@ _PROJECT_CAPACITY_INTEGRATION_PATCH = bytes(
  if(window.__fieldoraProjectCapacityIntegrationWired)return;window.__fieldoraProjectCapacityIntegrationWired=true;
  const ownerModule="capacity",projectModule="projects.core",q=id=>document.getElementById(id);
  const state={projectId:"",projectMounted:false};
+ const projectContext=()=>window.FieldoraModuleContracts?.resolve?.("projects.context.select")||null;
  function report(error,fallback){const text=error?.message||fallback;document.dispatchEvent(new CustomEvent("fieldora:module-error",{detail:{module_id:ownerModule,error:String(text)}}))}
- function currentProject(){return state.projectId||window.FieldoraProjects?.currentProject?.()||""}
+ function currentProject(){return projectContext()?.current?.()||state.projectId||""}
  function updateEntry(){const button=q("project-open-capacity");if(button)button.disabled=!currentProject()}
  function removeEntry(){q("project-open-capacity")?.remove()}
  function ensureEntry(){
@@ -35,9 +36,10 @@ _PROJECT_CAPACITY_INTEGRATION_PATCH = bytes(
   try{const target=window.FieldoraModules?.navigate?.("/capacity","project-capacity-integration","push");if(!target)throw new Error("Capacity workspace is unavailable.");await applyCapacityProject()}
   catch(error){report(error,"Capacity could not be opened for this project.")}
  }
- function mountProjectEntry(){state.projectMounted=true;state.projectId=window.FieldoraProjects?.currentProject?.()||state.projectId;ensureEntry()}
+ function mountProjectEntry(){state.projectMounted=true;state.projectId=currentProject()||state.projectId;ensureEntry()}
  function unmountProjectEntry(){state.projectMounted=false;removeEntry()}
  document.addEventListener("fieldora:project-context-changed",event=>{state.projectId=event.detail?.project_id||"";if(state.projectMounted)ensureEntry();updateEntry()});
+ document.addEventListener("fieldora:contract-registered",event=>{if(event.detail?.contract==="projects.context.select"){state.projectId=currentProject();updateEntry()}});
  document.addEventListener("fieldora:module-mount",event=>{const id=event.detail?.module?.module_id;if(id===projectModule)mountProjectEntry();else if(id===ownerModule)applyCapacityProject().catch(error=>report(error,"Capacity project context could not be applied."))});
  document.addEventListener("fieldora:module-unmount",event=>{if(event.detail?.module?.module_id===projectModule)unmountProjectEntry()});
  window.FieldoraProjectCapacityIntegration=Object.freeze({openSelectedProject,applyCapacityProject,currentProject});

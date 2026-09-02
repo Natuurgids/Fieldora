@@ -43,7 +43,7 @@ def test_capacity_module_is_idempotent_and_reads_governed_project_allocations() 
     assert "obligations" not in script
 
 
-def test_project_capacity_adapter_uses_only_public_module_contracts() -> None:
+def test_project_capacity_adapter_reads_project_context_through_runtime_contract() -> None:
     original = ApiResponse(200, b"const baseApp=true;", "text/javascript; charset=utf-8")
     patched = patch_project_capacity_integration_response("/app.js", original)
     again = patch_project_capacity_integration_response("/app.js", patched)
@@ -56,7 +56,10 @@ def test_project_capacity_adapter_uses_only_public_module_contracts() -> None:
     assert 'button.id="project-open-capacity"' in script
     assert 'button.dataset.fieldoraAction="capacity.project.open"' in script
     assert 'navigate?.("/capacity","project-capacity-integration","push")' in script
-    assert "window.FieldoraProjects?.currentProject?.()" in script
+    assert 'resolve?.("projects.context.select")' in script
+    assert "projectContext()?.current?.()" in script
+    assert 'event.detail?.contract==="projects.context.select"' in script
+    assert "window.FieldoraProjects" not in script
     assert "window.FieldoraCapacity" in script
     assert "capacity-project" not in script
     assert "loadCapacity" not in script

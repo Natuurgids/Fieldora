@@ -22,6 +22,7 @@ def test_capacity_owns_project_integration_actions() -> None:
     assert allocations is capacity
     assert capacity.module_id == "capacity"
     assert capacity.dependencies == ("projects.core",)
+    assert capacity.requires_contracts == ("projects.context.select",)
 
 
 def test_capacity_module_is_idempotent_and_reads_governed_project_allocations() -> None:

@@ -51,6 +51,16 @@ def test_lifecycle_reselection_uses_project_context_contract() -> None:
     assert "window.FieldoraProjects?.selectProject" not in script
 
 
+def test_lifecycle_mount_reads_current_project_through_context_contract() -> None:
+    patched = patch_project_lifecycle_module_response(
+        "/app.js", ApiResponse(200, b"", "text/javascript; charset=utf-8")
+    )
+    script = patched.body.decode("utf-8")
+
+    assert 'state.projectId=projectContext()?.current?.()||""' in script
+    assert "window.FieldoraProjects?.currentProject" not in script
+
+
 def test_lifecycle_adapter_keeps_revision_conflict_and_visible_validation() -> None:
     patched = patch_project_lifecycle_module_response(
         "/app.js", ApiResponse(200, b"", "text/javascript; charset=utf-8")

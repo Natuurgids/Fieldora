@@ -1,8 +1,8 @@
 """Bounded Projects-to-Research browser integration for managed web.
 
-Research owns the cross-module entry point. Projects/Core only publishes project
-context; this adapter consumes that public context and hands the selected Project
-to the Research workspace through its public browser contract.
+Research owns the cross-module entry point. Projects publishes project context and
+a replaceable cockpit-extension contract; this adapter consumes those contracts
+and hands the selected Project to Research without owning Projects DOM details.
 """
 
 from __future__ import annotations
@@ -17,21 +17,19 @@ _PROJECT_RESEARCH_INTEGRATION_PATCH = bytes(
 /* WEB-PROJECT-RESEARCH-INTEGRATION: bounded Projects -> Research navigation. */
 (()=>{
  if(window.__fieldoraProjectResearchIntegrationWired)return;window.__fieldoraProjectResearchIntegrationWired=true;
- const ownerModule="research.dossiers",projectModule="projects.core",q=id=>document.getElementById(id);
- const state={projectId:"",projectMounted:false};
+ const ownerModule="research.dossiers",entryKey="research.project.open";
+ const state={projectId:""};
  const projectContext=()=>window.FieldoraModuleContracts?.resolve?.("projects.context.select")||null;
+ const projectToolbar=()=>window.FieldoraModuleContracts?.resolve?.("projects.toolbar.extend")||null;
  function report(error,fallback){
   const text=error?.message||fallback;
   document.dispatchEvent(new CustomEvent("fieldora:module-error",{detail:{module_id:ownerModule,error:String(text)}}));
  }
  function currentProject(){return projectContext()?.current?.()||state.projectId||""}
- function updateEntry(){const button=q("project-open-research");if(button)button.disabled=!currentProject()}
- function removeEntry(){q("project-open-research")?.remove()}
+ function updateEntry(){return projectToolbar()?.setEnabled?.(entryKey,Boolean(currentProject()))??false}
  function ensureEntry(){
-  const toolbar=q("project-desktop-cockpit")?.querySelector(".cockpit-center .cockpit-toolbar");if(!toolbar)return false;
-  let button=q("project-open-research");
-  if(!button){button=document.createElement("button");button.id="project-open-research";button.type="button";button.textContent="Open research";button.dataset.fieldoraOwnerModule=ownerModule;button.dataset.fieldoraAction="research.project.open";button.addEventListener("click",openSelectedProject);toolbar.appendChild(button)}
-  updateEntry();return true;
+  const toolbar=projectToolbar();if(!toolbar?.upsert)return false;
+  toolbar.upsert({key:entryKey,label:"Open research",ownerModule,action:"research.project.open",enabled:Boolean(currentProject()),activate:openSelectedProject});return true;
  }
  async function applyResearchProject(){
   const pid=currentProject();if(!pid)return false;
@@ -47,14 +45,11 @@ _PROJECT_RESEARCH_INTEGRATION_PATCH = bytes(
    await applyResearchProject();
   }catch(error){report(error,"Research could not be opened for this project.")}
  }
- function mountProjectEntry(){state.projectMounted=true;state.projectId=currentProject()||state.projectId;ensureEntry()}
- function unmountProjectEntry(){state.projectMounted=false;removeEntry()}
- document.addEventListener("fieldora:project-context-changed",event=>{state.projectId=event.detail?.project_id||"";if(state.projectMounted)ensureEntry();updateEntry()});
- document.addEventListener("fieldora:contract-registered",event=>{if(event.detail?.contract==="projects.context.select"){state.projectId=currentProject();updateEntry()}});
- document.addEventListener("fieldora:module-mount",event=>{const id=event.detail?.module?.module_id;if(id===projectModule)mountProjectEntry();else if(id===ownerModule)applyResearchProject().catch(error=>report(error,"Research project context could not be applied."))});
- document.addEventListener("fieldora:module-unmount",event=>{if(event.detail?.module?.module_id===projectModule)unmountProjectEntry()});
+ document.addEventListener("fieldora:project-context-changed",event=>{state.projectId=event.detail?.project_id||"";ensureEntry();updateEntry()});
+ document.addEventListener("fieldora:contract-registered",event=>{const name=event.detail?.contract;if(name==="projects.context.select"){state.projectId=currentProject();updateEntry()}else if(name==="projects.toolbar.extend")ensureEntry()});
+ document.addEventListener("fieldora:module-mount",event=>{if(event.detail?.module?.module_id===ownerModule)applyResearchProject().catch(error=>report(error,"Research project context could not be applied."))});
  window.FieldoraProjectResearchIntegration=Object.freeze({openSelectedProject,applyResearchProject,currentProject});
- const active=window.FieldoraModules?.current?.()?.module_id;if(active===projectModule)mountProjectEntry();else if(active===ownerModule)applyResearchProject().catch(()=>{});
+ ensureEntry();if(window.FieldoraModules?.current?.()?.module_id===ownerModule)applyResearchProject().catch(()=>{});
 })();
 """,
     "utf-8",

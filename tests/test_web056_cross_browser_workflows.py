@@ -16,9 +16,19 @@ from natureai_next.server.browser_functionality_web import (
 )
 from natureai_next.server.contract_web_compatibility import patch_contract_web_response
 from natureai_next.server.facility_web_compatibility import patch_facility_web_response
+from natureai_next.server.modular_shell_web import patch_modular_shell_response
 from natureai_next.server.navigation_web_compatibility import patch_navigation_web_response
+from natureai_next.server.project_creation_module_web import (
+    patch_project_creation_module_response,
+)
+from natureai_next.server.project_list_provider_web import (
+    patch_project_list_provider_response,
+)
 from natureai_next.server.science_workflow_web import patch_science_workflow_web_response
 from natureai_next.server.web_compatibility import patch_web_response
+from natureai_next.server.web_module_contract_runtime import (
+    patch_runtime_contracts_response,
+)
 
 
 @contextlib.contextmanager
@@ -37,6 +47,10 @@ def _web_fixture(tmp_path: Path):
         patch_navigation_web_response,
         patch_browser_functionality_response,
         patch_science_workflow_web_response,
+        patch_project_creation_module_response,
+        patch_modular_shell_response,
+        patch_runtime_contracts_response,
+        patch_project_list_provider_response,
     ):
         response = patch("/app.js", response)
     (tmp_path / "app.js").write_bytes(response.body)
@@ -223,12 +237,16 @@ def test_web056_complete_create_import_link_edit_review_workflow(
         )
         page.goto(url)
         page.wait_for_selector("#workspace:not([hidden])")
+        assert page.evaluate(
+            "Boolean(window.FieldoraModuleContracts?.resolve?.('projects.list.read'))"
+        )
+        assert page.locator("#portfolio-new-project").count() == 0
 
         page.locator('.nav[data-page="projects"]').click()
-        page.locator("#portfolio-new-project").click()
-        page.locator("#portfolio-project-name").fill("Cross-browser Survey")
-        page.locator("#portfolio-project-save").click()
-        page.wait_for_selector("#portfolio-project-editor", state="hidden")
+        page.locator("#project-core-create").click()
+        page.locator("#project-core-create-name").fill("Cross-browser Survey")
+        page.locator("#project-core-create-save").click()
+        page.wait_for_selector("#project-core-create-editor", state="hidden")
         created = next(
             project for project in backend.projects if project["name"] == "Cross-browser Survey"
         )

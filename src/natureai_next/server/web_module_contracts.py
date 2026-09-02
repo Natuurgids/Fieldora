@@ -264,6 +264,7 @@ FOUNDATION_WEB_MODULES: tuple[WebModuleSpec, ...] = (
             "capacity.obligation.create",
         ),
         dependencies=("projects.core",),
+        requires_contracts=("projects.context.select",),
     ),
     WebModuleSpec(
         "research.dossiers",

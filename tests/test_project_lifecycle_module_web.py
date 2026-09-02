@@ -69,9 +69,11 @@ def test_lifecycle_project_list_uses_read_contract() -> None:
 
     assert 'resolve?.("projects.list.read")' in script
     assert "const projectItems=()=>projectList()?.items?.()||[]" in script
-    assert "const items=await list.refresh()" in script
+    assert "await list.refresh()" in script
     assert 'api("/api/v1/projects",{purpose:"research"})' not in script
     assert "Array.isArray(projects)?projects:[]" not in script
+    assert "projects=Array.from(" not in script
+    assert "projectOptions()" not in script
 
 
 def test_lifecycle_adapter_keeps_revision_conflict_and_visible_validation() -> None:

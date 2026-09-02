@@ -21,7 +21,8 @@ _PROJECT_CORE_MODULE_PATCH = bytes(
  const moduleId="projects.core",q=id=>document.getElementById(id);
  const state={mounted:false,controller:null,projectId:"",centerView:"work",scope:"all",evidence:[],phases:[],tasks:[],sprints:[],allocations:[],workSelection:null};
  const escProject=value=>String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
- const projectItems=()=>Array.isArray(projects)?projects:[];
+ const projectList=()=>window.FieldoraModuleContracts?.resolve?.("projects.list.read")||null;
+ const projectItems=()=>projectList()?.items?.()||[];
  const projectById=id=>projectItems().find(project=>project.id===id)||null;
  function status(message,error=false){
   const page=q("page-projects");if(!page)return;
@@ -119,6 +120,21 @@ _PROJECT_CORE_MODULE_PATCH = bytes(
   document.dispatchEvent(new CustomEvent("fieldora:project-context-changed",{detail:{module_id:moduleId,project_id:state.projectId}}));
   return true;
  }
+ async function loadProjects(){
+  const list=projectList();if(!list){renderTree();return false}
+  try{
+   await list.refresh();renderTree();
+   const selected=projectById(state.projectId);
+   if(state.projectId&&!selected){
+    state.projectId="";state.workSelection=null;
+    if(typeof selectedProject!=="undefined")selectedProject="";
+    if(q("work-project"))q("work-project").value="";
+   }
+   if(!state.projectId&&projectItems().length)return selectProject(projectItems()[0].id);
+   renderInspector(projectById(state.projectId));
+   await Promise.all([loadWork(),loadEvidence()]);return true;
+  }catch(error){renderTree();moduleError(error,"Projects could not be loaded.");return false}
+ }
  function setCenter(view){
   state.centerView=view==="evidence"?"evidence":"work";const work=q("project-workspace-work"),evidence=q("project-workspace-evidence");
   if(work)work.hidden=state.centerView!=="work";if(evidence)evidence.hidden=state.centerView!=="evidence";
@@ -138,11 +154,13 @@ _PROJECT_CORE_MODULE_PATCH = bytes(
   q("project-tree-filter")?.addEventListener("input",renderTree,{signal});
   q("project-cockpit-tree")?.addEventListener("click",event=>{const project=event.target.closest?.("[data-project-tree]"),scope=event.target.closest?.("[data-project-scope]");if(project)selectProject(project.dataset.projectTree);else if(scope){state.scope=scope.dataset.projectScope==="mine"?"mine":"all";renderTree()}},{signal});
   q("project-desktop-cockpit")?.addEventListener("click",event=>{const center=event.target.closest?.("[data-project-center]");if(center)setCenter(center.dataset.projectCenter);else inspectWorkItem(event.target)},{signal});
-  renderTree();setCenter(state.centerView);if(!state.projectId&&projectItems().length)selectProject(projectItems()[0].id);else{renderInspector(projectById(state.projectId));loadWork();loadEvidence()}
+  renderTree();setCenter(state.centerView);loadProjects();
  }
  function unmount(){if(!state.mounted)return;state.controller?.abort();state.controller=null;state.mounted=false;const legacy=q("portfolio-list")?.closest(".card");if(legacy&&"projectCoreLegacyHidden" in legacy.dataset){legacy.hidden=legacy.dataset.projectCoreLegacyHidden==="true";delete legacy.dataset.projectCoreLegacyHidden}status("")}
  document.addEventListener("fieldora:module-mount",event=>{if(event.detail?.module?.module_id===moduleId)mount()});
  document.addEventListener("fieldora:module-unmount",event=>{if(event.detail?.module?.module_id===moduleId)unmount()});
+ document.addEventListener("fieldora:contract-registered",event=>{if(event.detail?.contract==="projects.list.read"&&state.mounted)loadProjects()});
+ document.addEventListener("fieldora:project-list-changed",()=>{if(state.mounted)renderTree()});
  document.addEventListener("fieldora:project-work-changed",event=>{if(event.detail?.project_id===state.projectId)loadWork()});
  document.addEventListener("fieldora:project-evidence-changed",event=>{if(event.detail?.project_id===state.projectId)loadEvidence()});
  window.FieldoraProjects=Object.freeze({mount,unmount,selectProject,setCenter,refreshWork:loadWork,refreshEvidence:loadEvidence,currentProject:()=>state.projectId,currentView:()=>state.centerView});

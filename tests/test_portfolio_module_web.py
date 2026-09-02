@@ -28,7 +28,7 @@ def test_portfolio_module_patch_is_idempotent_and_lifecycle_owned() -> None:
     assert "showPage=function" not in script
 
 
-def test_portfolio_module_uses_projects_contracts_and_keeps_loader_transitional() -> None:
+def test_portfolio_module_uses_projects_contracts_and_owns_work_data_loading() -> None:
     patched = patch_portfolio_module_response(
         "/app.js", ApiResponse(200, b"", "text/javascript; charset=utf-8")
     )
@@ -41,9 +41,11 @@ def test_portfolio_module_uses_projects_contracts_and_keeps_loader_transitional(
     assert "context.select(rowNode.dataset.portfolioId)" in script
     assert "window.projects" not in script
     assert "window.openProject" not in script
-    assert 'typeof window.loadPortfolio==="function"' in script
-    assert "await window.loadPortfolio()" in script
-    assert "window.loadPortfolio=async function" not in script
+    assert "window.loadPortfolio" not in script
+    assert 'fetchItems("phases")' in script
+    assert 'fetchItems("tasks")' in script
+    assert 'fetchItems("sprints")' in script
+    assert "data-portfolio-id" in script
     assert "data-portfolio-view" in script
     assert 'q("portfolio-scope")' in script
 

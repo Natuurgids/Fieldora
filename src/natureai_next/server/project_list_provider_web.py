@@ -13,16 +13,21 @@ _PROJECT_LIST_PROVIDER_PATCH = bytes(
 (()=>{
  if(window.__fieldoraProjectListProviderWired)return;window.__fieldoraProjectListProviderWired=true;
  const moduleId="projects.core",contractName="projects.list.read";
- const state={items:[]};
+ const state={items:[],loaded:false,pending:null};
  const snapshot=()=>Object.freeze(state.items.map(item=>Object.freeze({...item})));
  async function refresh(){
-  const result=await api('/api/v1/projects',{purpose:'research'});
-  state.items=Array.isArray(result?.items)?result.items.map(item=>({...item})):[];
-  const items=snapshot();
-  document.dispatchEvent(new CustomEvent('fieldora:project-list-changed',{detail:{module_id:moduleId,count:items.length}}));
-  return items;
+  if(state.pending)return state.pending;
+  const pending=(async()=>{
+   const result=await api('/api/v1/projects',{purpose:'research'});
+   state.items=Array.isArray(result?.items)?result.items.map(item=>({...item})):[];state.loaded=true;
+   const items=snapshot();
+   document.dispatchEvent(new CustomEvent('fieldora:project-list-changed',{detail:{module_id:moduleId,count:items.length}}));
+   return items;
+  })();
+  state.pending=pending;
+  try{return await pending}finally{if(state.pending===pending)state.pending=null}
  }
- const implementation=Object.freeze({items:snapshot,refresh});
+ const implementation=Object.freeze({items:snapshot,refresh,ready:()=>state.loaded});
  function register(){
   const contracts=window.FieldoraModuleContracts;if(!contracts)return false;
   const current=contracts.resolve(contractName);
@@ -31,7 +36,7 @@ _PROJECT_LIST_PROVIDER_PATCH = bytes(
  }
  register();
  document.addEventListener('fieldora:contracts-ready',register,{once:true});
- window.FieldoraProjectList=Object.freeze({items:snapshot,refresh});
+ window.FieldoraProjectList=implementation;
 })();
 """,
     "utf-8",

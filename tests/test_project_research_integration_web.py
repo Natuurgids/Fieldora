@@ -19,9 +19,10 @@ def test_research_owns_project_integration_actions() -> None:
     assert records is research
     assert research.module_id == "research.dossiers"
     assert research.dependencies == ("projects.core",)
+    assert research.requires_contracts == ("projects.context.select",)
 
 
-def test_project_research_adapter_is_idempotent_and_uses_public_contracts() -> None:
+def test_project_research_adapter_reads_project_context_through_runtime_contract() -> None:
     original = ApiResponse(200, b"const baseApp=true;", "text/javascript; charset=utf-8")
     patched = patch_project_research_integration_response("/app.js", original)
     again = patch_project_research_integration_response("/app.js", patched)
@@ -35,7 +36,10 @@ def test_project_research_adapter_is_idempotent_and_uses_public_contracts() -> N
     assert 'button.id="project-open-research"' in script
     assert 'button.dataset.fieldoraAction="research.project.open"' in script
     assert 'navigate?.("/research","project-research-integration","push")' in script
-    assert "window.FieldoraProjects?.currentProject?.()" in script
+    assert 'resolve?.("projects.context.select")' in script
+    assert "projectContext()?.current?.()" in script
+    assert 'event.detail?.contract==="projects.context.select"' in script
+    assert "window.FieldoraProjects" not in script
     assert "window.FieldoraResearchRecords" in script
     assert "science-project" not in script
     assert "loadResearchDomain" not in script

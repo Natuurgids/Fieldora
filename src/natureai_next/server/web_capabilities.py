@@ -315,7 +315,12 @@ _ZERO_TRUST_WEB_PATCH = bytes(
   await refresh();
   projects=[];
   if(allowed('projects')){
-   const result=await baseApi('/api/v1/projects');projects=result.items||[];
+   const list=window.FieldoraModuleContracts?.resolve?.('projects.list.read');
+   if(list?.refresh){
+    const items=await list.refresh();projects=items.map(item=>({...item}));
+   }else{
+    const result=await baseApi('/api/v1/projects');projects=result.items||[];
+   }
   }
   projectOptions();
   if(allowed('administration')){

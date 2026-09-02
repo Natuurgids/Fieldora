@@ -57,6 +57,17 @@ def test_app_bundle_patch_turns_header_import_into_file_picker_action() -> None:
     assert patch_web_response("/app.js", patched).body == patched.body
 
 
+def test_app_bundle_patch_bridges_project_list_contract_to_legacy_selectors() -> None:
+    patched = patch_web_response(
+        "/app.js", ApiResponse(200, b"console.log('fieldora');", "text/javascript")
+    )
+
+    assert b'resolve?.("projects.list.read")' in patched.body
+    assert b"projects=Array.from(list.items()||[],item=>({...item}))" in patched.body
+    assert b"projectOptions();" in patched.body
+    assert b'addEventListener("fieldora:project-list-changed"' in patched.body
+
+
 def test_navigation_patch_wires_history_and_cross_screen_project_opening() -> None:
     original = ApiResponse(200, b"console.log('fieldora');", "text/javascript")
     patched = patch_navigation_web_response("/app.js", original)

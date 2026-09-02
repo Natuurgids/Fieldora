@@ -87,6 +87,7 @@ class _WorkflowApi:
         self.observations: list[dict[str, object]] = []
         self.uploads: dict[str, dict[str, object]] = {}
         self.mutations: list[tuple[str, str, dict[str, object], str | None]] = []
+        self._project_number = 0
         self._upload_number = 0
         self._media_number = 0
 
@@ -149,7 +150,9 @@ class _WorkflowApi:
             return self._json(route, {"items": self.projects})
         if path == "projects" and method == "POST":
             body = self._body(route)
+            self._project_number += 1
             item = {
+                "id": f"project-created-{self._project_number}",
                 **body,
                 "status": "active",
                 "owner_id": "admin-1",

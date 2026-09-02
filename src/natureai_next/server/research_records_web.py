@@ -13,6 +13,7 @@ _RESEARCH_RECORDS_PATCH = bytes(
  window.__fieldoraResearchRecordsWired=true;
  const byId=id=>document.getElementById(id);
  const html=value=>String(value??"").replace(/[&<>"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
+ const projectContext=()=>window.FieldoraModuleContracts?.resolve?.("projects.context.select")||null;
  let governedResearchRecords=[],editingResearchRecord=null,integrationProjectId="";
  const list=byId("research-domain-list"),save=byId("science-save"),recordsCard=list?.closest(".card");
  if(!list||!save||!recordsCard)return;
@@ -24,7 +25,7 @@ _RESEARCH_RECORDS_PATCH = bytes(
  }
  loadResearchDomain=async function(){
   try{
-   const project=integrationProjectId||byId("science-project")?.value||selectedProject||"";
+   const project=integrationProjectId||byId("science-project")?.value||projectContext()?.current?.()||"";
    const suffix=project?`?project_id=${encodeURIComponent(project)}`:"";
    governedResearchRecords=(await api(`/api/v1/${researchDomain}${suffix}`)).items||[];render();
   }catch(error){list.innerHTML=`<div class="empty">${html(error.message)}</div>`}

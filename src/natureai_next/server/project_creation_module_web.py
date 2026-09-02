@@ -39,7 +39,8 @@ _PROJECT_CREATION_MODULE_PATCH = bytes(
   const items=projectList?.refresh?await projectList.refresh():(await api("/api/v1/projects",{purpose:"research"})).items||[];
   projects=Array.from(items||[],item=>({...item}));
   if(typeof projectOptions==="function")projectOptions();
-  if(selectedId&&window.FieldoraProjects?.selectProject)await window.FieldoraProjects.selectProject(selectedId);
+  const projectContext=window.FieldoraModuleContracts?.resolve?.("projects.context.select");
+  if(selectedId&&projectContext?.select)await projectContext.select(selectedId);
   document.dispatchEvent(new CustomEvent("fieldora:projects-changed",{detail:{module_id:moduleId,project_id:selectedId||""}}));
  }
  async function save(){

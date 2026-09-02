@@ -28,6 +28,8 @@ _PORTFOLIO_MODULE_PATCH = bytes(
  const state={mounted:false,controller:null,view:"hierarchy"};
  const escPortfolio=value=>String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
  const itemName=item=>item?.name||item?.title||item?.label||item?.id||"Untitled";
+ const projectList=()=>window.FieldoraModuleContracts?.resolve?.("projects.list.read")||null;
+ const projectContext=()=>window.FieldoraModuleContracts?.resolve?.("projects.context.select")||null;
  function status(message,error=false){
   const page=q("page-portfolio");if(!page)return;
   let node=q("portfolio-module-status");
@@ -42,7 +44,7 @@ _PORTFOLIO_MODULE_PATCH = bytes(
  }
  function snapshot(){
   const list=q("portfolio-list"),tasks=JSON.parse(list?.dataset.tasks||"[]"),phases=JSON.parse(list?.dataset.phases||"[]"),sprints=JSON.parse(list?.dataset.sprints||"[]");
-  const scope=q("portfolio-scope")?.value||"all",allProjects=Array.isArray(window.projects)?window.projects:[];
+  const scope=q("portfolio-scope")?.value||"all",allProjects=projectList()?.items?.()||[];
   let visibleProjects=allProjects;
   if(scope==="mine"&&window.me){
    visibleProjects=allProjects.filter(project=>!project.owner_id||project.owner_id===window.me.identity_id||tasks.some(task=>task.project_id===project.id&&task.assignee_id===window.me.identity_id));
@@ -82,13 +84,15 @@ _PORTFOLIO_MODULE_PATCH = bytes(
  }
  async function refresh(){
   try{
+   const list=projectList();if(list?.refresh)await list.refresh();
    if(typeof window.loadPortfolio==="function")await window.loadPortfolio();
    render();selectTabs();status("");
   }catch(error){status(error?.message||"Portfolio could not be loaded.",true);document.dispatchEvent(new CustomEvent("fieldora:module-error",{detail:{module_id:moduleId,error:String(error?.message||error)}}))}
  }
  function openProjectFrom(target){
   const rowNode=target?.closest?.('[data-portfolio-id][data-kind="project"]');if(!rowNode)return false;
-  if(typeof window.openProject==="function")window.openProject(rowNode.dataset.portfolioId);return true;
+  const context=projectContext();if(!context?.select){status("Project context is not available.",true);return false}
+  context.select(rowNode.dataset.portfolioId);return true;
  }
  function mount(){
   if(state.mounted)return;state.mounted=true;state.controller=new AbortController();const signal=state.controller.signal;
@@ -101,6 +105,8 @@ _PORTFOLIO_MODULE_PATCH = bytes(
  function unmount(){if(!state.mounted)return;state.controller?.abort();state.controller=null;state.mounted=false;status("")}
  document.addEventListener("fieldora:module-mount",event=>{if(event.detail?.module?.module_id===moduleId)mount()});
  document.addEventListener("fieldora:module-unmount",event=>{if(event.detail?.module?.module_id===moduleId)unmount()});
+ document.addEventListener("fieldora:contract-registered",event=>{if(event.detail?.contract==="projects.list.read"&&state.mounted)refresh()});
+ document.addEventListener("fieldora:project-list-changed",()=>{if(state.mounted)render()});
  window.FieldoraPortfolio=Object.freeze({mount,unmount,refresh,currentView:()=>state.view});
  if(window.FieldoraModules?.current?.()?.module_id===moduleId)mount();
 })();

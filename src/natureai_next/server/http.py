@@ -55,6 +55,7 @@ from natureai_next.server.web_compatibility import (
     public_response,
     rewrite_public_target,
 )
+from natureai_next.server.web_module_contract_runtime import patch_runtime_contracts_response
 from natureai_next.server.workspace_language_web import patch_workspace_language_web_response
 
 
@@ -140,6 +141,9 @@ def patch_managed_web_response(target: str, response):
         # already installed the shell, it removes migrated compatibility code
         # after all append-only patches and moves initial mount to the very end.
         finalize_modular_shell_response,
+        # Runtime contract declarations must execute after the finalized shell so
+        # consumers can discover providers without depending on implementation IDs.
+        patch_runtime_contracts_response,
     ):
         response = patch(target, response)
     return response

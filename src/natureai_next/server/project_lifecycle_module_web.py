@@ -20,7 +20,8 @@ _PROJECT_LIFECYCLE_MODULE_PATCH = bytes(
  const moduleId="projects.core",q=id=>document.getElementById(id);
  const state={mounted:false,controller:null,projectId:"",editingId:"",canEdit:false};
  const projectContext=()=>window.FieldoraModuleContracts?.resolve?.("projects.context.select")||null;
- const projectItems=()=>Array.isArray(projects)?projects:[];
+ const projectList=()=>window.FieldoraModuleContracts?.resolve?.("projects.list.read")||null;
+ const projectItems=()=>projectList()?.items?.()||[];
  const projectById=id=>projectItems().find(project=>String(project.id)===String(id))||null;
  function emitError(error,fallback){const text=error?.message||fallback;document.dispatchEvent(new CustomEvent("fieldora:module-error",{detail:{module_id:moduleId,error:String(text)}}))}
  function ensureSurface(){
@@ -45,7 +46,7 @@ _PROJECT_LIFECYCLE_MODULE_PATCH = bytes(
   try{const caps=await api(`/api/v1/projects/${encodeURIComponent(state.projectId)}/capabilities`,{purpose:"research"});state.canEdit=caps?.actions?.edit===true;if(control)control.dataset.fieldoraAuthorizationHidden=state.canEdit?"false":"true";if(!state.canEdit&&editor())editor().hidden=true;return state.canEdit}catch(error){if(editor())editor().hidden=true;emitError(error,"Project permissions could not be loaded.");return false}
  }
  async function reloadProjects(focusId=state.editingId||state.projectId){
-  const result=await api("/api/v1/projects",{purpose:"research"});projects=result.items||[];if(typeof projectOptions==="function")projectOptions();
+  const list=projectList();if(!list?.refresh)throw new Error("Project list contract is unavailable.");const items=await list.refresh();projects=Array.from(items||[],item=>({...item}));if(typeof projectOptions==="function")projectOptions();
   const context=projectContext();if(focusId&&context?.select)await context.select(focusId);
   return projectById(focusId);
  }

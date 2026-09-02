@@ -238,7 +238,11 @@ FOUNDATION_WEB_MODULES: tuple[WebModuleSpec, ...] = (
             "projects.status.change",
             "projects.archive",
         ),
-        provides_contracts=("projects.list.read", "projects.context.select"),
+        provides_contracts=(
+            "projects.list.read",
+            "projects.context.select",
+            "projects.toolbar.extend",
+        ),
     ),
     WebModuleSpec(
         "portfolio",

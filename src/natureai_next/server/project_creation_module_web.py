@@ -36,7 +36,8 @@ _PROJECT_CREATION_MODULE_PATCH = bytes(
  function closeEditor(){const editor=q("project-core-create-editor");if(editor)editor.hidden=true;message("")}
  async function reloadProjects(selectedId){
   const projectList=window.FieldoraModuleContracts?.resolve?.("projects.list.read");
-  const items=projectList?.refresh?await projectList.refresh():(await api("/api/v1/projects",{purpose:"research"})).items||[];
+  if(!projectList?.refresh)throw new Error("Project list contract is unavailable.");
+  const items=await projectList.refresh();
   projects=Array.from(items||[],item=>({...item}));
   if(typeof projectOptions==="function")projectOptions();
   const projectContext=window.FieldoraModuleContracts?.resolve?.("projects.context.select");

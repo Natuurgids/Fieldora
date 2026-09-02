@@ -61,6 +61,19 @@ def test_lifecycle_mount_reads_current_project_through_context_contract() -> Non
     assert "window.FieldoraProjects?.currentProject" not in script
 
 
+def test_lifecycle_project_list_uses_read_contract() -> None:
+    patched = patch_project_lifecycle_module_response(
+        "/app.js", ApiResponse(200, b"", "text/javascript; charset=utf-8")
+    )
+    script = patched.body.decode("utf-8")
+
+    assert 'resolve?.("projects.list.read")' in script
+    assert "const projectItems=()=>projectList()?.items?.()||[]" in script
+    assert "const items=await list.refresh()" in script
+    assert 'api("/api/v1/projects",{purpose:"research"})' not in script
+    assert "Array.isArray(projects)?projects:[]" not in script
+
+
 def test_lifecycle_adapter_keeps_revision_conflict_and_visible_validation() -> None:
     patched = patch_project_lifecycle_module_response(
         "/app.js", ApiResponse(200, b"", "text/javascript; charset=utf-8")

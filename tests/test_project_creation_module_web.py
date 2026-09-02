@@ -48,6 +48,17 @@ def test_creation_refreshes_project_list_contract_and_keeps_legacy_fallback() ->
     assert "window.FieldoraProjectList" not in script
 
 
+def test_creation_selects_created_project_through_context_contract() -> None:
+    patched = patch_project_creation_module_response(
+        "/app.js", ApiResponse(200, b"", "text/javascript; charset=utf-8")
+    )
+    script = patched.body.decode("utf-8")
+
+    assert 'resolve?.("projects.context.select")' in script
+    assert "if(selectedId&&projectContext?.select)await projectContext.select(selectedId)" in script
+    assert "window.FieldoraProjects?.selectProject" not in script
+
+
 def test_creation_validation_and_server_owned_defaults_are_explicit() -> None:
     patched = patch_project_creation_module_response(
         "/app.js", ApiResponse(200, b"", "text/javascript; charset=utf-8")

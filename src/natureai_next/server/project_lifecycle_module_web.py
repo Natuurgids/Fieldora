@@ -67,7 +67,7 @@ _PROJECT_LIFECYCLE_MODULE_PATCH = bytes(
  function mount(){
   if(state.mounted)return;if(!ensureSurface())return;state.mounted=true;state.controller=new AbortController();const signal=state.controller.signal;
   button()?.addEventListener("click",open,{signal});q("project-core-lifecycle-save")?.addEventListener("click",save,{signal});q("project-core-lifecycle-apply-status")?.addEventListener("click",applyStatus,{signal});q("project-core-lifecycle-archive")?.addEventListener("click",archive,{signal});q("project-core-lifecycle-cancel")?.addEventListener("click",()=>{editor().hidden=true;message("")},{signal});
-  state.projectId=window.FieldoraProjects?.currentProject?.()||"";refreshAuthority();
+  state.projectId=projectContext()?.current?.()||"";refreshAuthority();
  }
  function unmount(){if(!state.mounted)return;state.controller?.abort();state.controller=null;state.mounted=false;if(editor())editor().hidden=true}
  document.addEventListener("fieldora:project-context-changed",event=>{state.projectId=event.detail?.project_id||"";state.editingId="";refreshAuthority()});

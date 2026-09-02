@@ -275,6 +275,7 @@ FOUNDATION_WEB_MODULES: tuple[WebModuleSpec, ...] = (
             "research.project.records.view",
         ),
         dependencies=("projects.core",),
+        requires_contracts=("projects.context.select",),
     ),
     WebModuleSpec("knowledge.center", "/knowledge", "Knowledge & AI"),
     WebModuleSpec(

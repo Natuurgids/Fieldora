@@ -28,6 +28,7 @@ def test_foundation_registry_has_separate_projects_and_portfolio_ownership() -> 
     assert projects.provides_contracts == (
         "projects.list.read",
         "projects.context.select",
+        "projects.toolbar.extend",
     )
     assert portfolio is not None
     assert portfolio.module_id == "portfolio"
@@ -38,6 +39,7 @@ def test_foundation_registry_has_separate_projects_and_portfolio_ownership() -> 
     )
     assert registry.contract_provider("projects.list.read") is projects
     assert registry.contract_provider("projects.context.select") is projects
+    assert registry.contract_provider("projects.toolbar.extend") is projects
 
 
 def test_project_integrations_are_owned_by_bounded_modules() -> None:

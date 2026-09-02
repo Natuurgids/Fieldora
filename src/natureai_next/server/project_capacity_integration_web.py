@@ -1,8 +1,8 @@
 """Bounded Projects-to-Capacity browser integration for managed web.
 
-Capacity owns the cross-module entry point. Projects/Core only publishes project
-context; this adapter consumes that contract and hands the selected Project to the
-Capacity module without owning Capacity rendering or persistence.
+Capacity owns the cross-module entry point. Projects publishes project context and
+a replaceable cockpit-extension contract; this adapter consumes those contracts
+and hands the selected Project to Capacity without owning Projects DOM details.
 """
 
 from __future__ import annotations
@@ -17,18 +17,16 @@ _PROJECT_CAPACITY_INTEGRATION_PATCH = bytes(
 /* WEB-PROJECT-CAPACITY-INTEGRATION: bounded Projects -> Capacity navigation. */
 (()=>{
  if(window.__fieldoraProjectCapacityIntegrationWired)return;window.__fieldoraProjectCapacityIntegrationWired=true;
- const ownerModule="capacity",projectModule="projects.core",q=id=>document.getElementById(id);
- const state={projectId:"",projectMounted:false};
+ const ownerModule="capacity",entryKey="capacity.project.open";
+ const state={projectId:""};
  const projectContext=()=>window.FieldoraModuleContracts?.resolve?.("projects.context.select")||null;
+ const projectToolbar=()=>window.FieldoraModuleContracts?.resolve?.("projects.toolbar.extend")||null;
  function report(error,fallback){const text=error?.message||fallback;document.dispatchEvent(new CustomEvent("fieldora:module-error",{detail:{module_id:ownerModule,error:String(text)}}))}
  function currentProject(){return projectContext()?.current?.()||state.projectId||""}
- function updateEntry(){const button=q("project-open-capacity");if(button)button.disabled=!currentProject()}
- function removeEntry(){q("project-open-capacity")?.remove()}
+ function updateEntry(){return projectToolbar()?.setEnabled?.(entryKey,Boolean(currentProject()))??false}
  function ensureEntry(){
-  const toolbar=q("project-desktop-cockpit")?.querySelector(".cockpit-center .cockpit-toolbar");if(!toolbar)return false;
-  let button=q("project-open-capacity");
-  if(!button){button=document.createElement("button");button.id="project-open-capacity";button.type="button";button.textContent="Open capacity";button.dataset.fieldoraOwnerModule=ownerModule;button.dataset.fieldoraAction="capacity.project.open";button.addEventListener("click",openSelectedProject);toolbar.appendChild(button)}
-  updateEntry();return true;
+  const toolbar=projectToolbar();if(!toolbar?.upsert)return false;
+  toolbar.upsert({key:entryKey,label:"Open capacity",ownerModule,action:"capacity.project.open",enabled:Boolean(currentProject()),activate:openSelectedProject});return true;
  }
  async function applyCapacityProject(){const pid=currentProject();if(!pid)return false;const bridge=window.FieldoraCapacity;if(!bridge?.openProject)throw new Error("Capacity workspace integration is unavailable.");await bridge.openProject(pid);return true}
  async function openSelectedProject(){
@@ -36,14 +34,11 @@ _PROJECT_CAPACITY_INTEGRATION_PATCH = bytes(
   try{const target=window.FieldoraModules?.navigate?.("/capacity","project-capacity-integration","push");if(!target)throw new Error("Capacity workspace is unavailable.");await applyCapacityProject()}
   catch(error){report(error,"Capacity could not be opened for this project.")}
  }
- function mountProjectEntry(){state.projectMounted=true;state.projectId=currentProject()||state.projectId;ensureEntry()}
- function unmountProjectEntry(){state.projectMounted=false;removeEntry()}
- document.addEventListener("fieldora:project-context-changed",event=>{state.projectId=event.detail?.project_id||"";if(state.projectMounted)ensureEntry();updateEntry()});
- document.addEventListener("fieldora:contract-registered",event=>{if(event.detail?.contract==="projects.context.select"){state.projectId=currentProject();updateEntry()}});
- document.addEventListener("fieldora:module-mount",event=>{const id=event.detail?.module?.module_id;if(id===projectModule)mountProjectEntry();else if(id===ownerModule)applyCapacityProject().catch(error=>report(error,"Capacity project context could not be applied."))});
- document.addEventListener("fieldora:module-unmount",event=>{if(event.detail?.module?.module_id===projectModule)unmountProjectEntry()});
+ document.addEventListener("fieldora:project-context-changed",event=>{state.projectId=event.detail?.project_id||"";ensureEntry();updateEntry()});
+ document.addEventListener("fieldora:contract-registered",event=>{const name=event.detail?.contract;if(name==="projects.context.select"){state.projectId=currentProject();updateEntry()}else if(name==="projects.toolbar.extend")ensureEntry()});
+ document.addEventListener("fieldora:module-mount",event=>{if(event.detail?.module?.module_id===ownerModule)applyCapacityProject().catch(error=>report(error,"Capacity project context could not be applied."))});
  window.FieldoraProjectCapacityIntegration=Object.freeze({openSelectedProject,applyCapacityProject,currentProject});
- const active=window.FieldoraModules?.current?.()?.module_id;if(active===projectModule)mountProjectEntry();else if(active===ownerModule)applyCapacityProject().catch(()=>{});
+ ensureEntry();if(window.FieldoraModules?.current?.()?.module_id===ownerModule)applyCapacityProject().catch(()=>{});
 })();
 """,
     "utf-8",

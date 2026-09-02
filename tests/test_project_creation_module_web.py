@@ -35,7 +35,7 @@ def test_creation_adapter_is_idempotent_and_not_portfolio_coupled() -> None:
     assert "showPage=" not in script
 
 
-def test_creation_refresh_requires_project_list_contract() -> None:
+def test_creation_refresh_requires_project_list_contract_without_legacy_mirror() -> None:
     patched = patch_project_creation_module_response(
         "/app.js", ApiResponse(200, b"", "text/javascript; charset=utf-8")
     )
@@ -43,9 +43,10 @@ def test_creation_refresh_requires_project_list_contract() -> None:
 
     assert 'resolve?.("projects.list.read")' in script
     assert 'if(!projectList?.refresh)throw new Error("Project list contract is unavailable.")' in script
-    assert "const items=await projectList.refresh()" in script
+    assert "await projectList.refresh()" in script
     assert '(await api("/api/v1/projects",{purpose:"research"})).items||[]' not in script
-    assert "projects=Array.from(items||[],item=>({...item}))" in script
+    assert "projects=Array.from" not in script
+    assert "projectOptions()" not in script
     assert "window.FieldoraProjectList" not in script
 
 

@@ -45,6 +45,9 @@ from natureai_next.server.offline_models_web import patch_offline_models_web_res
 from natureai_next.server.project_facility_workspace_web import (
     patch_project_facility_workspace_response,
 )
+from natureai_next.server.project_list_provider_web import (
+    patch_project_list_provider_response,
+)
 from natureai_next.server.science_workflow_web import patch_science_workflow_web_response
 from natureai_next.server.web_capabilities import (
     patch_zero_trust_web_response,
@@ -144,6 +147,8 @@ def patch_managed_web_response(target: str, response):
         # Runtime contract declarations must execute after the finalized shell so
         # consumers can discover providers without depending on implementation IDs.
         patch_runtime_contracts_response,
+        # Projects owns the accessible-list snapshot behind the declared read contract.
+        patch_project_list_provider_response,
     ):
         response = patch(target, response)
     return response

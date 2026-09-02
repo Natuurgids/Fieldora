@@ -43,7 +43,23 @@ _SCIENCE_WORKFLOW_PATCH = bytes(
   if(review)review.id="observation-review-panel";
   let observationView="review",editingObservation=null;
   let observationNav=null;
+  const projectContext=()=>window.FieldoraModuleContracts?.resolve?.("projects.context.select")||null;
+  const projectList=()=>window.FieldoraModuleContracts?.resolve?.("projects.list.read")||null;
+  const projectItems=()=>{const items=projectList()?.items?.();return Array.isArray(items)?items:[]};
   const intro=document.createElement("p");intro.id="observation-workspace-intro";intro.className="library-workspace-intro";
+
+  function renderObservationProjectOptions(preferred=""){
+   const select=q("obs-project");if(!select)return;
+   const selected=String(preferred||select.value||"");
+   select.innerHTML='<option value="">Select project…</option>';
+   for(const item of projectItems()){
+    const option=document.createElement("option");option.value=String(item.id||"");option.textContent=String(item.name||item.title||item.id||"");select.appendChild(option);
+   }
+   if(selected&&!Array.from(select.options).some(option=>option.value===selected)){
+    const option=document.createElement("option");option.value=selected;option.textContent=selected;select.appendChild(option);
+   }
+   select.value=selected;
+  }
 
   if(editor){
    editor.innerHTML=`
@@ -67,7 +83,7 @@ _SCIENCE_WORKFLOW_PATCH = bytes(
     </div>
     <div class="actions"><button id="obs-save-aligned" type="button">Save observation</button><button id="obs-cancel-aligned" type="button">Cancel</button></div>
     <p id="obs-save-status" class="muted" aria-live="polite"></p>`;
-   projectOptions();
+   renderObservationProjectOptions();
   }
 
   function setObservationView(view){
@@ -127,8 +143,9 @@ _SCIENCE_WORKFLOW_PATCH = bytes(
   async function beginObservationCreate(){
    editingObservation=null;clearObservationForm();
    if(q("observation-editor-title"))q("observation-editor-title").textContent="New observation";
-   const project=selectedProject||projects[0]?.id||"";
-   if(q("obs-project")){q("obs-project").disabled=false;q("obs-project").value=project}
+   const project=projectContext()?.current?.()||projectItems()[0]?.id||"";
+   renderObservationProjectOptions(project);
+   if(q("obs-project"))q("obs-project").disabled=false;
    await refreshObservationEvidence();
    setObservationView("create");
   }
@@ -137,7 +154,8 @@ _SCIENCE_WORKFLOW_PATCH = bytes(
    const item=observations.find(value=>value.id===id);if(!item)return;
    editingObservation=item;
    if(q("observation-editor-title"))q("observation-editor-title").textContent="Edit observation";
-   if(q("obs-project")){q("obs-project").value=item.project_id||"";q("obs-project").disabled=true}
+   renderObservationProjectOptions(item.project_id||"");
+   if(q("obs-project"))q("obs-project").disabled=true;
    if(q("obs-type"))q("obs-type").value=item.observation_type||"unknown";
    if(q("obs-count"))q("obs-count").value=item.count??"";
    if(q("obs-life-stage"))q("obs-life-stage").value=item.life_stage||"";
@@ -228,6 +246,10 @@ _SCIENCE_WORKFLOW_PATCH = bytes(
    if(event.target.closest("input[type=checkbox]"))return;
    const row=event.target.closest("[data-observation]");if(row)beginObservationEdit(row.dataset.observation);
   });
+  document.addEventListener("fieldora:contract-registered",event=>{
+   const name=event.detail?.contract;if(name==="projects.list.read"&&!editingObservation)renderObservationProjectOptions(q("obs-project")?.value||"");
+  });
+  document.addEventListener("fieldora:project-list-changed",()=>{if(!editingObservation)renderObservationProjectOptions(q("obs-project")?.value||"")});
 
   loadObservations=async function(){
    try{observations=(await api("/api/v1/observations")).items;renderObservations()}

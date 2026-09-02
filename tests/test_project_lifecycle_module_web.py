@@ -40,6 +40,17 @@ def test_lifecycle_adapter_is_idempotent_and_does_not_depend_on_portfolio() -> N
     assert "showPage=" not in script
 
 
+def test_lifecycle_reselection_uses_project_context_contract() -> None:
+    patched = patch_project_lifecycle_module_response(
+        "/app.js", ApiResponse(200, b"", "text/javascript; charset=utf-8")
+    )
+    script = patched.body.decode("utf-8")
+
+    assert 'resolve?.("projects.context.select")' in script
+    assert "if(focusId&&context?.select)await context.select(focusId)" in script
+    assert "window.FieldoraProjects?.selectProject" not in script
+
+
 def test_lifecycle_adapter_keeps_revision_conflict_and_visible_validation() -> None:
     patched = patch_project_lifecycle_module_response(
         "/app.js", ApiResponse(200, b"", "text/javascript; charset=utf-8")

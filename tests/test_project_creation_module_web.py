@@ -35,6 +35,19 @@ def test_creation_adapter_is_idempotent_and_not_portfolio_coupled() -> None:
     assert "showPage=" not in script
 
 
+def test_creation_refreshes_project_list_contract_and_keeps_legacy_fallback() -> None:
+    patched = patch_project_creation_module_response(
+        "/app.js", ApiResponse(200, b"", "text/javascript; charset=utf-8")
+    )
+    script = patched.body.decode("utf-8")
+
+    assert 'resolve?.("projects.list.read")' in script
+    assert "projectList?.refresh?await projectList.refresh()" in script
+    assert '(await api("/api/v1/projects",{purpose:"research"})).items||[]' in script
+    assert "projects=Array.from(items||[],item=>({...item}))" in script
+    assert "window.FieldoraProjectList" not in script
+
+
 def test_creation_validation_and_server_owned_defaults_are_explicit() -> None:
     patched = patch_project_creation_module_response(
         "/app.js", ApiResponse(200, b"", "text/javascript; charset=utf-8")

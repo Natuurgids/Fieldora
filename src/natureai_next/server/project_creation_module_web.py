@@ -35,7 +35,9 @@ _PROJECT_CREATION_MODULE_PATCH = bytes(
  function openEditor(){const editor=q("project-core-create-editor");if(!editor)return;message("");editor.hidden=false;q("project-core-create-name")?.focus()}
  function closeEditor(){const editor=q("project-core-create-editor");if(editor)editor.hidden=true;message("")}
  async function reloadProjects(selectedId){
-  const result=await api("/api/v1/projects",{purpose:"research"});projects=result.items||[];
+  const projectList=window.FieldoraModuleContracts?.resolve?.("projects.list.read");
+  const items=projectList?.refresh?await projectList.refresh():(await api("/api/v1/projects",{purpose:"research"})).items||[];
+  projects=Array.from(items||[],item=>({...item}));
   if(typeof projectOptions==="function")projectOptions();
   if(selectedId&&window.FieldoraProjects?.selectProject)await window.FieldoraProjects.selectProject(selectedId);
   document.dispatchEvent(new CustomEvent("fieldora:projects-changed",{detail:{module_id:moduleId,project_id:selectedId||""}}));

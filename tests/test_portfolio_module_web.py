@@ -42,9 +42,12 @@ def test_portfolio_module_uses_projects_contracts_and_owns_work_data_loading() -
     assert "window.projects" not in script
     assert "window.openProject" not in script
     assert "window.loadPortfolio" not in script
-    assert 'fetchItems("phases")' in script
-    assert 'fetchItems("tasks")' in script
-    assert 'fetchItems("sprints")' in script
+    assert 'api("/api/v1/phases",{purpose:"research"})' in script
+    assert 'api("/api/v1/tasks",{purpose:"research"})' in script
+    assert 'api("/api/v1/sprints",{purpose:"research"})' in script
+    assert "list.dataset.phases=JSON.stringify(phases.items||[])" in script
+    assert "list.dataset.tasks=JSON.stringify(tasks.items||[])" in script
+    assert "list.dataset.sprints=JSON.stringify(sprints.items||[])" in script
     assert "data-portfolio-id" in script
     assert "data-portfolio-view" in script
     assert 'q("portfolio-scope")' in script

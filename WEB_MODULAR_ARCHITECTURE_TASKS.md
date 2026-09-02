@@ -37,7 +37,7 @@ Status legend: `[ ]` missing, `[~]` partial/evidence or migration in progress, `
 | P08 | [~] | Remove mutable global Projects coupling | P02-P07 | `projects`, `selectedProject`, direct feature globals and equivalent ambient state are no longer module integration APIs. |
 | P09 | [~] | Retire legacy Projects wiring | P01-P08 | Final `/app.js` contains one owner per migrated responsibility and no competing legacy listeners. |
 | P10 | [ ] | Module removal test | P01-P09 | Remove/disable Projects module and prove shell plus unrelated modules still boot/function. |
-| P11 | [ ] | Module replacement test | P01-P09 | Substitute a minimal Projects provider implementing the same public contracts without shell/consumer changes. |
+| P11 | [~] | Module replacement test | P01-P09 | Substitute a minimal Projects provider implementing the same public contracts without shell/consumer changes. |
 | P12 | [~] | Dependency contract tests | A01-P11 | Duplicate ownership, missing providers and undeclared concrete coupling are rejected where mechanically testable. |
 | P13 | [ ] | Browser behavior certification | P02-P07 | Chromium/Firefox/WebKit cover list, context switch, strict empty `My work`, stale/inaccessible selection, error and recovery. |
 | P14 | [~] | API/security certification | P02,P07 | Accessible-list filtering, cross-org exclusion and scoped authorization are proven independently of UI hiding. |
@@ -46,13 +46,15 @@ Status legend: `[ ]` missing, `[~]` partial/evidence or migration in progress, `
 | P17 | [~] | Dependency graph maintained | A01-P16 | Required, optional and provided contracts are represented in registry/manifest and this ledger stays current. |
 | P18 | [ ] | Certify Project list/context | P01-P17 | Iteration 6 item may move from `[~]` only when behavior and removal/replacement boundaries are proven at one exact head. |
 
-## Current dependency findings at audit head `5e700bdff5e6a8e354c4990b37238f85bd6ae0f3`
+## Current dependency findings at audit head `4e17cd434f1e8b0cdd7b6d5c59615d53eaf0e67d`
 
-- The registry and browser runtime now distinguish concrete module dependencies from public provided/required contracts. `projects.core` provides `projects.list.read` and `projects.context.select`; Portfolio requires those contracts rather than the concrete Projects module ID.
-- `projects.list.read` now has one Projects-owned provider with immutable snapshots, refresh deduplication and loaded-state reporting. Projects/Core and Portfolio consume that contract instead of reading ambient `projects`/`window.projects`.
-- `web_capabilities.py` now routes modular initial project loading through `projects.list.read`; it copies the returned snapshot into the legacy `projects` array only as a compatibility mirror. The direct `/api/v1/projects` bootstrap remains only as the non-modular fallback.
-- `projects.context.select` has a Projects-owned provider around the existing public Projects module API. Portfolio project-open interaction now uses this contract instead of `window.openProject`.
-- Remaining ambient coupling keeps P08 open: the compatibility `projects` mirror is still used by legacy home/options code, Projects/Core still reads `me`, writes `selectedProject`, and calls global `api()`, Portfolio still reads `window.me` and uses transitional `window.loadPortfolio`, and Capacity/Research have not yet been migrated from their concrete Projects dependencies.
+- The registry and browser runtime now distinguish concrete module dependencies from public provided/required contracts. `projects.core` provides `projects.list.read`, `projects.context.select` and `projects.toolbar.extend`; Portfolio requires list/context contracts rather than the concrete Projects module ID.
+- `projects.list.read` has one Projects-owned provider with immutable snapshots, refresh deduplication and loaded-state reporting. Projects/Core and Portfolio consume that contract instead of reading ambient `projects`/`window.projects`.
+- `web_capabilities.py` routes modular initial project loading through `projects.list.read`; it copies the returned snapshot into the legacy `projects` array only as a compatibility mirror. The direct `/api/v1/projects` bootstrap remains only as the non-modular fallback.
+- `projects.context.select` has a Projects-owned provider around the existing public Projects module API. Portfolio, Capacity and Research consume that contract for project-context interactions instead of reading the Projects implementation directly.
+- `projects.toolbar.extend` is a Projects-owned cockpit extension contract. Capacity and Research register their cross-module entry points through it instead of querying the Projects cockpit DOM or following `projects.core` mount/unmount lifecycle.
+- Capacity and Research now declare no concrete dependency on `projects.core`; both require `projects.context.select` and `projects.toolbar.extend`. Focused registry tests prove each consumer can validate against a replacement Projects provider implementing those contracts. This is meaningful P11/P12 evidence, but full runtime Projects replacement/removal is not yet certified.
+- Remaining ambient coupling keeps P08 open: the compatibility `projects` mirror is still used by legacy home/options code, Projects/Core still reads `me`, writes `selectedProject`, and calls global `api()`, Portfolio still reads `window.me` and uses transitional `window.loadPortfolio`, and Research records still has transitional project/global state paths outside the now-decoupled Projects integration adapter.
 - Qt Project Management obtains accessible projects through `WorkspaceContext.accessible_projects(...)`; its `select_project()` refreshes the accessible list and returns `False` when the requested project is absent. This supports the web stale/inaccessible-selection guard as parity behavior.
 - WEB-056 still lacks runtime Projects list/context certification for strict `My work`, context switching, stale/inaccessible IDs and Projects error/recovery. P13 remains open.
 
@@ -63,16 +65,20 @@ Shell/Registry
   ├─ capability + lifecycle contracts
   ├─ auth/navigation/notification contracts
   └─ Projects capability
-       ├─ ProjectListProvider
-       ├─ ProjectContext
+       ├─ ProjectListProvider        provides projects.list.read
+       ├─ ProjectContext             provides projects.context.select
+       ├─ ProjectToolbarExtensions   provides projects.toolbar.extend
        ├─ ProjectScope
        ├─ ProjectHierarchy
        ├─ ProjectInspector
        └─ ProjectWorkData adapters
 
-Portfolio / Capacity / Research
-  └─ require ProjectContext/ProjectList contracts
-     (never require `projects.core` implementation or its private DOM/state)
+Portfolio
+  └─ requires projects.list.read + projects.context.select
+
+Capacity / Research
+  └─ require projects.context.select + projects.toolbar.extend
+     (no concrete `projects.core` dependency)
 ```
 
 ## Working order

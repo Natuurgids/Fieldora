@@ -60,6 +60,9 @@ def test_research_records_exposes_project_context_bridge() -> None:
     script = response.body.decode("utf-8")
 
     assert "integrationProjectId" in script
+    assert 'resolve?.("projects.context.select")' in script
+    assert "projectContext()?.current?.()" in script
+    assert "selectedProject" not in script
     assert "async function openProject(projectId)" in script
     assert "window.FieldoraResearchRecords=Object.freeze" in script
     assert "?project_id=${encodeURIComponent(project)}" in script

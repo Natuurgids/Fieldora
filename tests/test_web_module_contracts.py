@@ -59,7 +59,11 @@ def test_project_integrations_are_owned_by_bounded_modules() -> None:
         "projects.toolbar.extend",
     )
     assert research.module_id == "research.dossiers"
-    assert research.dependencies == ("projects.core",)
+    assert research.dependencies == ()
+    assert research.requires_contracts == (
+        "projects.context.select",
+        "projects.toolbar.extend",
+    )
     assert registry.action_owner("capacity.project.allocations.view") is capacity
     assert registry.action_owner("research.project.records.view") is research
     assert "capacity.project.allocations.view" not in projects.owns_actions
@@ -197,6 +201,29 @@ def test_capacity_can_bind_to_replacement_projects_contract_provider() -> None:
     assert registry.contract_provider("projects.context.select") is replacement
     assert registry.contract_provider("projects.toolbar.extend") is replacement
     assert capacity.dependencies == ()
+
+
+def test_research_can_bind_to_replacement_projects_contract_provider() -> None:
+    replacement = WebModuleSpec(
+        "projects.replacement",
+        "/projects",
+        "Projects replacement",
+        provides_contracts=("projects.context.select", "projects.toolbar.extend"),
+    )
+    research = WebModuleSpec(
+        "research.dossiers",
+        "/research",
+        "Research",
+        requires_contracts=("projects.context.select", "projects.toolbar.extend"),
+    )
+    registry = WebModuleRegistry((replacement, research))
+
+    registry.validate_dependencies()
+    registry.validate_contracts()
+
+    assert registry.contract_provider("projects.context.select") is replacement
+    assert registry.contract_provider("projects.toolbar.extend") is replacement
+    assert research.dependencies == ()
 
 
 def test_capability_projection_only_controls_visibility() -> None:

@@ -46,7 +46,7 @@ _PROJECT_LIFECYCLE_MODULE_PATCH = bytes(
   try{const caps=await api(`/api/v1/projects/${encodeURIComponent(state.projectId)}/capabilities`,{purpose:"research"});state.canEdit=caps?.actions?.edit===true;if(control)control.dataset.fieldoraAuthorizationHidden=state.canEdit?"false":"true";if(!state.canEdit&&editor())editor().hidden=true;return state.canEdit}catch(error){if(editor())editor().hidden=true;emitError(error,"Project permissions could not be loaded.");return false}
  }
  async function reloadProjects(focusId=state.editingId||state.projectId){
-  const list=projectList();if(!list?.refresh)throw new Error("Project list contract is unavailable.");const items=await list.refresh();projects=Array.from(items||[],item=>({...item}));if(typeof projectOptions==="function")projectOptions();
+  const list=projectList();if(!list?.refresh)throw new Error("Project list contract is unavailable.");await list.refresh();
   const context=projectContext();if(focusId&&context?.select)await context.select(focusId);
   return projectById(focusId);
  }

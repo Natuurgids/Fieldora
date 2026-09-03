@@ -119,6 +119,20 @@ def test_portfolio_owner_removes_legacy_view_refresh_wiring() -> None:
     assert "WEB-PORTFOLIO-MODULE" in script
 
 
+def test_project_core_owner_routes_legacy_work_save_refresh_through_event() -> None:
+    legacy = b'if(await saveGeneric(path,item,"work-status",`${type} saved.`))loadPortfolio()'
+    base = ApiResponse(200, legacy, "text/javascript; charset=utf-8")
+    owned = patch_project_core_module_response("/app.js", base)
+    final = patch_modular_shell_response("/app.js", owned)
+    script = final.body.decode("utf-8")
+
+    assert legacy.decode("utf-8") not in script
+    assert "fieldora:project-work-changed" in script
+    assert 'module_id:"legacy.work-editor"' in script
+    assert "project_id:project" in script
+    assert "WEB-PROJECT-CORE-MODULE" in script
+
+
 def test_final_composed_response_removes_migrated_navigation_and_portfolio_wiring() -> None:
     base = ApiResponse(200, b"const baseApp=true;", "text/javascript; charset=utf-8")
     owned = patch_portfolio_module_response("/app.js", base)

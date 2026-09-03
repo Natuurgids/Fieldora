@@ -45,10 +45,18 @@ _PROJECT_RESEARCH_INTEGRATION_PATCH = bytes(
    await applyResearchProject();
   }catch(error){report(error,"Research could not be opened for this project.")}
  }
+ async function exportCurrentProject(){
+  const pid=currentProject();if(!pid)return status("project-job-status","Select a project.",true);
+  try{
+   const job=await api("/api/v1/jobs",{method:"POST",purpose:"research",body:JSON.stringify({job_type:"export_project",project_id:pid,include_library_references:true})});
+   status("project-job-status",`Export queued · job ${job.job_id}`);q("job-id").value=job.job_id;
+  }catch(error){status("project-job-status",error.message,true)}
+ }
+ if(typeof exportProject==="function")exportProject=exportCurrentProject;
  document.addEventListener("fieldora:project-context-changed",event=>{state.projectId=event.detail?.project_id||"";ensureEntry();updateEntry()});
  document.addEventListener("fieldora:contract-registered",event=>{const name=event.detail?.contract;if(name==="projects.context.select"){state.projectId=currentProject();updateEntry()}else if(name==="projects.toolbar.extend")ensureEntry()});
  document.addEventListener("fieldora:module-mount",event=>{if(event.detail?.module?.module_id===ownerModule)applyResearchProject().catch(error=>report(error,"Research project context could not be applied."))});
- window.FieldoraProjectResearchIntegration=Object.freeze({openSelectedProject,applyResearchProject,currentProject});
+ window.FieldoraProjectResearchIntegration=Object.freeze({openSelectedProject,applyResearchProject,currentProject,exportCurrentProject});
  ensureEntry();if(window.FieldoraModules?.current?.()?.module_id===ownerModule)applyResearchProject().catch(()=>{});
 })();
 """,

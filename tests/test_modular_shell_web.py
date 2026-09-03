@@ -169,6 +169,7 @@ def test_research_owner_removes_legacy_project_list_rendering_and_wiring_only() 
 
     assert 'cards("project-list",projects,' not in script
     assert 'q("project-list").onclick=e=>' not in script
+    assert "selectedProject=id" not in script
     assert 'cards("dossier-list",dossiers,' in script
     assert "function openProject(id)" in script
     assert 'q("project-detail").innerHTML=id' in script

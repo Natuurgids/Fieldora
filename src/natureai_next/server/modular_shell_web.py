@@ -53,6 +53,8 @@ _LEGACY_PORTFOLIO_REFRESH_WIRING = b'q("portfolio-refresh").onclick=loadPortfoli
 _LEGACY_PORTFOLIO_SCOPE_WIRING = b'q("portfolio-scope").onchange=loadPortfolio;'
 _LEGACY_PORTFOLIO_VIEW_WIRING = b'document.querySelectorAll("[data-portfolio-view]").forEach(b=>b.onclick=()=>{portfolioView=b.dataset.portfolioView;document.querySelectorAll("[data-portfolio-view]").forEach(x=>x.classList.toggle("primary",x===b));loadPortfolio()});'
 _LEGACY_PROJECTS_SHOWPAGE_LOAD = b'if(name==="projects")loadPortfolio();'
+_LEGACY_WORK_SAVE_REFRESH = b'if(await saveGeneric(path,item,"work-status",`${type} saved.`))loadPortfolio()'
+_PROJECT_EVENT_WORK_SAVE_REFRESH = b'if(await saveGeneric(path,item,"work-status",`${type} saved.`))document.dispatchEvent(new CustomEvent("fieldora:project-work-changed",{detail:{module_id:"legacy.work-editor",project_id:project,kind:type,item:null}}))'
 _PORTFOLIO_OWNER_MARKER = b"WEB-PORTFOLIO-MODULE"
 _PROJECT_OWNER_MARKER = b"WEB-PROJECT-CORE-MODULE"
 _PROJECT_CREATION_OWNER_MARKER = b"WEB-PROJECT-CREATION-MODULE"
@@ -176,6 +178,7 @@ def _rewrite_owned_browser_response(body: bytes) -> bytes:
         # retired after their Projects/Core replacements are present. Strip the
         # leading Project cockpit behavior before Portfolio consumes its end marker.
         body = body.replace(_LEGACY_PROJECTS_SHOWPAGE_LOAD, b"", 1)
+        body = body.replace(_LEGACY_WORK_SAVE_REFRESH, _PROJECT_EVENT_WORK_SAVE_REFRESH, 1)
         body = body.replace(_PROJECT_HIERARCHY_PATCH, b"", 1)
         body = _strip_legacy_range(
             body, _PROJECT_COCKPIT_BEHAVIOR_START, _PROJECT_COCKPIT_BEHAVIOR_END

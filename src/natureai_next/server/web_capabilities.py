@@ -239,7 +239,8 @@ _ZERO_TRUST_WEB_PATCH = bytes(
  const mark=(node,hidden)=>{if(node)node.dataset.fieldoraAuthorizationHidden=hidden?"true":"false"};
  const projectItems=()=>{
   const list=window.FieldoraModuleContracts?.resolve?.('projects.list.read');
-  return list?.items?Array.from(list.items()||[]):projects;
+  if(list?.items)return Array.from(list.items()||[]);
+  return window.FieldoraModuleContracts?[]:projects;
  };
  const aiActionFor={
   provider:'aiadmin.providers.manage',model:'aiadmin.models.manage',mcp:'aiadmin.mcp.manage'
@@ -323,7 +324,7 @@ _ZERO_TRUST_WEB_PATCH = bytes(
    const list=window.FieldoraModuleContracts?.resolve?.('projects.list.read');
    if(list?.refresh){
     await list.refresh();
-   }else{
+   }else if(!window.FieldoraModuleContracts){
     const result=await baseApi('/api/v1/projects');projects=result.items||[];
    }
   }

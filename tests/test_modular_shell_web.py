@@ -108,6 +108,17 @@ def test_portfolio_owner_removes_legacy_scope_refresh_wiring() -> None:
     assert "WEB-PORTFOLIO-MODULE" in script
 
 
+def test_portfolio_owner_removes_legacy_view_refresh_wiring() -> None:
+    legacy = b'document.querySelectorAll("[data-portfolio-view]").forEach(b=>b.onclick=()=>{portfolioView=b.dataset.portfolioView;document.querySelectorAll("[data-portfolio-view]").forEach(x=>x.classList.toggle("primary",x===b));loadPortfolio()});'
+    base = ApiResponse(200, legacy, "text/javascript; charset=utf-8")
+    owned = patch_portfolio_module_response("/app.js", base)
+    final = patch_modular_shell_response("/app.js", owned)
+    script = final.body.decode("utf-8")
+
+    assert legacy.decode("utf-8") not in script
+    assert "WEB-PORTFOLIO-MODULE" in script
+
+
 def test_final_composed_response_removes_migrated_navigation_and_portfolio_wiring() -> None:
     base = ApiResponse(200, b"const baseApp=true;", "text/javascript; charset=utf-8")
     owned = patch_portfolio_module_response("/app.js", base)

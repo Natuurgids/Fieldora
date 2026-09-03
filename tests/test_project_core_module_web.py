@@ -57,6 +57,8 @@ def test_project_context_rejects_ids_outside_the_accessible_project_list() -> No
     assert 'const requested=String(id||""),project=requested?projectById(requested):null;' in script
     assert 'if(requested&&!project){status("That project is no longer accessible.",true);return false}' in script
     assert "state.projectId=requested;state.workSelection=null;" in script
+    assert "selectedProject" not in script
+    assert 'q("work-project")' in script
     assert "renderTree();renderInspector(project);selectInspector(\"properties\");" in script
     assert "return true;" in script
 

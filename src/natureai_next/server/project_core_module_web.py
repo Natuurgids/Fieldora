@@ -113,7 +113,6 @@ _PROJECT_CORE_MODULE_PATCH = bytes(
   const requested=String(id||""),project=requested?projectById(requested):null;
   if(requested&&!project){status("That project is no longer accessible.",true);return false}
   state.projectId=requested;state.workSelection=null;
-  if(typeof selectedProject!=="undefined")selectedProject=state.projectId;
   if(q("work-project"))q("work-project").value=state.projectId;
   renderTree();renderInspector(project);selectInspector("properties");
   await Promise.all([loadWork(),loadEvidence()]);
@@ -127,7 +126,6 @@ _PROJECT_CORE_MODULE_PATCH = bytes(
    const selected=projectById(state.projectId);
    if(state.projectId&&!selected){
     state.projectId="";state.workSelection=null;
-    if(typeof selectedProject!=="undefined")selectedProject="";
     if(q("work-project"))q("work-project").value="";
    }
    if(!state.projectId&&projectItems().length)return selectProject(projectItems()[0].id);

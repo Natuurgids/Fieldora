@@ -320,15 +320,17 @@ _ZERO_TRUST_WEB_PATCH = bytes(
   me=await baseApi('/api/v1/me');
   await refresh();
   projects=[];
+  let refreshedProjectList=false;
   if(allowed('projects')){
    const list=window.FieldoraModuleContracts?.resolve?.('projects.list.read');
    if(list?.refresh){
     await list.refresh();
+    refreshedProjectList=true;
    }else if(!window.FieldoraModuleContracts){
     const result=await baseApi('/api/v1/projects');projects=result.items||[];
    }
   }
-  projectOptions();
+  if(!refreshedProjectList)projectOptions();
   if(allowed('administration')){
    if(document.getElementById('contract-org'))document.getElementById('contract-org').value=me.organization_id;
    if(document.getElementById('device-org'))document.getElementById('device-org').value=me.organization_id;

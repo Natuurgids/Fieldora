@@ -133,6 +133,24 @@ def test_project_core_owner_routes_legacy_work_save_refresh_through_event() -> N
     assert "WEB-PROJECT-CORE-MODULE" in script
 
 
+def test_project_and_portfolio_owners_remove_legacy_portfolio_loader_only() -> None:
+    legacy = (
+        b"async function loadPortfolio(){const legacyPortfolio=true;}"
+        b"async function saveWorkItem(){const legacyEditor=true;}"
+    )
+    base = ApiResponse(200, legacy, "text/javascript; charset=utf-8")
+    project_owned = patch_project_core_module_response("/app.js", base)
+    owned = patch_portfolio_module_response("/app.js", project_owned)
+    final = patch_modular_shell_response("/app.js", owned)
+    script = final.body.decode("utf-8")
+
+    assert "async function loadPortfolio(){" not in script
+    assert "const legacyPortfolio=true" not in script
+    assert "async function saveWorkItem(){const legacyEditor=true;}" in script
+    assert "WEB-PROJECT-CORE-MODULE" in script
+    assert "WEB-PORTFOLIO-MODULE" in script
+
+
 def test_final_composed_response_removes_migrated_navigation_and_portfolio_wiring() -> None:
     base = ApiResponse(200, b"const baseApp=true;", "text/javascript; charset=utf-8")
     owned = patch_portfolio_module_response("/app.js", base)

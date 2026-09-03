@@ -17,6 +17,9 @@ from natureai_next.server.project_core_module_web import (
 from natureai_next.server.project_facility_workspace_web import (
     patch_project_facility_workspace_response,
 )
+from natureai_next.server.project_research_integration_web import (
+    patch_project_research_integration_response,
+)
 
 
 def test_manifest_exposes_distinct_project_and_portfolio_owners() -> None:
@@ -149,6 +152,26 @@ def test_project_and_portfolio_owners_remove_legacy_portfolio_loader_only() -> N
     assert "async function saveWorkItem(){const legacyEditor=true;}" in script
     assert "WEB-PROJECT-CORE-MODULE" in script
     assert "WEB-PORTFOLIO-MODULE" in script
+
+
+def test_research_owner_removes_legacy_project_list_rendering_only() -> None:
+    legacy = (
+        b'async function loadResearch(){cards("project-list",projects,p=>`<div data-project="${p.id}"></div>`);'
+        b'cards("dossier-list",dossiers,r=>`<div>${r.id}</div>`);await loadResearchDomain()}'
+        b'function openProject(id){selectedProject=id;q("project-detail").innerHTML=id;showPage("research")}'
+        b'q("home-projects").onclick=e=>{const row=e.target.closest("[data-project]");if(row)openProject(row.dataset.project)};'
+    )
+    base = ApiResponse(200, legacy, "text/javascript; charset=utf-8")
+    owned = patch_project_research_integration_response("/app.js", base)
+    final = patch_modular_shell_response("/app.js", owned)
+    script = final.body.decode("utf-8")
+
+    assert 'cards("project-list",projects,' not in script
+    assert 'cards("dossier-list",dossiers,' in script
+    assert "function openProject(id)" in script
+    assert 'q("project-detail").innerHTML=id' in script
+    assert 'q("home-projects").onclick=e=>' in script
+    assert "WEB-PROJECT-RESEARCH-INTEGRATION" in script
 
 
 def test_final_composed_response_removes_migrated_navigation_and_portfolio_wiring() -> None:

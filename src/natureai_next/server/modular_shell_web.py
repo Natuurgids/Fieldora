@@ -59,6 +59,9 @@ _LEGACY_PORTFOLIO_LOADER_START = b"async function loadPortfolio(){"
 _LEGACY_PORTFOLIO_LOADER_END = b"async function saveWorkItem(){"
 _LEGACY_RESEARCH_PROJECT_LIST_START = b'cards("project-list",projects,'
 _LEGACY_RESEARCH_PROJECT_LIST_END = b'cards("dossier-list",dossiers,'
+_LEGACY_RESEARCH_PROJECT_LIST_WIRING = (
+    b'q("project-list").onclick=e=>{const row=e.target.closest("[data-project]");if(row)openProject(row.dataset.project)};'
+)
 _PORTFOLIO_OWNER_MARKER = b"WEB-PORTFOLIO-MODULE"
 _PROJECT_OWNER_MARKER = b"WEB-PROJECT-CORE-MODULE"
 _PROJECT_CREATION_OWNER_MARKER = b"WEB-PROJECT-CREATION-MODULE"
@@ -221,6 +224,7 @@ def _rewrite_owned_browser_response(body: bytes) -> bytes:
             _LEGACY_RESEARCH_PROJECT_LIST_START,
             _LEGACY_RESEARCH_PROJECT_LIST_END,
         )
+        body = body.replace(_LEGACY_RESEARCH_PROJECT_LIST_WIRING, b"", 1)
     if _PROJECT_CREATION_OWNER_MARKER in body:
         body = _strip_legacy_range(
             body, _LEGACY_PROJECT_CREATION_START, _LEGACY_PROJECT_CREATION_END

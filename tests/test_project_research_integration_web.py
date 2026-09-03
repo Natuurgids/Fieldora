@@ -73,6 +73,26 @@ def test_research_export_uses_project_context_contract() -> None:
     assert 'if(typeof exportProject==="function")exportProject=exportCurrentProject' in adapter
 
 
+def test_research_record_editor_uses_project_context_contract() -> None:
+    response = patch_project_research_integration_response(
+        "/app.js",
+        ApiResponse(
+            200,
+            b'function editRecord(kind){q("record-project").value=selectedProject||""}',
+            "text/javascript; charset=utf-8",
+        ),
+    )
+    script = response.body.decode("utf-8")
+    adapter = script.split("/* WEB-PROJECT-RESEARCH-INTEGRATION", 1)[1]
+
+    assert "function editResearchRecord(kind)" in adapter
+    assert 'q("record-project").value=kind==="project"?"":currentProject()' in adapter
+    assert 'resolve?.("projects.context.select")' in adapter
+    assert "selectedProject" not in adapter
+    assert 'if(typeof editRecord==="function")editRecord=editResearchRecord' in adapter
+    assert "editResearchRecord,exportCurrentProject" in adapter
+
+
 def test_research_records_exposes_project_context_bridge() -> None:
     response = patch_research_records_response(
         "/app.js", ApiResponse(200, b"", "text/javascript; charset=utf-8")

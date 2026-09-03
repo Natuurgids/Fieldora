@@ -95,6 +95,7 @@ def test_final_composed_response_removes_migrated_navigation_and_portfolio_wirin
     assert "oldShowPage=showPage" not in script
     assert "showPage=function(name)" not in script
     assert "loadPortfolio=async function" not in script
+    assert 'q("portfolio-refresh").onclick=loadPortfolio' not in script
     assert "window.FieldoraModules" in script
     assert "WEB-PORTFOLIO-MODULE" in script
     assert "loadKnowledge=async function" in script

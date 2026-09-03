@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import threading
+from pathlib import Path
 from types import SimpleNamespace
 from urllib.request import Request, urlopen
 
@@ -267,6 +268,29 @@ def test_zero_trust_project_options_refresh_is_fallback_only() -> None:
     assert "if(!refreshedProjectList)projectOptions();" in script
     assert "else if(!window.FieldoraModuleContracts){\n    const result=await baseApi('/api/v1/projects');projects=result.items||[];" in script
     assert "projects=[];" in script
+
+
+def test_platform_admin_records_are_project_list_independent() -> None:
+    script = (
+        Path(__file__).parents[1]
+        / "src"
+        / "natureai_next"
+        / "resources"
+        / "server_web"
+        / "app.js"
+    ).read_text(encoding="utf-8")
+
+    def function_body(name: str) -> str:
+        return script.split(f"async function {name}()", 1)[1].split("\nasync function ", 1)[0]
+
+    for name in ("saveAIRecord", "saveReferenceValue", "saveConnector"):
+        body = function_body(name)
+        assert 'project_id:"platform"' in body
+        assert "projects[0]" not in body
+
+    connectors = function_body("loadConnectors")
+    assert 'cards("connector-list",connectors' in connectors
+    assert ').join("")' not in connectors
 
 
 def test_http_handler_writes_immutable_tuple_headers() -> None:

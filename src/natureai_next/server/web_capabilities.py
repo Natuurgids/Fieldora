@@ -237,6 +237,10 @@ _ZERO_TRUST_WEB_PATCH = bytes(
  document.head.appendChild(style);
  const allowed=page=>ready&&capabilities.pages?.[pageCapability[page]||page]===true;
  const mark=(node,hidden)=>{if(node)node.dataset.fieldoraAuthorizationHidden=hidden?"true":"false"};
+ const projectItems=()=>{
+  const list=window.FieldoraModuleContracts?.resolve?.('projects.list.read');
+  return list?.items?Array.from(list.items()||[]):projects;
+ };
  const aiActionFor={
   provider:'aiadmin.providers.manage',model:'aiadmin.models.manage',mcp:'aiadmin.mcp.manage'
  };
@@ -293,8 +297,9 @@ _ZERO_TRUST_WEB_PATCH = bytes(
  loadHome=async function(){
   if(!ready)return;
   const metrics=[];
+  const homeProjects=allowed('projects')?projectItems():[];
   let runtime=null;
-  if(allowed('projects'))metrics.push(['Projects',projects.length]);
+  if(allowed('projects'))metrics.push(['Projects',homeProjects.length]);
   if(allowed('dossiers')){
    const result=await baseApi('/api/v1/dossiers');
    metrics.push(['Dossiers',(result.items||[]).length]);
@@ -306,7 +311,7 @@ _ZERO_TRUST_WEB_PATCH = bytes(
   const homeMetrics=document.getElementById('home-metrics');
   homeMetrics.innerHTML=metrics.map(([a,b])=>`<section class="card metric"><span class="muted">${esc(a)}</span><strong>${esc(b)}</strong><span class="accent">Governed workspace</span></section>`).join('');
   mark(homeMetrics,metrics.length===0);
-  if(allowed('projects'))cards('home-projects',projects,p=>`<div class="row" data-project="${esc(p.id)}"><strong>${esc(p.name||p.title||p.id)}</strong><span>${esc(p.status||'Active')}</span><span>${esc(p.description||'')}</span><button>Open</button></div>`);
+  if(allowed('projects'))cards('home-projects',homeProjects,p=>`<div class="row" data-project="${esc(p.id)}"><strong>${esc(p.name||p.title||p.id)}</strong><span>${esc(p.status||'Active')}</span><span>${esc(p.description||'')}</span><button>Open</button></div>`);
   if(runtime)document.getElementById('home-runtime').innerHTML=Object.entries(runtime.backends||{}).map(([k,v])=>`<p><strong>${esc(k.replaceAll('_',' '))}</strong><br><span class="accent">${esc(v)}</span></p>`).join('');
   apply();
  };

@@ -55,6 +55,8 @@ _LEGACY_PORTFOLIO_VIEW_WIRING = b'document.querySelectorAll("[data-portfolio-vie
 _LEGACY_PROJECTS_SHOWPAGE_LOAD = b'if(name==="projects")loadPortfolio();'
 _LEGACY_WORK_SAVE_REFRESH = b'if(await saveGeneric(path,item,"work-status",`${type} saved.`))loadPortfolio()'
 _PROJECT_EVENT_WORK_SAVE_REFRESH = b'if(await saveGeneric(path,item,"work-status",`${type} saved.`))document.dispatchEvent(new CustomEvent("fieldora:project-work-changed",{detail:{module_id:"legacy.work-editor",project_id:project,kind:type,item:null}}))'
+_LEGACY_PORTFOLIO_LOADER_START = b"async function loadPortfolio(){"
+_LEGACY_PORTFOLIO_LOADER_END = b"async function saveWorkItem(){"
 _PORTFOLIO_OWNER_MARKER = b"WEB-PORTFOLIO-MODULE"
 _PROJECT_OWNER_MARKER = b"WEB-PROJECT-CORE-MODULE"
 _PROJECT_CREATION_OWNER_MARKER = b"WEB-PROJECT-CREATION-MODULE"
@@ -204,9 +206,11 @@ def _rewrite_owned_browser_response(body: bytes) -> bytes:
         )
     if _PROJECT_OWNER_MARKER in body:
         body = _strip_legacy_range(
-            body,
-            _PROJECT_COCKPIT_WORK_WIRING_START,
-            _PROJECT_COCKPIT_WORK_WIRING_END,
+            body, _PROJECT_COCKPIT_WORK_WIRING_START, _PROJECT_COCKPIT_WORK_WIRING_END
+        )
+    if _PROJECT_OWNER_MARKER in body and _PORTFOLIO_OWNER_MARKER in body:
+        body = _strip_legacy_range(
+            body, _LEGACY_PORTFOLIO_LOADER_START, _LEGACY_PORTFOLIO_LOADER_END
         )
     if _PROJECT_CREATION_OWNER_MARKER in body:
         body = _strip_legacy_range(

@@ -57,12 +57,15 @@ _LEGACY_WORK_SAVE_REFRESH = b'if(await saveGeneric(path,item,"work-status",`${ty
 _PROJECT_EVENT_WORK_SAVE_REFRESH = b'if(await saveGeneric(path,item,"work-status",`${type} saved.`))document.dispatchEvent(new CustomEvent("fieldora:project-work-changed",{detail:{module_id:"legacy.work-editor",project_id:project,kind:type,item:null}}))'
 _LEGACY_PORTFOLIO_LOADER_START = b"async function loadPortfolio(){"
 _LEGACY_PORTFOLIO_LOADER_END = b"async function saveWorkItem(){"
+_LEGACY_RESEARCH_PROJECT_LIST_START = b'cards("project-list",projects,'
+_LEGACY_RESEARCH_PROJECT_LIST_END = b'cards("dossier-list",dossiers,'
 _PORTFOLIO_OWNER_MARKER = b"WEB-PORTFOLIO-MODULE"
 _PROJECT_OWNER_MARKER = b"WEB-PROJECT-CORE-MODULE"
 _PROJECT_CREATION_OWNER_MARKER = b"WEB-PROJECT-CREATION-MODULE"
 _PROJECT_LIFECYCLE_OWNER_MARKER = b"WEB-PROJECT-LIFECYCLE-MODULE"
 _PROJECT_WORK_ACTIONS_OWNER_MARKER = b"WEB-PROJECT-WORK-ACTIONS-MODULE"
 _PROJECT_EVIDENCE_ACTIONS_OWNER_MARKER = b"WEB-PROJECT-EVIDENCE-ACTIONS-MODULE"
+_RESEARCH_OWNER_MARKER = b"WEB-PROJECT-RESEARCH-INTEGRATION"
 
 # Project creation first shipped inside the general browser-functionality patch.
 # Remove only that bounded fragment once Projects/Core has its dedicated owner.
@@ -211,6 +214,12 @@ def _rewrite_owned_browser_response(body: bytes) -> bytes:
     if _PROJECT_OWNER_MARKER in body and _PORTFOLIO_OWNER_MARKER in body:
         body = _strip_legacy_range(
             body, _LEGACY_PORTFOLIO_LOADER_START, _LEGACY_PORTFOLIO_LOADER_END
+        )
+    if _RESEARCH_OWNER_MARKER in body:
+        body = _strip_legacy_range(
+            body,
+            _LEGACY_RESEARCH_PROJECT_LIST_START,
+            _LEGACY_RESEARCH_PROJECT_LIST_END,
         )
     if _PROJECT_CREATION_OWNER_MARKER in body:
         body = _strip_legacy_range(

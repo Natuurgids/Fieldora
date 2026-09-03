@@ -322,7 +322,7 @@ _ZERO_TRUST_WEB_PATCH = bytes(
   if(allowed('projects')){
    const list=window.FieldoraModuleContracts?.resolve?.('projects.list.read');
    if(list?.refresh){
-    const items=await list.refresh();projects=items.map(item=>({...item}));
+    await list.refresh();
    }else{
     const result=await baseApi('/api/v1/projects');projects=result.items||[];
    }

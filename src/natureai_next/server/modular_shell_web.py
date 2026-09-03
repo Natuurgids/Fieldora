@@ -50,6 +50,7 @@ _LEGACY_HISTORY_ROUTING_END = b" function selectTab(buttons,selected){"
 _LEGACY_PORTFOLIO_START = b" /* Projects & Portfolio used to change only the selected button.  Render a\n"
 _LEGACY_PORTFOLIO_END = b" /* Knowledge tabs previously had no state or handlers at all. */"
 _LEGACY_PORTFOLIO_REFRESH_WIRING = b'q("portfolio-refresh").onclick=loadPortfolio;'
+_LEGACY_PORTFOLIO_SCOPE_WIRING = b'q("portfolio-scope").onchange=loadPortfolio;'
 _LEGACY_PROJECTS_SHOWPAGE_LOAD = b'if(name==="projects")loadPortfolio();'
 _PORTFOLIO_OWNER_MARKER = b"WEB-PORTFOLIO-MODULE"
 _PROJECT_OWNER_MARKER = b"WEB-PROJECT-CORE-MODULE"
@@ -167,6 +168,7 @@ def _rewrite_owned_browser_response(body: bytes) -> bytes:
             body, _LEGACY_PORTFOLIO_START, _LEGACY_PORTFOLIO_END
         )
         body = body.replace(_LEGACY_PORTFOLIO_REFRESH_WIRING, b"", 1)
+        body = body.replace(_LEGACY_PORTFOLIO_SCOPE_WIRING, b"", 1)
     if _PROJECT_OWNER_MARKER in body:
         # Managed Project APIs remain authoritative; only browser competitors are
         # retired after their Projects/Core replacements are present. Strip the

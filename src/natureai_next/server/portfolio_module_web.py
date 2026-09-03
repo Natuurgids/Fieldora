@@ -112,6 +112,7 @@ _PORTFOLIO_MODULE_PATCH = bytes(
  function mount(){
   if(state.mounted)return;state.mounted=true;state.controller=new AbortController();const signal=state.controller.signal;
   document.querySelectorAll("[data-portfolio-view]").forEach(button=>button.addEventListener("click",()=>{state.view=button.dataset.portfolioView||"hierarchy";refresh()},{signal}));
+  q("portfolio-refresh")?.addEventListener("click",refresh,{signal});
   q("portfolio-scope")?.addEventListener("change",refresh,{signal});
   q("portfolio-list")?.addEventListener("click",event=>openProjectFrom(event.target),{signal});
   q("portfolio-list")?.addEventListener("keydown",event=>{if(event.key!=="Enter"&&event.key!==" ")return;if(openProjectFrom(event.target))event.preventDefault()},{signal});

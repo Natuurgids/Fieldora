@@ -255,6 +255,20 @@ def test_zero_trust_project_list_fails_closed_under_contract_runtime() -> None:
     assert "else if(!window.FieldoraModuleContracts){" in script
 
 
+def test_zero_trust_project_options_refresh_is_fallback_only() -> None:
+    response = patch_zero_trust_web_response(
+        "/app.js",
+        ApiResponse(200, b"const baseApp=true;", "text/javascript; charset=utf-8"),
+    )
+    script = response.body.decode("utf-8")
+
+    assert "let refreshedProjectList=false;" in script
+    assert "await list.refresh();\n    refreshedProjectList=true;" in script
+    assert "if(!refreshedProjectList)projectOptions();" in script
+    assert "else if(!window.FieldoraModuleContracts){\n    const result=await baseApi('/api/v1/projects');projects=result.items||[];" in script
+    assert "projects=[];" in script
+
+
 def test_http_handler_writes_immutable_tuple_headers() -> None:
     class Application:
         def dispatch(self, method, target, headers, body):

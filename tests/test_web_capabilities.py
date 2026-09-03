@@ -15,7 +15,11 @@ from natureai_next.domain.access_control import (
 )
 from natureai_next.server.api import ApiResponse
 from natureai_next.server.http import handler_for
-from natureai_next.server.web_capabilities import capability_payload, project_help_response
+from natureai_next.server.web_capabilities import (
+    capability_payload,
+    patch_zero_trust_web_response,
+    project_help_response,
+)
 
 
 class AccessRepository:
@@ -235,6 +239,20 @@ def test_help_projection_removes_denied_workspace_topics_and_direct_lookup() -> 
     )
     assert denied.status == 404
     assert json.loads(denied.body) == {"error": "help_topic_not_found"}
+
+
+def test_zero_trust_project_list_fails_closed_under_contract_runtime() -> None:
+    response = patch_zero_trust_web_response(
+        "/app.js",
+        ApiResponse(200, b"const baseApp=true;", "text/javascript; charset=utf-8"),
+    )
+    script = response.body.decode("utf-8")
+
+    assert "if(list?.items)return Array.from(list.items()||[]);" in script
+    assert "return window.FieldoraModuleContracts?[]:projects;" in script
+    assert "await list.refresh();" in script
+    assert "const items=await list.refresh();projects=items.map(item=>({...item}));" not in script
+    assert "else if(!window.FieldoraModuleContracts){" in script
 
 
 def test_http_handler_writes_immutable_tuple_headers() -> None:

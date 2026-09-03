@@ -53,6 +53,26 @@ def test_project_research_adapter_uses_replaceable_projects_contracts() -> None:
     assert "loadResearchDomain" not in script
 
 
+def test_research_export_uses_project_context_contract() -> None:
+    response = patch_project_research_integration_response(
+        "/app.js",
+        ApiResponse(
+            200,
+            b"async function exportProject(){if(!selectedProject)return;}",
+            "text/javascript; charset=utf-8",
+        ),
+    )
+    script = response.body.decode("utf-8")
+    adapter = script.split("/* WEB-PROJECT-RESEARCH-INTEGRATION", 1)[1]
+
+    assert "async function exportCurrentProject()" in adapter
+    assert "const pid=currentProject()" in adapter
+    assert 'resolve?.("projects.context.select")' in adapter
+    assert "project_id:pid" in adapter
+    assert "selectedProject" not in adapter
+    assert 'if(typeof exportProject==="function")exportProject=exportCurrentProject' in adapter
+
+
 def test_research_records_exposes_project_context_bridge() -> None:
     response = patch_research_records_response(
         "/app.js", ApiResponse(200, b"", "text/javascript; charset=utf-8")

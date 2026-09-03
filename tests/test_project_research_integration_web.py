@@ -53,6 +53,30 @@ def test_project_research_adapter_uses_replaceable_projects_contracts() -> None:
     assert "loadResearchDomain" not in script
 
 
+def test_research_project_open_uses_project_context_contract() -> None:
+    response = patch_project_research_integration_response(
+        "/app.js",
+        ApiResponse(
+            200,
+            b'function openProject(id){selectedProject=id;showPage("research")}',
+            "text/javascript; charset=utf-8",
+        ),
+    )
+    script = response.body.decode("utf-8")
+    adapter = script.split("/* WEB-PROJECT-RESEARCH-INTEGRATION", 1)[1]
+
+    assert 'const legacyOpenProject=typeof openProject==="function"?openProject:null' in adapter
+    assert "async function openResearchProject(id)" in adapter
+    assert "const context=projectContext()" in adapter
+    assert "await context.select(pid)" in adapter
+    assert "if(selected===false)return false" in adapter
+    assert "if(legacyOpenProject)legacyOpenProject(pid)" in adapter
+    assert "await applyResearchProject()" in adapter
+    assert "selectedProject" not in adapter
+    assert 'if(legacyOpenProject)openProject=openResearchProject' in adapter
+    assert "openSelectedProject,openResearchProject,applyResearchProject" in adapter
+
+
 def test_research_export_uses_project_context_contract() -> None:
     response = patch_project_research_integration_response(
         "/app.js",

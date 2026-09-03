@@ -154,11 +154,12 @@ def test_project_and_portfolio_owners_remove_legacy_portfolio_loader_only() -> N
     assert "WEB-PORTFOLIO-MODULE" in script
 
 
-def test_research_owner_removes_legacy_project_list_rendering_only() -> None:
+def test_research_owner_removes_legacy_project_list_rendering_and_wiring_only() -> None:
     legacy = (
         b'async function loadResearch(){cards("project-list",projects,p=>`<div data-project="${p.id}"></div>`);'
         b'cards("dossier-list",dossiers,r=>`<div>${r.id}</div>`);await loadResearchDomain()}'
         b'function openProject(id){selectedProject=id;q("project-detail").innerHTML=id;showPage("research")}'
+        b'q("project-list").onclick=e=>{const row=e.target.closest("[data-project]");if(row)openProject(row.dataset.project)};'
         b'q("home-projects").onclick=e=>{const row=e.target.closest("[data-project]");if(row)openProject(row.dataset.project)};'
     )
     base = ApiResponse(200, legacy, "text/javascript; charset=utf-8")
@@ -167,6 +168,7 @@ def test_research_owner_removes_legacy_project_list_rendering_only() -> None:
     script = final.body.decode("utf-8")
 
     assert 'cards("project-list",projects,' not in script
+    assert 'q("project-list").onclick=e=>' not in script
     assert 'cards("dossier-list",dossiers,' in script
     assert "function openProject(id)" in script
     assert 'q("project-detail").innerHTML=id' in script

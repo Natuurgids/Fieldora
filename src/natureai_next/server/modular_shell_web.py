@@ -68,6 +68,8 @@ _LEGACY_DOSSIER_LOADER_END = b"async function loadResearchDomain(){"
 _LEGACY_DOSSIER_REFRESH_WIRING = b'q("dossier-refresh").onclick=loadDossierWorkspace;'
 _LEGACY_DOSSIER_SAVE_WIRING = b'q("dossier-save").onclick=saveDossierWorkspace;'
 _LEGACY_DOSSIER_LIST_WIRING = b'q("dossier-workspace-list").onclick=e=>{const row=e.target.closest("[data-dossier-workspace]");if(!row)return;const dossiers=JSON.parse(q("dossier-workspace-list").dataset.records||"[]"),reviews=JSON.parse(q("dossier-workspace-list").dataset.reviews||"[]"),d=dossiers.find(x=>x.id===row.dataset.dossierWorkspace);q("dossier-workspace-detail").innerHTML=`<h3>${esc(recordName(d||{}))}</h3><pre>${esc(JSON.stringify(d,null,2))}</pre><h4>Review history</h4><pre>${esc(JSON.stringify(reviews.filter(r=>r.dossier_id===d?.id),null,2))}</pre>`};'
+_LEGACY_DOSSIER_PROJECT_OPTIONS = b'"dossier-project","science-project"'
+_MANAGED_DOSSIER_PROJECT_OPTIONS = b'"science-project"'
 _PORTFOLIO_OWNER_MARKER = b"WEB-PORTFOLIO-MODULE"
 _PROJECT_OWNER_MARKER = b"WEB-PROJECT-CORE-MODULE"
 _PROJECT_CREATION_OWNER_MARKER = b"WEB-PROJECT-CREATION-MODULE"
@@ -233,7 +235,9 @@ def _rewrite_owned_browser_response(body: bytes) -> bytes:
             _LEGACY_RESEARCH_PROJECT_LIST_END,
         )
         body = body.replace(_LEGACY_RESEARCH_PROJECT_LIST_WIRING, b"", 1)
-        body = body.replace(_LEGACY_RESEARCH_SELECTED_PROJECT_WRITE, b"function openProject(id){", 1)
+        body = body.replace(
+            _LEGACY_RESEARCH_SELECTED_PROJECT_WRITE, b"function openProject(id){", 1
+        )
     if _PROJECT_CREATION_OWNER_MARKER in body:
         body = _strip_legacy_range(
             body, _LEGACY_PROJECT_CREATION_START, _LEGACY_PROJECT_CREATION_END
@@ -245,13 +249,19 @@ def _rewrite_owned_browser_response(body: bytes) -> bytes:
         and _PROJECT_EVIDENCE_ACTIONS_OWNER_MARKER in body
     ):
         body = body.replace(_PROJECT_RUNTIME_WEB_PATCH, b"", 1)
-    if _DOSSIER_OWNER_MARKER in body and _DOSSIER_REGISTRY_MARKER in _MODULAR_SHELL_BOOTSTRAP:
+    if (
+        _DOSSIER_OWNER_MARKER in body
+        and _DOSSIER_REGISTRY_MARKER in _MODULAR_SHELL_BOOTSTRAP
+    ):
         body = _strip_legacy_range(
             body, _LEGACY_DOSSIER_LOADER_START, _LEGACY_DOSSIER_LOADER_END
         )
         body = body.replace(_LEGACY_DOSSIER_REFRESH_WIRING, b"", 1)
         body = body.replace(_LEGACY_DOSSIER_SAVE_WIRING, b"", 1)
         body = body.replace(_LEGACY_DOSSIER_LIST_WIRING, b"", 1)
+        body = body.replace(
+            _LEGACY_DOSSIER_PROJECT_OPTIONS, _MANAGED_DOSSIER_PROJECT_OPTIONS, 1
+        )
     body = body.replace(_MODULAR_SHELL_BOOTSTRAP, b"", 1)
     return body + _MODULAR_SHELL_BOOTSTRAP
 

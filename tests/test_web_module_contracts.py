@@ -48,10 +48,12 @@ def test_project_integrations_are_owned_by_bounded_modules() -> None:
     projects = registry.resolve("/projects")
     capacity = registry.resolve("/capacity")
     research = registry.resolve("/research")
+    dossiers = registry.resolve("/dossiers")
 
     assert projects is not None
     assert capacity is not None
     assert research is not None
+    assert dossiers is not None
     assert capacity.module_id == "capacity"
     assert capacity.dependencies == ()
     assert capacity.requires_contracts == (
@@ -64,10 +66,24 @@ def test_project_integrations_are_owned_by_bounded_modules() -> None:
         "projects.context.select",
         "projects.toolbar.extend",
     )
+    assert dossiers.module_id == "dossiers.workspace"
+    assert dossiers.dependencies == ()
+    assert dossiers.requires_contracts == ("projects.context.select",)
+    assert dossiers.owns_actions == (
+        "dossiers.workspace.view",
+        "dossiers.create",
+        "dossiers.review.create",
+    )
     assert registry.action_owner("capacity.project.allocations.view") is capacity
     assert registry.action_owner("research.project.records.view") is research
+    assert registry.action_owner("dossiers.workspace.view") is dossiers
+    assert registry.action_owner("dossiers.create") is dossiers
+    assert registry.action_owner("dossiers.review.create") is dossiers
     assert "capacity.project.allocations.view" not in projects.owns_actions
     assert "research.project.records.view" not in projects.owns_actions
+    assert "dossiers.workspace.view" not in projects.owns_actions
+    assert "dossiers.create" not in projects.owns_actions
+    assert "dossiers.review.create" not in projects.owns_actions
 
 
 def test_registry_rejects_duplicate_route_ownership() -> None:
@@ -224,6 +240,35 @@ def test_research_can_bind_to_replacement_projects_contract_provider() -> None:
     assert registry.contract_provider("projects.context.select") is replacement
     assert registry.contract_provider("projects.toolbar.extend") is replacement
     assert research.dependencies == ()
+
+
+def test_dossiers_can_bind_to_replacement_projects_context_provider() -> None:
+    replacement = WebModuleSpec(
+        "projects.replacement",
+        "/projects",
+        "Projects replacement",
+        provides_contracts=("projects.context.select",),
+    )
+    dossiers = WebModuleSpec(
+        "dossiers.workspace",
+        "/dossiers",
+        "Dossiers",
+        owns_actions=(
+            "dossiers.workspace.view",
+            "dossiers.create",
+            "dossiers.review.create",
+        ),
+        requires_contracts=("projects.context.select",),
+    )
+    registry = WebModuleRegistry((replacement, dossiers))
+
+    registry.validate_dependencies()
+    registry.validate_contracts()
+
+    assert registry.contract_provider("projects.context.select") is replacement
+    assert dossiers.dependencies == ()
+    assert "projects.list.read" not in dossiers.requires_contracts
+    assert "projects.toolbar.extend" not in dossiers.requires_contracts
 
 
 def test_capability_projection_only_controls_visibility() -> None:

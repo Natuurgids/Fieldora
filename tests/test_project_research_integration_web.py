@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from natureai_next.server.api import ApiResponse
 from natureai_next.server.offline_first_api import OfflineFirstFieldoraApi
 from natureai_next.server.project_research_integration_web import (
@@ -115,6 +117,26 @@ def test_research_record_editor_uses_project_context_contract() -> None:
     assert "selectedProject" not in adapter
     assert 'if(typeof editRecord==="function")editRecord=editResearchRecord' in adapter
     assert "editResearchRecord,exportCurrentProject" in adapter
+
+
+def test_legacy_record_project_selector_remains_required_by_generic_record_save() -> None:
+    script = Path("src/natureai_next/resources/server_web/app.js").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'q("record-project").value=selectedProject||""' in script
+    assert 'project=q("record-project").value' in script
+    assert 'project_id:kind==="project"?undefined:project' in script
+
+    response = patch_project_research_integration_response(
+        "/app.js", ApiResponse(200, script.encode("utf-8"), "text/javascript; charset=utf-8")
+    )
+    adapter = response.body.decode("utf-8").split(
+        "/* WEB-PROJECT-RESEARCH-INTEGRATION", 1
+    )[1]
+
+    assert 'q("record-project").value=kind==="project"?"":currentProject()' in adapter
+    assert "selectedProject" not in adapter
 
 
 def test_research_records_exposes_project_context_bridge() -> None:

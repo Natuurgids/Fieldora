@@ -4,29 +4,23 @@ from natureai_next.server.api import ApiResponse
 from natureai_next.server.web_compatibility import patch_web_response
 
 
-def test_legacy_dossier_project_selector_tracks_canonical_context() -> None:
+def test_compatibility_keeps_project_list_mirror_without_dossier_context_ownership() -> None:
     response = patch_web_response(
         "/app.js",
         ApiResponse(200, b"const baseApp=true;", "text/javascript; charset=utf-8"),
     )
     script = response.body.decode("utf-8")
 
+    assert "function syncLegacyProjectsFromListContract()" in script
+    assert 'resolve?.("projects.list.read")' in script
+    assert "projects=Array.from(list.items()||[],item=>({...item}));projectOptions();" in script
     assert (
-        'function currentProjectContext(){return window.FieldoraModuleContracts?.resolve?.("projects.context.select")?.current?.()||"";}'
+        'document.addEventListener("fieldora:project-list-changed",syncLegacyProjectsFromListContract);'
         in script
     )
-    start = script.index("function syncLegacyDossierProjectSelector()")
-    end = script.index("function syncLegacyProjectsFromListContract()", start)
-    bridge = script[start:end]
-    assert 'q("dossier-project")' in bridge
-    assert "projects[0]" not in bridge
 
-    assert "projectOptions();syncLegacyDossierProjectSelector();" in script
-    assert (
-        'document.addEventListener("fieldora:project-context-changed",syncLegacyDossierProjectSelector);'
-        in script
-    )
-    assert (
-        'event.detail?.contract==="projects.context.select")syncLegacyDossierProjectSelector();'
-        in script
-    )
+    assert "currentProjectContext" not in script
+    assert "syncLegacyDossierProjectSelector" not in script
+    assert 'resolve?.("projects.context.select")' not in script
+    assert 'q("dossier-project")' not in script
+    assert 'document.addEventListener("fieldora:project-context-changed"' not in script

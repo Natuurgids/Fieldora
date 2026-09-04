@@ -6,6 +6,21 @@ from urllib.parse import urlsplit
 
 from natureai_next.server.api import ApiResponse
 
+_LEGACY_WORK_PROJECT_ID = b'project_id:q("work-project").value,'
+_MANAGED_WORK_PROJECT_ID = (
+    b'project_id:(()=>{const context=window.FieldoraModuleContracts?.resolve?.('
+    b'"projects.context.select");if(context){const projectId=String(context.current?.()||"");'
+    b'if(!projectId)throw new Error("Select a project before saving work.");return projectId}'
+    b'return q("work-project").value})(),'
+)
+
+
+def _patch_legacy_work_project_context(body: bytes) -> bytes:
+    """Make managed Project context authoritative without removing the legacy editor."""
+
+    return body.replace(_LEGACY_WORK_PROJECT_ID, _MANAGED_WORK_PROJECT_ID, 1)
+
+
 _PROJECT_CONTEXT_PROVIDER_PATCH = bytes(
     r"""
 
@@ -68,9 +83,10 @@ def patch_project_context_provider_response(target: str, response: ApiResponse) 
         or _PROJECT_CONTEXT_PROVIDER_PATCH in response.body
     ):
         return response
+    body = _patch_legacy_work_project_context(response.body)
     return ApiResponse(
         response.status,
-        response.body + _PROJECT_CONTEXT_PROVIDER_PATCH,
+        body + _PROJECT_CONTEXT_PROVIDER_PATCH,
         response.content_type,
         response.headers,
     )

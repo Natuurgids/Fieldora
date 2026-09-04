@@ -35,6 +35,31 @@ def test_context_provider_requires_project_owner_and_contract_runtime() -> None:
     assert "owner()?.currentProject?.()" in script
 
 
+def test_context_provider_makes_managed_context_authoritative_for_legacy_work_save() -> None:
+    legacy = ApiResponse(
+        200,
+        b'async function saveWorkItem(){const body={project_id:q("work-project").value,kind:q("work-kind").value};}',
+        "text/javascript; charset=utf-8",
+    )
+
+    # Without the managed owner/runtime boundary, the legacy selector stays intact.
+    project_only = patch_project_core_module_response("/app.js", legacy)
+    assert patch_project_context_provider_response("/app.js", project_only) is project_only
+    assert b'project_id:q("work-project").value,' in project_only.body
+
+    shell = patch_modular_shell_response("/app.js", project_only)
+    contracts = patch_runtime_contracts_response("/app.js", shell)
+    patched = patch_project_context_provider_response("/app.js", contracts)
+    script = patched.body.decode("utf-8")
+
+    assert 'resolve?.("projects.context.select")' in script
+    assert 'const projectId=String(context.current?.()||"")' in script
+    assert 'if(!projectId)throw new Error("Select a project before saving work.")' in script
+    assert 'return q("work-project").value' in script
+    assert 'project_id:q("work-project").value,' not in script
+    assert 'q("work-project")' in script
+
+
 def test_projects_toolbar_extension_provider_owns_cockpit_dom_boundary() -> None:
     project = patch_project_core_module_response(
         "/app.js", ApiResponse(200, b"", "text/javascript; charset=utf-8")

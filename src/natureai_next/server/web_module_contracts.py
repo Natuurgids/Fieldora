@@ -285,6 +285,17 @@ FOUNDATION_WEB_MODULES: tuple[WebModuleSpec, ...] = (
             "projects.toolbar.extend",
         ),
     ),
+    WebModuleSpec(
+        "dossiers.workspace",
+        "/dossiers",
+        "Dossiers",
+        owns_actions=(
+            "dossiers.workspace.view",
+            "dossiers.create",
+            "dossiers.review.create",
+        ),
+        requires_contracts=("projects.context.select",),
+    ),
     WebModuleSpec("knowledge.center", "/knowledge", "Knowledge & AI"),
     WebModuleSpec(
         "admin.shell",

@@ -20,12 +20,8 @@ _WEB_PLATFORM_PATCH = bytes(r"""
  const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
  const oldProjectOptions=projectOptions;
  projectOptions=function(){oldProjectOptions();const s=q("upload-project");if(s){const o=s.querySelector('option[value=""]');if(o)o.textContent="General Library (no project)";const l=s.closest("label");if(l&&l.firstChild)l.firstChild.textContent="Project (optional)";}};
- function currentProjectContext(){return window.FieldoraModuleContracts?.resolve?.("projects.context.select")?.current?.()||"";}
- function syncLegacyDossierProjectSelector(){const pid=currentProjectContext(),selector=q("dossier-project");if(selector&&pid&&selector.value!==pid)selector.value=pid;return pid;}
- function syncLegacyProjectsFromListContract(){const list=window.FieldoraModuleContracts?.resolve?.("projects.list.read");if(!list?.items)return;projects=Array.from(list.items()||[],item=>({...item}));projectOptions();syncLegacyDossierProjectSelector();}
+ function syncLegacyProjectsFromListContract(){const list=window.FieldoraModuleContracts?.resolve?.("projects.list.read");if(!list?.items)return;projects=Array.from(list.items()||[],item=>({...item}));projectOptions();}
  document.addEventListener("fieldora:project-list-changed",syncLegacyProjectsFromListContract);
- document.addEventListener("fieldora:project-context-changed",syncLegacyDossierProjectSelector);
- document.addEventListener("fieldora:contract-registered",event=>{if(event.detail?.contract==="projects.context.select")syncLegacyDossierProjectSelector();});
  const sp=q("stage-project");if(sp){sp.placeholder="Leave empty for General Library";const l=sp.closest("label");if(l&&l.firstChild)l.firstChild.textContent="Project ID (optional)";}
 
  async function stagedUploadGeneral(){

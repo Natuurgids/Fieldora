@@ -17,26 +17,25 @@ _PROJECT_CAPACITY_INTEGRATION_PATCH = bytes(
 /* WEB-PROJECT-CAPACITY-INTEGRATION: bounded Projects -> Capacity navigation. */
 (()=>{
  if(window.__fieldoraProjectCapacityIntegrationWired)return;window.__fieldoraProjectCapacityIntegrationWired=true;
- const ownerModule="capacity",entryKey="capacity.project.open",q=id=>document.getElementById(id);
+ const ownerModule="capacity",entryKey="capacity.project.open";
  const state={projectId:""};
  const projectContext=()=>window.FieldoraModuleContracts?.resolve?.("projects.context.select")||null;
  const projectToolbar=()=>window.FieldoraModuleContracts?.resolve?.("projects.toolbar.extend")||null;
  function report(error,fallback){const text=error?.message||fallback;document.dispatchEvent(new CustomEvent("fieldora:module-error",{detail:{module_id:ownerModule,error:String(text)}}))}
  function currentProject(){return projectContext()?.current?.()||state.projectId||""}
- function syncLegacyProjectSelector(){const pid=currentProject(),selector=q("capacity-project");if(selector&&pid&&selector.value!==pid)selector.value=pid;return pid}
  function updateEntry(){return projectToolbar()?.setEnabled?.(entryKey,Boolean(currentProject()))??false}
  function ensureEntry(){
   const toolbar=projectToolbar();if(!toolbar?.upsert)return false;
   toolbar.upsert({key:entryKey,label:"Open capacity",ownerModule,action:"capacity.project.open",enabled:Boolean(currentProject()),activate:openSelectedProject});return true;
  }
- async function applyCapacityProject(){const pid=currentProject();if(!pid)return false;syncLegacyProjectSelector();const bridge=window.FieldoraCapacity;if(!bridge?.openProject)throw new Error("Capacity workspace integration is unavailable.");await bridge.openProject(pid);return true}
+ async function applyCapacityProject(){const pid=currentProject();if(!pid)return false;const bridge=window.FieldoraCapacity;if(!bridge?.openProject)throw new Error("Capacity workspace integration is unavailable.");await bridge.openProject(pid);return true}
  async function openSelectedProject(){
   const pid=currentProject();if(!pid){report(null,"Select a project before opening Capacity.");return}
   try{const target=window.FieldoraModules?.navigate?.("/capacity","project-capacity-integration","push");if(!target)throw new Error("Capacity workspace is unavailable.");await applyCapacityProject()}
   catch(error){report(error,"Capacity could not be opened for this project.")}
  }
- document.addEventListener("fieldora:project-context-changed",event=>{state.projectId=event.detail?.project_id||"";syncLegacyProjectSelector();ensureEntry();updateEntry()});
- document.addEventListener("fieldora:contract-registered",event=>{const name=event.detail?.contract;if(name==="projects.context.select"){state.projectId=currentProject();syncLegacyProjectSelector();updateEntry()}else if(name==="projects.toolbar.extend")ensureEntry()});
+ document.addEventListener("fieldora:project-context-changed",event=>{state.projectId=event.detail?.project_id||"";ensureEntry();updateEntry()});
+ document.addEventListener("fieldora:contract-registered",event=>{const name=event.detail?.contract;if(name==="projects.context.select"){state.projectId=currentProject();updateEntry()}else if(name==="projects.toolbar.extend")ensureEntry()});
  document.addEventListener("fieldora:module-mount",event=>{if(event.detail?.module?.module_id===ownerModule)applyCapacityProject().catch(error=>report(error,"Capacity project context could not be applied."))});
  window.FieldoraProjectCapacityIntegration=Object.freeze({openSelectedProject,applyCapacityProject,currentProject});
  ensureEntry();if(window.FieldoraModules?.current?.()?.module_id===ownerModule)applyCapacityProject().catch(()=>{});

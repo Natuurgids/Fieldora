@@ -109,8 +109,8 @@ def test_project_capacity_adapter_uses_replaceable_projects_contracts() -> None:
     assert 'module_id===projectModule' not in script
     assert "window.FieldoraProjects" not in script
     assert "window.FieldoraCapacity" in script
-    assert 'q("capacity-project")' in script
-    assert "syncLegacyProjectSelector()" in script
+    assert 'q("capacity-project")' not in script
+    assert "syncLegacyProjectSelector" not in script
     assert 'resolve?.("projects.list.read")' not in script
     assert "projects[0]" not in script
     assert "loadCapacity" not in script

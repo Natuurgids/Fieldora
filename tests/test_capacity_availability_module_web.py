@@ -7,6 +7,7 @@ from natureai_next.server.api import ApiResponse
 from natureai_next.server.capacity_availability_module_web import (
     CapacityAvailabilityModuleWebApiMixin,
 )
+from natureai_next.server.capacity_module_web import patch_capacity_module_response
 from natureai_next.server.offline_first_api import OfflineFirstFieldoraApi
 from natureai_next.server.web_module_contracts import foundation_registry
 
@@ -115,6 +116,35 @@ def test_browser_adapter_is_lifecycle_owned_and_hides_private_hr_detail() -> Non
     assert "private HR details stay server-side" in script
     assert "loadCapacity=" not in script
     assert "showPage=" not in script
+
+
+def test_availability_owner_retires_legacy_capacity_create_only_with_allocation_owner() -> None:
+    legacy = (
+        b"async function saveCapacity(){const legacyCapacity=true;}"
+        b"async function loadDossierWorkspace(){const dossier=true;}"
+        b'q("capacity-save").onclick=saveCapacity;'
+    )
+    base = ApiResponse(200, legacy, "text/javascript; charset=utf-8")
+
+    availability_only = CapacityAvailabilityModuleWebApiMixin._patch_browser(
+        "/app.js", base
+    ).body.decode("utf-8")
+    assert "async function saveCapacity(){" in availability_only
+    assert 'q("capacity-save").onclick=saveCapacity;' in availability_only
+
+    allocation_owned = patch_capacity_module_response("/app.js", base)
+    fully_owned = CapacityAvailabilityModuleWebApiMixin._patch_browser(
+        "/app.js", allocation_owned
+    )
+    script = fully_owned.body.decode("utf-8")
+    assert "WEB-CAPACITY-MODULE" in script
+    assert "WEB-CAPACITY-AVAILABILITY-MODULE" in script
+    assert "async function saveCapacity(){" not in script
+    assert 'q("capacity-save").onclick=saveCapacity;' not in script
+    assert "async function loadDossierWorkspace(){const dossier=true;}" in script
+    assert CapacityAvailabilityModuleWebApiMixin._patch_browser(
+        "/app.js", fully_owned
+    ).body == fully_owned.body
 
 
 def test_availability_read_returns_aggregate_workload_and_templates() -> None:

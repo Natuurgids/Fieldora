@@ -20,6 +20,23 @@ from natureai_next.server.browser_functionality_api import _session_cookie
 _ABSENCE_TYPES = frozenset(
     {"annual_leave", "pto", "sick_leave", "medical_appointment", "other"}
 )
+_CAPACITY_ALLOCATION_OWNER_MARKER = b"WEB-CAPACITY-MODULE"
+_LEGACY_CAPACITY_SAVE_START = b"async function saveCapacity(){"
+_LEGACY_CAPACITY_SAVE_END = b"async function loadDossierWorkspace(){"
+_LEGACY_CAPACITY_SAVE_WIRING = b'q("capacity-save").onclick=saveCapacity;'
+
+
+def _retire_legacy_capacity_create(body: bytes) -> bytes:
+    """Retire the shared legacy editor only when allocation ownership also exists."""
+
+    if _CAPACITY_ALLOCATION_OWNER_MARKER not in body:
+        return body
+    start = body.find(_LEGACY_CAPACITY_SAVE_START)
+    end = body.find(_LEGACY_CAPACITY_SAVE_END, start) if start >= 0 else -1
+    if start >= 0 and end >= 0:
+        body = body[:start] + body[end:]
+    return body.replace(_LEGACY_CAPACITY_SAVE_WIRING, b"", 1)
+
 
 _CAPACITY_AVAILABILITY_PATCH = bytes(
     r'''
@@ -237,15 +254,11 @@ class CapacityAvailabilityModuleWebApiMixin:
 
     @staticmethod
     def _patch_browser(target: str, response: ApiResponse) -> ApiResponse:
-        if (
-            urlsplit(target).path != "/app.js"
-            or response.status != 200
-            or _CAPACITY_AVAILABILITY_PATCH in response.body
-        ):
+        if urlsplit(target).path != "/app.js" or response.status != 200:
             return response
-        return ApiResponse(
-            response.status,
-            response.body + _CAPACITY_AVAILABILITY_PATCH,
-            response.content_type,
-            response.headers,
-        )
+        body = _retire_legacy_capacity_create(response.body)
+        if _CAPACITY_AVAILABILITY_PATCH not in body:
+            body += _CAPACITY_AVAILABILITY_PATCH
+        if body == response.body:
+            return response
+        return ApiResponse(response.status, body, response.content_type, response.headers)

@@ -70,6 +70,22 @@ def test_capacity_module_creates_allocations_from_canonical_project_context() ->
     assert "window.projects" not in script
 
 
+def test_capacity_module_retires_only_legacy_allocation_create_choice() -> None:
+    original = ApiResponse(200, b"const baseApp=true;", "text/javascript; charset=utf-8")
+    script = patch_capacity_module_response("/app.js", original).body.decode("utf-8")
+
+    assert "function retireLegacyAllocationCreate()" in script
+    assert 'q("capacity-type")' in script
+    assert 'option[value="allocation"]' in script
+    assert 'option:not([value="allocation"])' in script
+    assert "option.remove()" in script
+    assert "retireLegacyAllocationCreate();if(!ensureSurface())return" in script
+    assert 'q("capacity-save")' not in script
+    assert "work-schedules" not in script
+    assert "absences" not in script
+    assert "obligations" not in script
+
+
 def test_project_capacity_adapter_uses_replaceable_projects_contracts() -> None:
     original = ApiResponse(200, b"const baseApp=true;", "text/javascript; charset=utf-8")
     patched = patch_project_capacity_integration_response("/app.js", original)

@@ -27,6 +27,10 @@ _CAPACITY_MODULE_PATCH = bytes(
   document.dispatchEvent(new CustomEvent("fieldora:module-error",{detail:{module_id:moduleId,error:String(text)}}));
  }
  function clearStatus(){const node=q("capacity-project-status");if(node){node.textContent="";node.classList.remove("error")}}
+ function retireLegacyAllocationCreate(){
+  const type=q("capacity-type"),option=type?.querySelector('option[value="allocation"]');if(!option)return;
+  if(type.value==="allocation")type.value=type.querySelector('option:not([value="allocation"])')?.value||"";option.remove();
+ }
  function ensureSurface(){
   const page=q("page-capacity");if(!page)return false;
   let host=q("capacity-project-context");
@@ -55,7 +59,7 @@ _CAPACITY_MODULE_PATCH = bytes(
   }catch(error){report(error,"Project allocation could not be created.");return false}
  }
  async function openProject(projectId){state.projectId=String(projectId||"");document.dispatchEvent(new CustomEvent("fieldora:capacity-project-changed",{detail:{module_id:moduleId,project_id:state.projectId}}));await refresh();return state.projectId}
- function mount(){if(state.mounted)return;if(!ensureSurface())return;state.mounted=true;state.controller=new AbortController();q("capacity-project-refresh")?.addEventListener("click",refresh,{signal:state.controller.signal});q("capacity-project-allocation-create")?.addEventListener("submit",createAllocation,{signal:state.controller.signal});render();if(state.projectId)refresh()}
+ function mount(){if(state.mounted)return;retireLegacyAllocationCreate();if(!ensureSurface())return;state.mounted=true;state.controller=new AbortController();q("capacity-project-refresh")?.addEventListener("click",refresh,{signal:state.controller.signal});q("capacity-project-allocation-create")?.addEventListener("submit",createAllocation,{signal:state.controller.signal});render();if(state.projectId)refresh()}
  function unmount(){if(!state.mounted)return;state.controller?.abort();state.controller=null;state.mounted=false}
  document.addEventListener("fieldora:module-mount",event=>{if(event.detail?.module?.module_id===moduleId)mount()});
  document.addEventListener("fieldora:module-unmount",event=>{if(event.detail?.module?.module_id===moduleId)unmount()});

@@ -17,15 +17,20 @@ def _legacy_dossier_response() -> ApiResponse:
     return ApiResponse(200, body, "text/javascript; charset=utf-8")
 
 
-def test_dossier_owner_does_not_retire_legacy_workspace_before_registry_ownership() -> None:
+def test_dossier_owner_does_not_retire_legacy_workspace_without_registry_ownership(
+    monkeypatch,
+) -> None:
+    unregistered_bootstrap = shell._MODULAR_SHELL_BOOTSTRAP.replace(
+        shell._DOSSIER_REGISTRY_MARKER, b"", 1
+    )
+    monkeypatch.setattr(shell, "_MODULAR_SHELL_BOOTSTRAP", unregistered_bootstrap)
+
     owned = patch_dossier_module_response("/app.js", _legacy_dossier_response())
     final = shell.patch_modular_shell_response("/app.js", owned)
     script = final.body.decode("utf-8")
 
     assert "WEB-DOSSIER-MODULE" in script
-    assert '"module_id":"dossiers.workspace"' not in shell._MODULAR_SHELL_BOOTSTRAP.decode(
-        "utf-8"
-    )
+    assert '"module_id":"dossiers.workspace"' not in script
     assert "async function loadDossierWorkspace(){" in script
     assert "async function saveDossierWorkspace(){" in script
     assert 'q("dossier-refresh").onclick=loadDossierWorkspace;' in script
@@ -33,11 +38,8 @@ def test_dossier_owner_does_not_retire_legacy_workspace_before_registry_ownershi
     assert shell._LEGACY_DOSSIER_LIST_WIRING.decode("utf-8") in script
 
 
-def test_registered_dossier_owner_retires_only_legacy_workspace_competitors(
-    monkeypatch,
-) -> None:
-    registered_bootstrap = shell._MODULAR_SHELL_BOOTSTRAP + shell._DOSSIER_REGISTRY_MARKER
-    monkeypatch.setattr(shell, "_MODULAR_SHELL_BOOTSTRAP", registered_bootstrap)
+def test_registered_dossier_owner_retires_only_legacy_workspace_competitors() -> None:
+    assert shell._DOSSIER_REGISTRY_MARKER in shell._MODULAR_SHELL_BOOTSTRAP
 
     owned = patch_dossier_module_response("/app.js", _legacy_dossier_response())
     final = shell.patch_modular_shell_response("/app.js", owned)

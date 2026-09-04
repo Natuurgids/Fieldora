@@ -10,6 +10,9 @@ from natureai_next.server.bounded_upload_web import BoundedUploadWebApiMixin
 from natureai_next.server.capacity_availability_module_web import (
     CapacityAvailabilityModuleWebApiMixin,
 )
+from natureai_next.server.capacity_legacy_retirement_web import (
+    CapacityLegacyRetirementWebApiMixin,
+)
 from natureai_next.server.capacity_module_web import CapacityModuleWebApiMixin
 from natureai_next.server.dossier_module_web import DossierModuleWebApiMixin
 from natureai_next.server.facility_actions_api import FacilityActionsApiMixin
@@ -67,6 +70,7 @@ class OfflineFirstFieldoraApi(
     ProjectResearchIntegrationWebApiMixin,
     ProjectCapacityIntegrationWebApiMixin,
     DossierModuleWebApiMixin,
+    CapacityLegacyRetirementWebApiMixin,
     CapacityAvailabilityModuleWebApiMixin,
     CapacityModuleWebApiMixin,
     ProjectTaskEditModuleWebApiMixin,

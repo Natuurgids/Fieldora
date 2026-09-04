@@ -4,6 +4,10 @@ from urllib.parse import urlsplit
 
 from natureai_next.server.api import ApiResponse
 
+_LEGACY_RESEARCH_SAVE_START = b"async function saveScienceRecord(){"
+_LEGACY_RESEARCH_SAVE_END = b"async function reviewSelected(statusValue){"
+_LEGACY_RESEARCH_SAVE_WIRING = b'q("science-save").onclick=saveScienceRecord;'
+
 _RESEARCH_RECORDS_PATCH = bytes(
     r"""
 
@@ -74,6 +78,14 @@ _RESEARCH_RECORDS_PATCH = bytes(
 )
 
 
+def _retire_legacy_research_save(body: bytes) -> bytes:
+    start = body.find(_LEGACY_RESEARCH_SAVE_START)
+    end = body.find(_LEGACY_RESEARCH_SAVE_END, start) if start >= 0 else -1
+    if start >= 0 and end >= 0:
+        body = body[:start] + body[end:]
+    return body.replace(_LEGACY_RESEARCH_SAVE_WIRING, b"", 1)
+
+
 def patch_research_records_response(target: str, response: ApiResponse) -> ApiResponse:
     if (
         urlsplit(target).path != "/app.js"
@@ -81,9 +93,10 @@ def patch_research_records_response(target: str, response: ApiResponse) -> ApiRe
         or _RESEARCH_RECORDS_PATCH in response.body
     ):
         return response
+    body = _retire_legacy_research_save(response.body)
     return ApiResponse(
         response.status,
-        response.body + _RESEARCH_RECORDS_PATCH,
+        body + _RESEARCH_RECORDS_PATCH,
         response.content_type,
         response.headers,
     )

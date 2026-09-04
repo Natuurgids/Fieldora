@@ -60,6 +60,14 @@ _PROJECT_CREATION_MODULE_PATCH = bytes(
   q("project-core-create")?.addEventListener("click",openEditor,{signal});q("project-core-create-save")?.addEventListener("click",save,{signal});q("project-core-create-cancel")?.addEventListener("click",closeEditor,{signal});
  }
  function unmount(){if(!state.mounted)return;state.controller?.abort();state.controller=null;state.mounted=false;closeEditor()}
+ function handleCreateRequest(event){
+  event?.preventDefault?.();
+  const source=String(event?.detail?.source||"projects-create-request");
+  const target=window.FieldoraModules?.navigate?.("/projects",source,"push");
+  if(!target)return emitError(null,"Projects workspace is unavailable.");
+  mount();openEditor();
+ }
+ document.addEventListener("fieldora:projects-create-requested",handleCreateRequest);
  document.addEventListener("fieldora:module-mount",event=>{if(event.detail?.module?.module_id===moduleId)mount()});
  document.addEventListener("fieldora:module-unmount",event=>{if(event.detail?.module?.module_id===moduleId)unmount()});
  window.FieldoraProjectCreation=Object.freeze({mount,unmount,openEditor});

@@ -55,9 +55,14 @@ _PROJECT_RESEARCH_INTEGRATION_PATCH = bytes(
    await applyResearchProject();return true;
   }catch(error){report(error,"Project could not be opened in Research.");return false}
  }
+ function requestProjectCreation(){
+  const event=new CustomEvent("fieldora:projects-create-requested",{cancelable:true,detail:{source:ownerModule}});
+  if(document.dispatchEvent(event))report(null,"Project creation is unavailable.");
+ }
  function editResearchRecord(kind){
+  if(kind==="project"){requestProjectCreation();return}
   q("record-editor").hidden=false;q("record-editor").dataset.kind=kind;q("record-editor-title").textContent=`New ${kind}`;
-  q("record-project").value=kind==="project"?"":currentProject();
+  q("record-project").value=currentProject();
  }
  async function exportCurrentProject(){
   const pid=currentProject();if(!pid)return status("project-job-status","Select a project.",true);

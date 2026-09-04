@@ -4,6 +4,7 @@ from pathlib import Path
 
 from natureai_next.server.api import ApiResponse
 from natureai_next.server.offline_first_api import OfflineFirstFieldoraApi
+from natureai_next.server.project_creation_module_web import patch_project_creation_module_response
 from natureai_next.server.project_research_integration_web import (
     ProjectResearchIntegrationWebApiMixin,
     patch_project_research_integration_response,
@@ -112,11 +113,42 @@ def test_research_record_editor_uses_project_context_contract() -> None:
     adapter = script.split("/* WEB-PROJECT-RESEARCH-INTEGRATION", 1)[1]
 
     assert "function editResearchRecord(kind)" in adapter
-    assert 'q("record-project").value=kind==="project"?"":currentProject()' in adapter
+    assert 'if(kind==="project"){requestProjectCreation();return}' in adapter
+    assert 'q("record-project").value=currentProject()' in adapter
     assert 'resolve?.("projects.context.select")' in adapter
     assert "selectedProject" not in adapter
     assert 'if(typeof editRecord==="function")editRecord=editResearchRecord' in adapter
     assert "editResearchRecord,exportCurrentProject" in adapter
+
+
+def test_research_project_creation_requests_canonical_owner_event() -> None:
+    response = patch_project_research_integration_response(
+        "/app.js",
+        ApiResponse(200, b"function editRecord(kind){}", "text/javascript; charset=utf-8"),
+    )
+    adapter = response.body.decode("utf-8").split(
+        "/* WEB-PROJECT-RESEARCH-INTEGRATION", 1
+    )[1]
+
+    assert 'new CustomEvent("fieldora:projects-create-requested",{cancelable:true' in adapter
+    assert 'detail:{source:ownerModule}' in adapter
+    assert 'if(document.dispatchEvent(event))report(null,"Project creation is unavailable.")' in adapter
+    assert 'if(kind==="project"){requestProjectCreation();return}' in adapter
+    assert 'api("/api/v1/projects"' not in adapter
+    assert "projectOptions()" not in adapter
+
+
+def test_project_creation_owner_handles_optional_research_request() -> None:
+    response = patch_project_creation_module_response(
+        "/app.js", ApiResponse(200, b"", "text/javascript; charset=utf-8")
+    )
+    script = response.body.decode("utf-8")
+
+    assert "function handleCreateRequest(event)" in script
+    assert "event?.preventDefault?.()" in script
+    assert 'navigate?.("/projects",source,"push")' in script
+    assert "mount();openEditor()" in script
+    assert 'addEventListener("fieldora:projects-create-requested",handleCreateRequest)' in script
 
 
 def test_legacy_record_project_selector_remains_required_by_generic_record_save() -> None:
@@ -135,7 +167,8 @@ def test_legacy_record_project_selector_remains_required_by_generic_record_save(
         "/* WEB-PROJECT-RESEARCH-INTEGRATION", 1
     )[1]
 
-    assert 'q("record-project").value=kind==="project"?"":currentProject()' in adapter
+    assert 'if(kind==="project"){requestProjectCreation();return}' in adapter
+    assert 'q("record-project").value=currentProject()' in adapter
     assert "selectedProject" not in adapter
 
 

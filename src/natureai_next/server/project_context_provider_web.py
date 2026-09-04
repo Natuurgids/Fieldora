@@ -13,12 +13,23 @@ _MANAGED_WORK_PROJECT_ID = (
     b'if(!projectId)throw new Error("Select a project before saving work.");return projectId}'
     b'return q("work-project").value})(),'
 )
+_LEGACY_OPEN_PROJECT_LOOKUP = b"const p=projects.find(x=>x.id===id);"
+_MANAGED_OPEN_PROJECT_LOOKUP = (
+    b'const list=window.FieldoraModuleContracts?.resolve?.("projects.list.read"),'
+    b'p=list?.items?Array.from(list.items()||[]).find(x=>x.id===id):null;'
+)
 
 
 def _patch_legacy_work_project_context(body: bytes) -> bytes:
     """Make managed Project context authoritative without removing the legacy editor."""
 
     return body.replace(_LEGACY_WORK_PROJECT_ID, _MANAGED_WORK_PROJECT_ID, 1)
+
+
+def _patch_legacy_project_presentation_list(body: bytes) -> bytes:
+    """Read managed Project presentation records from the canonical list contract."""
+
+    return body.replace(_LEGACY_OPEN_PROJECT_LOOKUP, _MANAGED_OPEN_PROJECT_LOOKUP, 1)
 
 
 _PROJECT_CONTEXT_PROVIDER_PATCH = bytes(
@@ -84,6 +95,7 @@ def patch_project_context_provider_response(target: str, response: ApiResponse) 
     ):
         return response
     body = _patch_legacy_work_project_context(response.body)
+    body = _patch_legacy_project_presentation_list(body)
     return ApiResponse(
         response.status,
         body + _PROJECT_CONTEXT_PROVIDER_PATCH,

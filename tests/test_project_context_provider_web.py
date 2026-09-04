@@ -60,6 +60,28 @@ def test_context_provider_makes_managed_context_authoritative_for_legacy_work_sa
     assert 'q("work-project")' in script
 
 
+def test_context_provider_uses_list_contract_for_legacy_project_presentation() -> None:
+    legacy = ApiResponse(
+        200,
+        b'function openProject(id){const p=projects.find(x=>x.id===id);if(!p)return;render(p)}',
+        "text/javascript; charset=utf-8",
+    )
+
+    project_only = patch_project_core_module_response("/app.js", legacy)
+    assert patch_project_context_provider_response("/app.js", project_only) is project_only
+    assert b"const p=projects.find(x=>x.id===id);" in project_only.body
+
+    shell = patch_modular_shell_response("/app.js", project_only)
+    contracts = patch_runtime_contracts_response("/app.js", shell)
+    patched = patch_project_context_provider_response("/app.js", contracts)
+    script = patched.body.decode("utf-8")
+
+    assert 'resolve?.("projects.list.read")' in script
+    assert "Array.from(list.items()||[]).find(x=>x.id===id)" in script
+    assert "const p=projects.find(x=>x.id===id);" not in script
+    assert ":projects.find(" not in script
+
+
 def test_projects_toolbar_extension_provider_owns_cockpit_dom_boundary() -> None:
     project = patch_project_core_module_response(
         "/app.js", ApiResponse(200, b"", "text/javascript; charset=utf-8")

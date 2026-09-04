@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from natureai_next.server.api import ApiResponse
 from natureai_next.server.dossier_module_web import patch_dossier_module_response
 from natureai_next.server.http import patch_managed_web_response
@@ -79,3 +81,25 @@ def test_production_finalizer_keeps_only_registered_dossier_workspace_owner() ->
     assert "async function loadResearchDomain(){}" in script
     assert '"dossier-project","science-project"' not in script
     assert '"work-project","science-project"' in script
+
+
+def test_dossier_retirement_matches_bundled_app_project_options() -> None:
+    app_path = (
+        Path(__file__).parents[1]
+        / "src"
+        / "natureai_next"
+        / "resources"
+        / "server_web"
+        / "app.js"
+    )
+    base = ApiResponse(200, app_path.read_bytes(), "text/javascript; charset=utf-8")
+
+    owned = patch_dossier_module_response("/app.js", base)
+    early_shell = shell.patch_modular_shell_response("/app.js", owned)
+    final = patch_managed_web_response("/app.js", early_shell)
+    script = final.body.decode("utf-8")
+
+    assert "function projectOptions()" in script
+    assert '"dossier-project","science-project"' not in script
+    assert '"work-project","capacity-project","science-project"' in script
+    assert 'q("dossier-project")' in script

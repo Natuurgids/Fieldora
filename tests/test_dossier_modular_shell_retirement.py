@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from natureai_next.server.api import ApiResponse
 from natureai_next.server.dossier_module_web import patch_dossier_module_response
+from natureai_next.server.http import patch_managed_web_response
 from natureai_next.server import modular_shell_web as shell
 
 
@@ -47,6 +48,25 @@ def test_registered_dossier_owner_retires_only_legacy_workspace_competitors() ->
 
     assert "WEB-DOSSIER-MODULE" in script
     assert '"module_id":"dossiers.workspace"' in script
+    assert "async function loadDossierWorkspace(){" not in script
+    assert "async function saveDossierWorkspace(){" not in script
+    assert 'q("dossier-refresh").onclick=loadDossierWorkspace;' not in script
+    assert 'q("dossier-save").onclick=saveDossierWorkspace;' not in script
+    assert shell._LEGACY_DOSSIER_LIST_WIRING.decode("utf-8") not in script
+    assert "async function loadResearchDomain(){}" in script
+
+
+def test_production_finalizer_keeps_only_registered_dossier_workspace_owner() -> None:
+    owned = patch_dossier_module_response("/app.js", _legacy_dossier_response())
+    early_shell = shell.patch_modular_shell_response("/app.js", owned)
+    final = patch_managed_web_response("/app.js", early_shell)
+    script = final.body.decode("utf-8")
+
+    assert "WEB-DOSSIER-MODULE" in script
+    assert '"module_id":"dossiers.workspace"' in script
+    assert 'q("dossier-refresh")?.addEventListener("click",refresh' in script
+    assert 'q("dossier-save")?.addEventListener("click",save' in script
+    assert 'q("dossier-workspace-list")?.addEventListener("click"' in script
     assert "async function loadDossierWorkspace(){" not in script
     assert "async function saveDossierWorkspace(){" not in script
     assert 'q("dossier-refresh").onclick=loadDossierWorkspace;' not in script

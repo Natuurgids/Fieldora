@@ -1,4 +1,4 @@
-"""Retire legacy Capacity loading only after both modular Capacity owners exist."""
+"""Retire legacy Capacity compatibility wiring after both modular owners exist."""
 
 from __future__ import annotations
 
@@ -12,10 +12,12 @@ _LEGACY_CAPACITY_LOAD_START = b"async function loadCapacity(){"
 _LEGACY_CAPACITY_LOAD_END = b"async function loadDossierWorkspace(){"
 _LEGACY_CAPACITY_SHOWPAGE_LOAD = b'if(name==="capacity")loadCapacity();'
 _LEGACY_CAPACITY_REFRESH_WIRING = b'q("capacity-refresh").onclick=loadCapacity;'
+_LEGACY_CAPACITY_PROJECT_OPTIONS = b'"work-project","capacity-project","dossier-project"'
+_MANAGED_PROJECT_OPTIONS = b'"work-project","dossier-project"'
 
 
 def _retire_legacy_capacity_load(body: bytes) -> bytes:
-    """Remove only the legacy Capacity reader/wiring when both owners are present."""
+    """Remove only legacy Capacity wiring when both modular owners are present."""
 
     if (
         _ALLOCATION_OWNER_MARKER not in body
@@ -27,13 +29,14 @@ def _retire_legacy_capacity_load(body: bytes) -> bytes:
     if start >= 0 and end >= 0:
         body = body[:start] + body[end:]
     body = body.replace(_LEGACY_CAPACITY_SHOWPAGE_LOAD, b"", 1)
-    return body.replace(_LEGACY_CAPACITY_REFRESH_WIRING, b"", 1)
+    body = body.replace(_LEGACY_CAPACITY_REFRESH_WIRING, b"", 1)
+    return body.replace(_LEGACY_CAPACITY_PROJECT_OPTIONS, _MANAGED_PROJECT_OPTIONS, 1)
 
 
 def patch_capacity_legacy_retirement_response(
     target: str, response: ApiResponse
 ) -> ApiResponse:
-    """Retire the competing legacy Capacity loader after modular composition."""
+    """Retire competing legacy Capacity wiring after modular composition."""
 
     if urlsplit(target).path != "/app.js" or response.status != 200:
         return response

@@ -14,6 +14,7 @@ from natureai_next.server.offline_first_api import OfflineFirstFieldoraApi
 
 def _legacy_capacity_app() -> ApiResponse:
     body = (
+        b'function projectOptions(){["work-project","capacity-project","dossier-project"].forEach(id=>q(id));}'
         b'if(name==="capacity")loadCapacity();'
         b"async function loadCapacity(){const legacyLoad=true;}"
         b"async function saveCapacity(){const legacySave=true;}"
@@ -39,9 +40,10 @@ def test_capacity_load_retirement_requires_both_modular_owners() -> None:
     assert "async function loadCapacity(){" in preserved
     assert 'if(name==="capacity")loadCapacity();' in preserved
     assert 'q("capacity-refresh").onclick=loadCapacity;' in preserved
+    assert '"work-project","capacity-project","dossier-project"' in preserved
 
 
-def test_capacity_load_retirement_removes_only_competing_legacy_loader() -> None:
+def test_capacity_load_retirement_removes_only_competing_legacy_wiring() -> None:
     allocation_owned = patch_capacity_module_response("/app.js", _legacy_capacity_app())
     fully_owned = CapacityAvailabilityModuleWebApiMixin._patch_browser(
         "/app.js", allocation_owned
@@ -56,6 +58,8 @@ def test_capacity_load_retirement_removes_only_competing_legacy_loader() -> None
     assert 'if(name==="capacity")loadCapacity();' not in script
     assert 'q("capacity-refresh").onclick=loadCapacity;' not in script
     assert 'q("capacity-save").onclick=saveCapacity;' not in script
+    assert '"work-project","capacity-project","dossier-project"' not in script
+    assert '"work-project","dossier-project"' in script
     assert "async function loadDossierWorkspace(){const dossier=true;}" in script
     assert patch_capacity_legacy_retirement_response("/app.js", final).body == final.body
 

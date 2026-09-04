@@ -23,7 +23,7 @@ _DOSSIER_MODULE_PATCH = bytes(
  const esc=value=>String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
  const nameOf=record=>record?.name||record?.title||record?.id||"Record";
  function context(){return window.FieldoraModuleContracts?.resolve?.("projects.context.select")||null}
- function currentProject(){return String(context()?.current?.()||state.projectId||"")}
+ function currentProject(){return String(context()?.current?.()||"")}
  function report(error,fallback){const text=error?.message||fallback,node=q("dossier-status");if(node){node.textContent=text;node.style.color="var(--danger)"}document.dispatchEvent(new CustomEvent("fieldora:module-error",{detail:{module_id:moduleId,error:String(text)}}))}
  function clearStatus(){const node=q("dossier-status");if(node){node.textContent="";node.style.color=""}}
  function syncProjectContext(){state.projectId=currentProject();const selector=q("dossier-project");if(selector&&state.projectId&&selector.value!==state.projectId)selector.value=state.projectId;return state.projectId}

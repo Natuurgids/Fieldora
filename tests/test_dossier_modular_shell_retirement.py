@@ -14,6 +14,7 @@ def _legacy_dossier_response() -> ApiResponse:
         b'q("dossier-refresh").onclick=loadDossierWorkspace;'
         b'q("dossier-save").onclick=saveDossierWorkspace;'
         + shell._LEGACY_DOSSIER_LIST_WIRING
+        + b'const selectors=["work-project","dossier-project","science-project"];'
     )
     return ApiResponse(200, body, "text/javascript; charset=utf-8")
 
@@ -37,6 +38,7 @@ def test_dossier_owner_does_not_retire_legacy_workspace_without_registry_ownersh
     assert 'q("dossier-refresh").onclick=loadDossierWorkspace;' in script
     assert 'q("dossier-save").onclick=saveDossierWorkspace;' in script
     assert shell._LEGACY_DOSSIER_LIST_WIRING.decode("utf-8") in script
+    assert '"work-project","dossier-project","science-project"' in script
 
 
 def test_registered_dossier_owner_retires_only_legacy_workspace_competitors() -> None:
@@ -54,6 +56,8 @@ def test_registered_dossier_owner_retires_only_legacy_workspace_competitors() ->
     assert 'q("dossier-save").onclick=saveDossierWorkspace;' not in script
     assert shell._LEGACY_DOSSIER_LIST_WIRING.decode("utf-8") not in script
     assert "async function loadResearchDomain(){}" in script
+    assert '"dossier-project","science-project"' not in script
+    assert '"work-project","science-project"' in script
 
 
 def test_production_finalizer_keeps_only_registered_dossier_workspace_owner() -> None:
@@ -73,3 +77,5 @@ def test_production_finalizer_keeps_only_registered_dossier_workspace_owner() ->
     assert 'q("dossier-save").onclick=saveDossierWorkspace;' not in script
     assert shell._LEGACY_DOSSIER_LIST_WIRING.decode("utf-8") not in script
     assert "async function loadResearchDomain(){}" in script
+    assert '"dossier-project","science-project"' not in script
+    assert '"work-project","science-project"' in script

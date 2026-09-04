@@ -262,6 +262,7 @@ FOUNDATION_WEB_MODULES: tuple[WebModuleSpec, ...] = (
         owns_actions=(
             "capacity.project.open",
             "capacity.project.allocations.view",
+            "capacity.project.allocations.create",
             "capacity.availability.view",
             "capacity.schedule.assign",
             "capacity.absence.register",

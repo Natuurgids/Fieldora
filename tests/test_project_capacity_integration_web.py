@@ -17,9 +17,11 @@ def test_capacity_owns_project_integration_actions() -> None:
     registry = foundation_registry()
     capacity = registry.action_owner("capacity.project.open")
     allocations = registry.action_owner("capacity.project.allocations.view")
+    allocation_create = registry.action_owner("capacity.project.allocations.create")
 
     assert capacity is not None
     assert allocations is capacity
+    assert allocation_create is capacity
     assert capacity.module_id == "capacity"
     assert capacity.dependencies == ()
     assert capacity.requires_contracts == (
@@ -45,6 +47,27 @@ def test_capacity_module_is_idempotent_and_reads_governed_project_allocations() 
     assert "work-schedules" not in script
     assert "absences" not in script
     assert "obligations" not in script
+
+
+def test_capacity_module_creates_allocations_from_canonical_project_context() -> None:
+    original = ApiResponse(200, b"const baseApp=true;", "text/javascript; charset=utf-8")
+    script = patch_capacity_module_response("/app.js", original).body.decode("utf-8")
+
+    assert 'resolve?.("projects.context.select")' in script
+    assert "projectContext()?.current?.()" in script
+    assert "async function createAllocation(event)" in script
+    assert 'data-fieldora-action="capacity.project.allocations.create"' in script
+    assert 'const projectId=canonicalProjectId();if(!projectId){report(null,"Select a project before creating an allocation.");return false}' in script
+    assert "record={project_id:projectId" in script
+    assert 'api("/api/v1/allocations",{method:"POST",purpose:"research",body:JSON.stringify(record)})' in script
+    assert "fieldora:capacity-allocations-changed" in script
+    assert 'addEventListener("submit",createAllocation,{signal:state.controller.signal})' in script
+    assert "createAllocation,currentProject" in script
+    assert 'q("capacity-project")' not in script
+    assert 'resolve?.("projects.list.read")' not in script
+    assert 'projectModule="projects.core"' not in script
+    assert "projects[0]" not in script
+    assert "window.projects" not in script
 
 
 def test_project_capacity_adapter_uses_replaceable_projects_contracts() -> None:

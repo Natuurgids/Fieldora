@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from natureai_next.server.api import ApiResponse
 from natureai_next.server.capacity_availability_module_web import (
     CapacityAvailabilityModuleWebApiMixin,
@@ -62,6 +64,35 @@ def test_capacity_load_retirement_removes_only_competing_legacy_wiring() -> None
     assert '"work-project","dossier-project"' in script
     assert "async function loadDossierWorkspace(){const dossier=true;}" in script
     assert patch_capacity_legacy_retirement_response("/app.js", final).body == final.body
+
+
+def test_capacity_retirement_matches_bundled_app_wiring() -> None:
+    app_path = (
+        Path(__file__).parents[1]
+        / "src"
+        / "natureai_next"
+        / "resources"
+        / "server_web"
+        / "app.js"
+    )
+    base = ApiResponse(200, app_path.read_bytes(), "text/javascript; charset=utf-8")
+
+    allocation_owned = patch_capacity_module_response("/app.js", base)
+    fully_owned = CapacityAvailabilityModuleWebApiMixin._patch_browser(
+        "/app.js", allocation_owned
+    )
+    final = patch_capacity_legacy_retirement_response("/app.js", fully_owned)
+    script = final.body.decode("utf-8")
+
+    assert "function projectOptions()" in script
+    assert "async function loadCapacity(){" not in script
+    assert "async function saveCapacity(){" not in script
+    assert 'if(name==="capacity")loadCapacity();' not in script
+    assert 'q("capacity-refresh").onclick=loadCapacity;' not in script
+    assert 'q("capacity-save").onclick=saveCapacity;' not in script
+    assert '"work-project","capacity-project","dossier-project"' not in script
+    assert '"work-project","dossier-project"' in script
+    assert "async function loadDossierWorkspace(){" in script
 
 
 def test_capacity_legacy_retirement_is_composed_after_capacity_owners() -> None:

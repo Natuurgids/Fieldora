@@ -6,6 +6,7 @@ on:
       - "src/natureai_next/application/project_task_detail.py"
       - "src/natureai_next/server/web_module_contracts.py"
       - "src/natureai_next/server/web_module_runtime.py"
+      - "src/natureai_next/server/web_module_contract_runtime.py"
       - "src/natureai_next/server/modular_shell_web.py"
       - "src/natureai_next/server/capacity_availability_module_web.py"
       - "src/natureai_next/server/capacity_module_web.py"
@@ -28,6 +29,8 @@ on:
       - "tests/test_web_module_contracts.py"
       - "tests/test_web_module_runtime.py"
       - "tests/test_modular_shell_web.py"
+      - "tests/test_projects_module_removal_runtime.py"
+      - "tests/test_projects_module_removal_browser.py"
       - "tests/test_capacity_availability_module_web.py"
       - "tests/test_project_capacity_integration_web.py"
       - "tests/test_project_core_module_web.py"
@@ -65,11 +68,14 @@ jobs:
           cache: pip
       - name: Install certification dependencies
         run: python -m pip install --upgrade pip && python -m pip install -e ".[dev]"
+      - name: Install Chromium certification engine
+        run: python -m playwright install --with-deps chromium
       - name: Ruff module contracts and runtime
         run: >-
           python -m ruff check
           src/natureai_next/server/web_module_contracts.py
           src/natureai_next/server/web_module_runtime.py
+          src/natureai_next/server/web_module_contract_runtime.py
       - name: Ruff shell and feature adapters
         run: >-
           python -m ruff check
@@ -97,6 +103,8 @@ jobs:
           tests/test_web_module_contracts.py
           tests/test_web_module_runtime.py
           tests/test_modular_shell_web.py
+          tests/test_projects_module_removal_runtime.py
+          tests/test_projects_module_removal_browser.py
           tests/test_capacity_availability_module_web.py
           tests/test_project_capacity_integration_web.py
           tests/test_project_core_module_web.py
@@ -116,6 +124,8 @@ jobs:
           tests/test_web_module_contracts.py
           tests/test_web_module_runtime.py
           tests/test_modular_shell_web.py
+          tests/test_projects_module_removal_runtime.py
+          tests/test_projects_module_removal_browser.py
           tests/test_capacity_availability_module_web.py
           tests/test_project_capacity_integration_web.py
           tests/test_project_core_module_web.py

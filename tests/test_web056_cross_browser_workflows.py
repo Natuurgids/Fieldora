@@ -381,7 +381,10 @@ def test_web056_projects_list_context_scope_error_and_recovery(
         assert backend.project_get_requests == baseline_requests + 1
         assert page.evaluate("FieldoraProjectContext.current()") == ""
 
-        page.evaluate("FieldoraProjectList.refresh()")
+        page.locator('.nav[data-page="library"]').click()
+        page.wait_for_selector("#page-library:not([hidden])")
+        page.locator('.nav[data-page="projects"]').click()
+        page.wait_for_selector("#page-projects:not([hidden])")
         page.wait_for_selector('[data-project-tree="project-alpha"]')
         page.wait_for_selector('[data-project-tree="project-beta"]')
         assert backend.project_get_requests == baseline_requests + 2

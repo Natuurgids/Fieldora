@@ -7,6 +7,12 @@ from natureai_next.server.api import ApiResponse
 _LEGACY_RESEARCH_SAVE_START = b"async function saveScienceRecord(){"
 _LEGACY_RESEARCH_SAVE_END = b"async function reviewSelected(statusValue){"
 _LEGACY_RESEARCH_SAVE_WIRING = b'q("science-save").onclick=saveScienceRecord;'
+_LEGACY_RESEARCH_SELECTED_PROJECT_FILTER = (
+    b"items.filter(r=>!selectedProject||r.project_id===selectedProject)"
+)
+_MANAGED_RESEARCH_PROJECT_FILTER = (
+    b'items.filter(r=>{const context=window.FieldoraModuleContracts?.resolve?.("projects.context.select"),project=context?.current?.()||"";return !project||r.project_id===project})'
+)
 
 _RESEARCH_RECORDS_PATCH = bytes(
     r"""
@@ -83,7 +89,12 @@ def _retire_legacy_research_save(body: bytes) -> bytes:
     end = body.find(_LEGACY_RESEARCH_SAVE_END, start) if start >= 0 else -1
     if start >= 0 and end >= 0:
         body = body[:start] + body[end:]
-    return body.replace(_LEGACY_RESEARCH_SAVE_WIRING, b"", 1)
+    body = body.replace(_LEGACY_RESEARCH_SAVE_WIRING, b"", 1)
+    return body.replace(
+        _LEGACY_RESEARCH_SELECTED_PROJECT_FILTER,
+        _MANAGED_RESEARCH_PROJECT_FILTER,
+        1,
+    )
 
 
 def patch_research_records_response(target: str, response: ApiResponse) -> ApiResponse:

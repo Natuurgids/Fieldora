@@ -17,7 +17,8 @@ async function reviewSelected(statusValue){
   return statusValue;
 }
 async function loadResearchDomain(){
-  return q("science-project").value;
+  const items=[];
+  return items.filter(r=>!selectedProject||r.project_id===selectedProject);
 }
 q("science-save").onclick=saveScienceRecord;
 const afterResearchSave = true;
@@ -34,7 +35,9 @@ const afterResearchSave = true;
     assert 'q("science-save").onclick=saveScienceRecord;' not in script
     assert "async function reviewSelected(statusValue){" in script
     assert "async function loadResearchDomain(){" in script
-    assert 'q("science-project").value' in script
+    assert "items.filter(r=>!selectedProject||r.project_id===selectedProject)" not in script
+    assert 'resolve?.("projects.context.select")' in script
+    assert "return !project||r.project_id===project" in script
     assert "const beforeResearchSave = true;" in script
     assert "const afterResearchSave = true;" in script
 
@@ -58,5 +61,8 @@ def test_research_records_retirement_matches_bundled_app() -> None:
     assert "async function reviewSelected(statusValue){" in script
     assert "async function loadResearchDomain(){" in script
     assert "loadResearchDomain=async function(){" in script
+    assert "items.filter(r=>!selectedProject||r.project_id===selectedProject)" not in script
+    assert 'resolve?.("projects.context.select")' in script
+    assert "return !project||r.project_id===project" in script
     assert 'byId("science-project")' in script
     assert "WEB-042: Research records use server-owned identity and revisions." in script

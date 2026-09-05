@@ -7,9 +7,9 @@ be marked certified after platform-specific evidence is recorded.
 """
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import asdict, dataclass
 from enum import StrEnum
-from typing import Iterable
 
 
 class Platform(StrEnum):
@@ -53,47 +53,227 @@ class PlatformFeature:
 
 
 def _desktop(surface: str) -> tuple[PlatformImplementation, PlatformImplementation]:
-    evidence = "Launch workspace, execute representative CRUD/action flow, verify audit and restart persistence."
+    evidence = (
+        "Launch workspace, execute representative CRUD/action flow, verify audit "
+        "and restart persistence."
+    )
     return (
-        PlatformImplementation(Platform.WINDOWS_DESKTOP, FeatureStatus.IMPLEMENTED, surface, evidence),
-        PlatformImplementation(Platform.LINUX_DESKTOP, FeatureStatus.IMPLEMENTED, surface, evidence),
+        PlatformImplementation(
+            Platform.WINDOWS_DESKTOP, FeatureStatus.IMPLEMENTED, surface, evidence
+        ),
+        PlatformImplementation(
+            Platform.LINUX_DESKTOP, FeatureStatus.IMPLEMENTED, surface, evidence
+        ),
     )
 
 
-def _server(status: FeatureStatus, surface: str, evidence: str | None = None) -> PlatformImplementation:
+def _server(
+    status: FeatureStatus, surface: str, evidence: str | None = None
+) -> PlatformImplementation:
     return PlatformImplementation(
         Platform.SERVER,
         status,
         surface,
-        evidence or "Exercise server UI and API with administrator and restricted-user accounts.",
+        evidence
+        or "Exercise server UI and API with administrator and restricted-user accounts.",
     )
 
 
-def _feature(fid: str, module: str, name: str, surface: str, server_status: FeatureStatus,
-             server_surface: str, permission: str = "view", description: str = "") -> PlatformFeature:
+def _feature(
+    fid: str,
+    module: str,
+    name: str,
+    surface: str,
+    server_status: FeatureStatus,
+    server_surface: str,
+    permission: str = "view",
+    description: str = "",
+) -> PlatformFeature:
     return PlatformFeature(
-        fid, module, name, description or name, permission,
+        fid,
+        module,
+        name,
+        description or name,
+        permission,
         (*_desktop(surface), _server(server_status, server_surface)),
     )
 
 
 FEATURES: tuple[PlatformFeature, ...] = (
-    _feature("core.login", "Platform", "Authentication and profiles", "Login / Local Profiles", FeatureStatus.IMPLEMENTED, "Session API / OIDC login", "authenticate"),
-    _feature("core.access", "Governance", "RBAC, ABAC, PBAC and access matrices", "Administration Governance", FeatureStatus.IMPLEMENTED, "Policy APIs / contracts", "administration"),
-    _feature("project.workspace", "Projects", "Projects, phases, tasks and subtasks", "Project Workspace", FeatureStatus.IMPLEMENTED, "Projects, phases, tasks and subtasks web workspace and APIs", "project.view"),
-    _feature("project.portfolio", "Projects", "Portfolio and My Work", "Portfolio & My Work", FeatureStatus.IMPLEMENTED, "Portfolio and My Work web workspace and APIs", "project.view"),
-    _feature("project.capacity", "Projects", "Schedules, absence, allocations and workload", "Availability / Workload", FeatureStatus.IMPLEMENTED, "Schedules, absences, obligations, allocations and workload web workspace", "project.manage"),
-    _feature("research.operations", "Research", "Specimens, protocols, surveys, samples and laboratory", "Measurements & Protocols", FeatureStatus.IMPLEMENTED, "Research operations web workspace and APIs", "research.view"),
-    _feature("observations.review", "Observations", "Observation review and bulk decisions", "Observations Overview", FeatureStatus.IMPLEMENTED, "Observation review and bulk-decision web workspace", "observation.review"),
-    _feature("dossiers.workspace", "Dossiers", "Independent, project and master dossiers", "Dossiers", FeatureStatus.IMPLEMENTED, "Dossier hierarchy, review and ownership web workspace", "dossier.view"),
-    _feature("library.assets", "Library", "Unified multimedia asset catalogue", "Library Overview", FeatureStatus.IMPLEMENTED, "Library media gallery and governed download", "asset.view"),
-    _feature("ai.platform", "AI", "Provider-neutral offline AI and MCP", "AI Chat & MCP / AI Platform Administration", FeatureStatus.IMPLEMENTED, "AI provider, model and MCP administration web workspace", "ai.use"),
-    _feature("admin.reference_data", "Administration", "Reference data", "Research Reference Data", FeatureStatus.IMPLEMENTED, "Reference-data administration web workspace and API", "reference_data.view"),
-    _feature("admin.audit", "Administration", "Audit and governance evidence", "Administration Governance", FeatureStatus.IMPLEMENTED, "Audit API and administration audit list", "audit.view"),
-    _feature("connectors.registry", "Connectors", "Connector registry and health", "Integrations / Resource Components", FeatureStatus.IMPLEMENTED, "Connector registry, capabilities and health web workspace", "connector.view"),
-    _feature("staging.intake", "Staging", "Governed staged ingestion", "Library governed import", FeatureStatus.IMPLEMENTED, "Staged-submission API and web upload", "staging.create"),
-    _feature("operations.assets", "Operations", "Assets, equipment, maintenance, calibration, facilities and storage", "Asset & Equipment Operations", FeatureStatus.IMPLEMENTED, "Operations web workspace, APIs and PostgreSQL schema", "operations.view"),
-    _feature("help.offline", "Help", "Offline help and guides", "Help & Guides", FeatureStatus.IMPLEMENTED, "Help catalogue and topic API", "help.view"),
+    _feature(
+        "core.login",
+        "Platform",
+        "Authentication and profiles",
+        "Login / Local Profiles",
+        FeatureStatus.IMPLEMENTED,
+        "Session API / OIDC login",
+        "authenticate",
+    ),
+    _feature(
+        "core.access",
+        "Governance",
+        "RBAC, ABAC, PBAC and access matrices",
+        "Administration Governance",
+        FeatureStatus.IMPLEMENTED,
+        "Policy APIs / contracts",
+        "administration",
+    ),
+    _feature(
+        "project.workspace",
+        "Projects",
+        "Projects, phases, tasks and subtasks",
+        "Project Workspace",
+        FeatureStatus.IMPLEMENTED,
+        "Projects, phases, tasks and subtasks web workspace and APIs",
+        "project.view",
+    ),
+    _feature(
+        "project.portfolio",
+        "Projects",
+        "Portfolio and My Work",
+        "Portfolio & My Work",
+        FeatureStatus.IMPLEMENTED,
+        "Portfolio and My Work web workspace and APIs",
+        "project.view",
+    ),
+    _feature(
+        "project.capacity",
+        "Projects",
+        "Schedules, absence, allocations and workload",
+        "Availability / Workload",
+        FeatureStatus.IMPLEMENTED,
+        "Schedules, absences, obligations, allocations and workload web workspace",
+        "project.manage",
+    ),
+    _feature(
+        "research.operations",
+        "Research",
+        "Specimens, protocols, surveys, samples and laboratory",
+        "Measurements & Protocols",
+        FeatureStatus.IMPLEMENTED,
+        "Research operations web workspace and APIs",
+        "research.view",
+    ),
+    _feature(
+        "observations.review",
+        "Observations",
+        "Observation review and bulk decisions",
+        "Observations Overview",
+        FeatureStatus.IMPLEMENTED,
+        "Observation review and bulk-decision web workspace",
+        "observation.review",
+    ),
+    _feature(
+        "dossiers.workspace",
+        "Dossiers",
+        "Independent, project and master dossiers",
+        "Dossiers",
+        FeatureStatus.IMPLEMENTED,
+        "Dossier hierarchy, review and ownership web workspace",
+        "dossier.view",
+    ),
+    _feature(
+        "library.assets",
+        "Library",
+        "Unified multimedia asset catalogue",
+        "Library Overview",
+        FeatureStatus.IMPLEMENTED,
+        "Library media gallery, governed import and governed download",
+        "asset.view",
+    ),
+    _feature(
+        "ai.platform",
+        "AI",
+        "Provider-neutral offline AI and MCP",
+        "AI Chat & MCP / AI Platform Administration",
+        FeatureStatus.IMPLEMENTED,
+        "AI provider, model and MCP administration web workspace",
+        "ai.use",
+    ),
+    _feature(
+        "admin.reference_data",
+        "Administration",
+        "Reference data",
+        "Research Reference Data",
+        FeatureStatus.IMPLEMENTED,
+        "Reference-data administration web workspace and API",
+        "reference_data.view",
+    ),
+    _feature(
+        "admin.audit",
+        "Administration",
+        "Audit and governance evidence",
+        "Administration Governance",
+        FeatureStatus.IMPLEMENTED,
+        "Audit API and administration audit list",
+        "audit.view",
+    ),
+    _feature(
+        "connectors.registry",
+        "Connectors",
+        "Connector registry and health",
+        "Integrations / Resource Components",
+        FeatureStatus.IMPLEMENTED,
+        "Connector registry, capabilities and health web workspace",
+        "connector.view",
+    ),
+    _feature(
+        "staging.intake",
+        "Staging",
+        "Governed staged ingestion",
+        "Library governed import",
+        FeatureStatus.IMPLEMENTED,
+        "Library governed import plus staged-submission API",
+        "staging.create",
+    ),
+    _feature(
+        "operations.assets",
+        "Operations",
+        "Assets, equipment, maintenance, calibration, facilities and storage",
+        "Asset & Equipment Operations",
+        FeatureStatus.IMPLEMENTED,
+        "Assets & Facilities web workspace, APIs and PostgreSQL schema",
+        "operations.view",
+    ),
+    _feature(
+        "operations.facility_floorplans",
+        "Operations",
+        "Versioned facility floorplans and location drawings",
+        "Asset & Equipment Operations / interactive floorplans",
+        FeatureStatus.PARTIAL,
+        "Facility/mobile API contract exists; interactive browser floorplan workspace pending",
+        "operations.view",
+        "Same governed location hierarchy and drawing lifecycle on desktop and server.",
+    ),
+    _feature(
+        "operations.facility_planning",
+        "Operations",
+        "Future layouts and planned placements",
+        "Asset & Equipment Operations / Layouts & relocation",
+        FeatureStatus.PARTIAL,
+        "Planning service contract exists; browser future-layout workspace pending",
+        "operations.view",
+        "Planning never changes authoritative current physical placement.",
+    ),
+    _feature(
+        "operations.relocation",
+        "Operations",
+        "Relocation campaigns and move execution",
+        "Asset & Equipment Operations / Layouts & relocation",
+        FeatureStatus.PARTIAL,
+        "Mobile/server relocation contract exists; browser campaign workspace pending",
+        "operations.view",
+        "Shared move states and explicit final placement semantics across clients.",
+    ),
+    _feature(
+        "help.offline",
+        "Help",
+        "Offline help and guides",
+        "Help & Guides",
+        FeatureStatus.IMPLEMENTED,
+        "Help catalogue and topic API",
+        "help.view",
+    ),
 )
 
 

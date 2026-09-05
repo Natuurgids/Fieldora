@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from pathlib import Path
-from xml.etree import ElementTree
+
+from defusedxml import ElementTree
 
 from natureai_next.ports.media import MetadataResult
 

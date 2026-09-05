@@ -1,0 +1,235 @@
+name: Fieldora Platform server certification
+
+on:
+  pull_request:
+    paths:
+      - "pyproject.toml"
+      - "ACCESS_CONTRACTS.md"
+      - "SECURITY_BANDIT.md"
+      - "SECURITY_SEMGREP.md"
+      - "src/natureai_next/bootstrap/platform_server_cli.py"
+      - "src/natureai_next/bootstrap/operator_cli.py"
+      - "src/natureai_next/bootstrap/service_trust_cli.py"
+      - "src/natureai_next/bootstrap/certificate_renewer_cli.py"
+      - "src/natureai_next/server/access_audit_events.py"
+      - "src/natureai_next/server/access_contracts.py"
+      - "src/natureai_next/server/access_barriers.py"
+      - "src/natureai_next/server/required_access_barriers.py"
+      - "src/natureai_next/server/recipient_contract_api.py"
+      - "src/natureai_next/server/project_owner_contract_api.py"
+      - "src/natureai_next/server/contract_web_compatibility.py"
+      - "src/natureai_next/server/operator_control.py"
+      - "src/natureai_next/server/linked_storage_operator_api.py"
+      - "src/natureai_next/server/platform_api.py"
+      - "src/natureai_next/server/platform_extensions.py"
+      - "src/natureai_next/server/scientific_collaboration.py"
+      - "src/natureai_next/server/service_trust.py"
+      - "src/natureai_next/server/service_runtime.py"
+      - "src/natureai_next/server/postgres_jobs.py"
+      - "src/natureai_next/server/postgres_science.py"
+      - "src/natureai_next/server/facility_platform.py"
+      - "src/natureai_next/server/facility_platform_api.py"
+      - "src/natureai_next/server/facility_web_compatibility.py"
+      - "src/natureai_next/server/web_compatibility.py"
+      - "src/natureai_next/server/http.py"
+      - "tests/test_access_contracts.py"
+      - "tests/test_access_barriers.py"
+      - "tests/test_required_access_barriers.py"
+      - "tests/test_contract_audit.py"
+      - "tests/test_contract_audit_postgres.py"
+      - "tests/test_postgres_jobs_worker.py"
+      - "tests/test_postgres_science_concurrency.py"
+      - "tests/test_recipient_contract_api.py"
+      - "tests/test_linked_storage_operator_api.py"
+      - "tests/test_platform_server_extensions.py"
+      - "tests/test_server_web_compatibility.py"
+      - "tests/test_service_tls_reload.py"
+      - "tests/test_certificate_renewal.py"
+      - ".github/workflows/platform-server-certification.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  platform-server-certification:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: fieldora_contract_test
+          POSTGRES_USER: fieldora_test
+          POSTGRES_PASSWORD: fieldora_test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U fieldora_test -d fieldora_contract_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      FIELDORA_TEST_POSTGRES_DSN: >-
+        postgresql://fieldora_test:fieldora_test_password@127.0.0.1:5432/fieldora_contract_test
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install certification dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -e ".[dev,server-postgresql]"
+
+      - name: Ruff platform server
+        run: >-
+          python -m ruff check
+          src/natureai_next/bootstrap/platform_server_cli.py
+          src/natureai_next/bootstrap/operator_cli.py
+          src/natureai_next/bootstrap/service_trust_cli.py
+          src/natureai_next/bootstrap/certificate_renewer_cli.py
+          src/natureai_next/server/access_audit_events.py
+          src/natureai_next/server/access_contracts.py
+          src/natureai_next/server/access_barriers.py
+          src/natureai_next/server/required_access_barriers.py
+          src/natureai_next/server/recipient_contract_api.py
+          src/natureai_next/server/project_owner_contract_api.py
+          src/natureai_next/server/contract_web_compatibility.py
+          src/natureai_next/server/operator_control.py
+          src/natureai_next/server/linked_storage_operator_api.py
+          src/natureai_next/server/platform_api.py
+          src/natureai_next/server/platform_extensions.py
+          src/natureai_next/server/scientific_collaboration.py
+          src/natureai_next/server/service_trust.py
+          src/natureai_next/server/service_runtime.py
+          src/natureai_next/server/postgres_jobs.py
+          src/natureai_next/server/postgres_science.py
+          src/natureai_next/server/facility_platform.py
+          src/natureai_next/server/facility_platform_api.py
+          src/natureai_next/server/facility_web_compatibility.py
+          src/natureai_next/server/web_compatibility.py
+          src/natureai_next/server/http.py
+          tests/test_access_contracts.py
+          tests/test_access_barriers.py
+          tests/test_required_access_barriers.py
+          tests/test_contract_audit.py
+          tests/test_contract_audit_postgres.py
+          tests/test_postgres_jobs_worker.py
+          tests/test_postgres_science_concurrency.py
+          tests/test_recipient_contract_api.py
+          tests/test_linked_storage_operator_api.py
+          tests/test_platform_server_extensions.py
+          tests/test_server_web_compatibility.py
+          tests/test_service_tls_reload.py
+          tests/test_certificate_renewal.py
+
+      - name: Bandit full repository audit
+        continue-on-error: true
+        run: >-
+          python -m bandit -r src/natureai_next -c pyproject.toml
+          -ll -ii -f json -o bandit-full-audit.json
+
+      - name: Upload Bandit full audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bandit-full-audit
+          path: bandit-full-audit.json
+          if-no-files-found: error
+
+      - name: Bandit high-severity repository gate
+        run: python -m bandit -r src/natureai_next -c pyproject.toml -lll -i
+
+      - name: Bandit governed platform gate
+        run: >-
+          python -m bandit
+          src/natureai_next/bootstrap/platform_server_cli.py
+          src/natureai_next/bootstrap/operator_cli.py
+          src/natureai_next/bootstrap/service_trust_cli.py
+          src/natureai_next/bootstrap/certificate_renewer_cli.py
+          src/natureai_next/server/access_audit_events.py
+          src/natureai_next/server/access_contracts.py
+          src/natureai_next/server/access_barriers.py
+          src/natureai_next/server/required_access_barriers.py
+          src/natureai_next/server/recipient_contract_api.py
+          src/natureai_next/server/project_owner_contract_api.py
+          src/natureai_next/server/contract_web_compatibility.py
+          src/natureai_next/server/operator_control.py
+          src/natureai_next/server/linked_storage_operator_api.py
+          src/natureai_next/server/platform_api.py
+          src/natureai_next/server/platform_extensions.py
+          src/natureai_next/server/service_trust.py
+          src/natureai_next/server/service_runtime.py
+          src/natureai_next/server/postgres_jobs.py
+          src/natureai_next/server/postgres_science.py
+          src/natureai_next/server/facility_platform.py
+          src/natureai_next/server/facility_platform_api.py
+          src/natureai_next/server/facility_web_compatibility.py
+          src/natureai_next/server/web_compatibility.py
+          src/natureai_next/server/http.py
+          -c pyproject.toml -ll -ii
+
+      - name: Semgrep OWASP Top 10 full audit
+        continue-on-error: true
+        run: >-
+          semgrep scan --config p/owasp-top-ten --metrics off
+          --json --output semgrep-owasp-audit.json src/natureai_next
+
+      - name: Upload Semgrep OWASP audit
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: semgrep-owasp-audit
+          path: semgrep-owasp-audit.json
+          if-no-files-found: warn
+
+      - name: Semgrep OWASP governed platform gate
+        run: >-
+          semgrep scan --config p/owasp-top-ten --metrics off
+          --severity ERROR --error
+          src/natureai_next/bootstrap/platform_server_cli.py
+          src/natureai_next/bootstrap/operator_cli.py
+          src/natureai_next/bootstrap/service_trust_cli.py
+          src/natureai_next/bootstrap/certificate_renewer_cli.py
+          src/natureai_next/server/access_audit_events.py
+          src/natureai_next/server/access_contracts.py
+          src/natureai_next/server/access_barriers.py
+          src/natureai_next/server/required_access_barriers.py
+          src/natureai_next/server/recipient_contract_api.py
+          src/natureai_next/server/project_owner_contract_api.py
+          src/natureai_next/server/contract_web_compatibility.py
+          src/natureai_next/server/operator_control.py
+          src/natureai_next/server/linked_storage_operator_api.py
+          src/natureai_next/server/platform_api.py
+          src/natureai_next/server/platform_extensions.py
+          src/natureai_next/server/service_trust.py
+          src/natureai_next/server/service_runtime.py
+          src/natureai_next/server/postgres_jobs.py
+          src/natureai_next/server/postgres_science.py
+          src/natureai_next/server/facility_platform.py
+          src/natureai_next/server/facility_platform_api.py
+          src/natureai_next/server/facility_web_compatibility.py
+          src/natureai_next/server/web_compatibility.py
+          src/natureai_next/server/http.py
+
+      - name: Platform server tests
+        run: >-
+          python -m pytest -q
+          tests/test_access_contracts.py
+          tests/test_access_barriers.py
+          tests/test_required_access_barriers.py
+          tests/test_contract_audit.py
+          tests/test_contract_audit_postgres.py
+          tests/test_postgres_jobs_worker.py
+          tests/test_postgres_science_concurrency.py
+          tests/test_recipient_contract_api.py
+          tests/test_linked_storage_operator_api.py
+          tests/test_platform_server_extensions.py
+          tests/test_server_web_compatibility.py
+          tests/test_facility_server_api.py
+          tests/test_service_tls_reload.py
+          tests/test_certificate_renewal.py

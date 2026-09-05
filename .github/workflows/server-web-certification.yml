@@ -1,0 +1,203 @@
+name: Fieldora server web certification
+
+on:
+  pull_request:
+    paths:
+      - "pyproject.toml"
+      - "src/natureai_next/application/platform_features.py"
+      - "src/natureai_next/server/http.py"
+      - "src/natureai_next/server/help.py"
+      - "src/natureai_next/server/web_compatibility.py"
+      - "src/natureai_next/server/navigation_web_compatibility.py"
+      - "src/natureai_next/server/desktop_alignment_web.py"
+      - "src/natureai_next/server/project_facility_workspace_web.py"
+      - "src/natureai_next/server/administration_workspace_web.py"
+      - "src/natureai_next/server/workspace_language_web.py"
+      - "src/natureai_next/server/library_collections_web.py"
+      - "src/natureai_next/server/science_workflow_web.py"
+      - "src/natureai_next/server/offline_models_web.py"
+      - "src/natureai_next/server/offline_model_store_api.py"
+      - "src/natureai_next/server/contract_web_compatibility.py"
+      - "src/natureai_next/server/facility_web_compatibility.py"
+      - "src/natureai_next/server/browser_functionality_web.py"
+      - "src/natureai_next/server/linked_storage.py"
+      - "src/natureai_next/server/linked_media_convergence.py"
+      - "src/natureai_next/server/linked_storage_web.py"
+      - "src/natureai_next/server/linked_storage_browser_api.py"
+      - "src/natureai_next/server/linked_storage_sources_api.py"
+      - "src/natureai_next/server/linked_storage_operator_api.py"
+      - "src/natureai_next/server/linked_storage_operator_web.py"
+      - "src/natureai_next/server/media.py"
+      - "src/natureai_next/server/media_detail_web.py"
+      - "src/natureai_next/server/media_links.py"
+      - "src/natureai_next/server/offline_first_api.py"
+      - "src/natureai_next/server/pagination.py"
+      - "src/natureai_next/server/pagination_api.py"
+      - "src/natureai_next/server/filtering.py"
+      - "src/natureai_next/server/postgres_web_indexes.py"
+      - "src/natureai_next/server/project_idempotency.py"
+      - "src/natureai_next/server/project_idempotency_web.py"
+      - "src/natureai_next/server/optimistic_concurrency_web.py"
+      - "src/natureai_next/server/structured_errors.py"
+      - "src/natureai_next/server/bounded_upload_web.py"
+      - "src/natureai_next/resources/help/**"
+      - "src/natureai_next/resources/server_web/**"
+      - "tests/test_cross_client_parity_contract.py"
+      - "tests/test_server_help_wiring.py"
+      - "tests/test_web046_contextual_help.py"
+      - "tests/test_web047_pagination.py"
+      - "tests/test_web048_server_filters.py"
+      - "tests/test_web049_project_idempotency.py"
+      - "tests/test_web050_optimistic_concurrency.py"
+      - "tests/test_web051_structured_errors.py"
+      - "tests/test_web052_bounded_upload_memory.py"
+      - "tests/test_web053_postgres_indexes.py"
+      - "tests/test_web055_desktop_api_contracts.py"
+      - "tests/test_server_web_compatibility.py"
+      - "tests/test_server_web_browser_navigation.py"
+      - "tests/test_desktop_alignment_web.py"
+      - "tests/test_project_facility_workspace_web.py"
+      - "tests/test_administration_workspace_web.py"
+      - "tests/test_workspace_language_web.py"
+      - "tests/test_browser_functionality_web.py"
+      - "tests/test_browser_media_detail_http.py"
+      - "tests/test_linked_media_convergence.py"
+      - "tests/test_offline_models_web.py"
+      - "tests/test_offline_model_store_api.py"
+      - "tests/test_linked_storage_web.py"
+      - "tests/test_linked_storage_sources_api.py"
+      - "tests/test_linked_storage_operator_api.py"
+      - ".github/workflows/server-web-certification.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  server-web-certification:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install certification dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -e ".[dev]"
+
+      - name: Install Chromium Firefox and WebKit for browser wiring certification
+        run: python -m playwright install --with-deps chromium firefox webkit
+
+      - name: Ruff server web and parity compatibility
+        run: >-
+          python -m ruff check
+          --per-file-ignores "src/natureai_next/server/linked_storage.py:UP035"
+          src/natureai_next/application/platform_features.py
+          src/natureai_next/server/http.py
+          src/natureai_next/server/help.py
+          src/natureai_next/server/web_compatibility.py
+          src/natureai_next/server/navigation_web_compatibility.py
+          src/natureai_next/server/desktop_alignment_web.py
+          src/natureai_next/server/project_facility_workspace_web.py
+          src/natureai_next/server/administration_workspace_web.py
+          src/natureai_next/server/workspace_language_web.py
+          src/natureai_next/server/library_collections_web.py
+          src/natureai_next/server/science_workflow_web.py
+          src/natureai_next/server/offline_models_web.py
+          src/natureai_next/server/offline_model_store_api.py
+          src/natureai_next/server/browser_functionality_web.py
+          src/natureai_next/server/linked_storage.py
+          src/natureai_next/server/linked_media_convergence.py
+          src/natureai_next/server/linked_storage_web.py
+          src/natureai_next/server/linked_storage_browser_api.py
+          src/natureai_next/server/linked_storage_sources_api.py
+          src/natureai_next/server/linked_storage_operator_api.py
+          src/natureai_next/server/linked_storage_operator_web.py
+          src/natureai_next/server/media.py
+          src/natureai_next/server/media_detail_web.py
+          src/natureai_next/server/media_links.py
+          src/natureai_next/server/offline_first_api.py
+          src/natureai_next/server/pagination.py
+          src/natureai_next/server/pagination_api.py
+          src/natureai_next/server/filtering.py
+          src/natureai_next/server/postgres_web_indexes.py
+          src/natureai_next/server/project_idempotency.py
+          src/natureai_next/server/project_idempotency_web.py
+          src/natureai_next/server/optimistic_concurrency_web.py
+          src/natureai_next/server/structured_errors.py
+          src/natureai_next/server/bounded_upload_web.py
+          tests/test_cross_client_parity_contract.py
+          tests/test_web046_contextual_help.py
+          tests/test_web047_pagination.py
+          tests/test_web048_server_filters.py
+          tests/test_web049_project_idempotency.py
+          tests/test_web050_optimistic_concurrency.py
+          tests/test_web051_structured_errors.py
+          tests/test_web052_bounded_upload_memory.py
+          tests/test_web053_postgres_indexes.py
+          tests/test_web055_desktop_api_contracts.py
+          tests/test_server_web_compatibility.py
+          tests/test_server_web_browser_navigation.py
+          tests/test_desktop_alignment_web.py
+          tests/test_project_facility_workspace_web.py
+          tests/test_administration_workspace_web.py
+          tests/test_workspace_language_web.py
+          tests/test_browser_functionality_web.py
+          tests/test_browser_media_detail_http.py
+          tests/test_linked_media_convergence.py
+          tests/test_offline_models_web.py
+          tests/test_offline_model_store_api.py
+          tests/test_linked_storage_web.py
+          tests/test_linked_storage_sources_api.py
+          tests/test_linked_storage_operator_api.py
+
+      - name: WEB-046 contextual Help regression across browser engines
+        run: python -m pytest -q tests/test_web046_contextual_help.py tests/test_server_help_wiring.py
+
+      - name: WEB-047 bounded pagination regression
+        run: python -m pytest -q tests/test_web047_pagination.py
+
+      - name: WEB-048 governed server filter regression
+        run: python -m pytest -q tests/test_web048_server_filters.py
+
+      - name: WEB-049 Project mutation idempotency regression
+        run: python -m pytest -q tests/test_web049_project_idempotency.py
+
+      - name: WEB-050 optimistic concurrency UX across browser engines
+        run: python -m pytest -q tests/test_web050_optimistic_concurrency.py
+
+      - name: WEB-051 structured browser error regression across browser engines
+        run: python -m pytest -q tests/test_web051_structured_errors.py
+
+      - name: WEB-052 bounded browser upload memory across browser engines
+        run: python -m pytest -q tests/test_web052_bounded_upload_memory.py
+
+      - name: WEB-053 PostgreSQL constraint and index review regression
+        run: python -m pytest -q tests/test_web053_postgres_indexes.py
+
+      - name: WEB-055 desktop and API contract parity regression
+        run: python -m pytest -q tests/test_web055_desktop_api_contracts.py
+
+      - name: Server web and parity compatibility tests across browser engines
+        run: >-
+          python -m pytest -q
+          tests/test_cross_client_parity_contract.py
+          tests/test_server_web_compatibility.py
+          tests/test_server_web_browser_navigation.py
+          tests/test_desktop_alignment_web.py
+          tests/test_project_facility_workspace_web.py
+          tests/test_administration_workspace_web.py
+          tests/test_workspace_language_web.py
+          tests/test_browser_functionality_web.py
+          tests/test_browser_media_detail_http.py
+          tests/test_linked_media_convergence.py
+          tests/test_offline_models_web.py
+          tests/test_offline_model_store_api.py
+          tests/test_linked_storage_web.py
+          tests/test_linked_storage_sources_api.py
+          tests/test_linked_storage_operator_api.py

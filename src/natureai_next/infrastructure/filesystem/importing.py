@@ -11,7 +11,8 @@ from collections.abc import Iterable
 from contextlib import suppress
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from xml.etree import ElementTree
+
+from defusedxml import ElementTree
 
 from natureai_next.domain.importing import (
     PHOTO_EXTENSIONS,

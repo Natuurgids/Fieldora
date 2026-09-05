@@ -1,0 +1,86 @@
+name: WEB-060 release gate contract certification
+
+on:
+  pull_request:
+    paths:
+      - "scripts/Test-Fieldora-Web-ReleaseGate.ps1"
+      - "WEB_DESKTOP_PARITY_PLAN.md"
+      - "tests/test_ci_exact_head_container_safety.py"
+      - ".github/workflows/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  web060-release-gate-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Verify exact PR head
+        if: ${{ github.event_name == 'pull_request' }}
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Certify container exact-head verification safety
+        run: |
+          python -m pip install pytest
+          python -m pytest -q tests/test_ci_exact_head_container_safety.py
+
+      - name: Certify fail-closed WEB-060 release gate contract
+        shell: pwsh
+        env:
+          FIELDORA_REF: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          $planPath = Join-Path $env:RUNNER_TEMP 'web060-plan.md'
+          $proofPath = Join-Path $env:RUNNER_TEMP 'web060-proof.json'
+          1..59 | ForEach-Object { '| WEB-{0:D3} | DONE | contract fixture | certified |' -f $_ } | Set-Content -LiteralPath $planPath
+          $proof = [ordered]@{
+            schema = 'fieldora.clean-runtime-certification.v1'
+            fieldora_ref = $env:FIELDORA_REF.ToLowerInvariant()
+            platform = 'Windows11'
+            host_identity = 'Windows 11 contract fixture'
+            install_root = 'D:\FDTEST'
+            secrets_or_payloads_recorded = $false
+            credential_handoff = @{ present = $true; content_recorded = $false }
+            storage_service_mtls_desired_state = $true
+            https = @{ live = $true; ready = $true; openapi = $true; root = $true; docs = $true }
+            services = @(
+              @{ name = 'fieldora-postgres'; running = $true; restart_count = 0 },
+              @{ name = 'fieldora-server'; running = $true; restart_count = 0 },
+              @{ name = 'fieldora-worker'; running = $true; restart_count = 0 },
+              @{ name = 'fieldora-cert-renewer'; running = $true; restart_count = 0 }
+            )
+            started_at = '2026-08-30T00:00:00Z'
+            completed_at = '2026-08-30T00:05:00Z'
+            docker_server_version = 'contract-fixture'
+            docker_compose_version = 'contract-fixture'
+          }
+          $proof | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $proofPath
+          ./scripts/Test-Fieldora-Web-ReleaseGate.ps1 -FieldoraRef $env:FIELDORA_REF -WindowsProofPath $proofPath -ParityPlanPath $planPath
+
+          $failedClosed = $false
+          try {
+            ./scripts/Test-Fieldora-Web-ReleaseGate.ps1 -FieldoraRef ('0' * 40) -WindowsProofPath $proofPath -ParityPlanPath $planPath
+          } catch {
+            $failedClosed = $_.Exception.Message -like '*exact Fieldora commit*'
+          }
+          if (-not $failedClosed) { throw 'WEB-060 gate did not fail closed on a mismatched runtime proof SHA.' }
+
+          (Get-Content -LiteralPath $planPath) -replace '^\| WEB-059 \| DONE \|', '| WEB-059 | TODO |' | Set-Content -LiteralPath $planPath
+          $failedIncomplete = $false
+          try {
+            ./scripts/Test-Fieldora-Web-ReleaseGate.ps1 -FieldoraRef $env:FIELDORA_REF -WindowsProofPath $proofPath -ParityPlanPath $planPath
+          } catch {
+            $failedIncomplete = $_.Exception.Message -like '*WEB-059:TODO*'
+          }
+          if (-not $failedIncomplete) { throw 'WEB-060 gate did not fail closed on incomplete mandatory parity work.' }

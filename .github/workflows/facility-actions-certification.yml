@@ -1,0 +1,42 @@
+name: Fieldora facility actions certification
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  facility-actions-certification:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Verify exact PR head
+        if: ${{ github.event_name == 'pull_request' }}
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install certification dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -e ".[dev]"
+      - name: Install browser engines
+        run: python -m playwright install --with-deps chromium firefox webkit
+      - name: Ruff WEB-044 Facilities actions
+        run: >-
+          python -m ruff check
+          src/natureai_next/server/facility_actions_api.py
+          src/natureai_next/server/facility_actions_web.py
+          src/natureai_next/server/offline_first_api.py
+          tests/test_web044_facility_actions.py
+      - name: WEB-044 governed Facilities actions
+        run: pytest -q tests/test_web044_facility_actions.py
+      - name: Desktop physical-placement invariant regression
+        run: pytest -q tests/test_facility_planning_workflow.py
+      - name: WEB-040 final visible-control regression
+        run: pytest -q tests/test_web040_visible_control_audit.py

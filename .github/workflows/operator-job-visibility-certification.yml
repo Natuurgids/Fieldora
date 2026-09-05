@@ -1,0 +1,39 @@
+name: Fieldora Operator job visibility certification
+
+on:
+  pull_request:
+    paths:
+      - 'src/natureai_next/server/linked_storage_operator_api.py'
+      - 'src/natureai_next/server/linked_storage_operator_web.py'
+      - 'src/natureai_next/server/jobs.py'
+      - 'src/natureai_next/server/postgres_jobs.py'
+      - 'tests/test_operator_job_visibility.py'
+      - '.github/workflows/operator-job-visibility-certification.yml'
+  workflow_dispatch:
+
+jobs:
+  operator-job-visibility:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Verify exact PR head
+        if: ${{ github.event_name == 'pull_request' }}
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install certification dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -e '.[dev]'
+      - name: Ruff Operator job visibility boundary
+        run: >-
+          python -m ruff check
+          src/natureai_next/server/linked_storage_operator_api.py
+          src/natureai_next/server/linked_storage_operator_web.py
+          tests/test_operator_job_visibility.py
+      - name: Operator durable job visibility
+        run: python -m pytest -q tests/test_operator_job_visibility.py

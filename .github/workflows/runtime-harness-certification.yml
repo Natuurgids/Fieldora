@@ -1,0 +1,147 @@
+name: Fieldora real-host runtime harness certification
+
+on:
+  pull_request:
+    paths:
+      - "scripts/Certify-Fieldora-Clean-Runtime.ps1"
+      - "scripts/Test-Fieldora-Web-ReleaseGate.ps1"
+      - "WEB_DESKTOP_PARITY_PLAN.md"
+      - ".github/workflows/runtime-harness-certification.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  runtime-harness-contract:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Parse runtime certification harness
+        shell: pwsh
+        run: |
+          $path = './scripts/Certify-Fieldora-Clean-Runtime.ps1'
+          $text = Get-Content -LiteralPath $path -Raw
+          [void][scriptblock]::Create($text)
+          Write-Host 'Runtime harness PowerShell syntax: OK'
+
+      - name: Certify destructive-host guardrails
+        shell: pwsh
+        run: |
+          $text = Get-Content -LiteralPath ./scripts/Certify-Fieldora-Clean-Runtime.ps1 -Raw
+          foreach ($needle in @(
+            "[ValidateSet('Windows11','RockyLinux9')]",
+            "[ValidatePattern('^[0-9a-fA-F]{40}$')]",
+            '[switch]$AllowDestructiveInstall',
+            'Refusing destructive runtime certification without -AllowDestructiveInstall.',
+            "Windows runtime certification is pinned to D:\FDTEST",
+            'Rocky runtime certification is pinned to /var/tmp/fieldora-runtime-certification',
+            "Real-host Linux certification requires Rocky Linux 9",
+            "`$osRelease['ID'] -ne 'rocky'",
+            "`$osRelease['VERSION_ID'].StartsWith('9')"
+          )) {
+            if (-not $text.Contains($needle)) { throw "Runtime harness safety marker is missing: $needle" }
+          }
+          Write-Host 'Disposable Windows and Rocky 9 host guardrails: OK'
+
+      - name: Certify exact-SHA and runtime proof contract
+        shell: pwsh
+        run: |
+          $text = Get-Content -LiteralPath ./scripts/Certify-Fieldora-Clean-Runtime.ps1 -Raw
+          foreach ($needle in @(
+            'raw.githubusercontent.com/Natuurgids/Fieldora/$FieldoraRef/$entryPoint',
+            "Assert-Container 'fieldora-postgres'",
+            "Assert-Container 'fieldora-server'",
+            "Assert-Container 'fieldora-worker'",
+            "Assert-Container 'fieldora-cert-renewer'",
+            "'/health/live'",
+            "'/health/ready'",
+            "'/openapi.json'",
+            "'/docs'",
+            'bootstrap-handoff/ADMIN-CREDENTIALS.txt',
+            'FIELDORA_STORAGE_SERVICE_ENABLED: "true"',
+            'FIELDORA_STORAGE_SERVICE_PORT: "8766"',
+            'FIELDORA_STORAGE_SERVICE_CLIENT_CA:',
+            'FIELDORA_MODEL_STORE: "/var/lib/fieldora-models"',
+            './fieldora-models:/var/lib/fieldora-models:ro',
+            'fieldora.clean-runtime-certification.v1',
+            'content_recorded=$false',
+            'secrets_or_payloads_recorded = $false',
+            'FIELDORA REAL-HOST RUNTIME CERTIFICATION PASSED'
+          )) {
+            if (-not $text.Contains($needle)) { throw "Runtime proof contract is missing: $needle" }
+          }
+          $codeText = (($text -split "`r?`n") | Where-Object { $_ -notmatch '^\s*#' }) -join "`n"
+          foreach ($forbidden in @('--insecure','-k ','huggingface.co','artifact_store_path','ca-private.pem','issuer-private.pem')) {
+            if ($codeText.Contains($forbidden)) { throw "Runtime harness contains forbidden shortcut or secret marker: $forbidden" }
+          }
+          Write-Host 'Exact-SHA runtime proof and secret-opacity contract: OK'
+
+      - name: WEB-060 release gate contract
+        shell: pwsh
+        run: |
+          $gatePath = './scripts/Test-Fieldora-Web-ReleaseGate.ps1'
+          $gateText = Get-Content -LiteralPath $gatePath -Raw
+          [void][scriptblock]::Create($gateText)
+
+          $sha = '${{ github.event.pull_request.head.sha }}'
+          if ([string]::IsNullOrWhiteSpace($sha)) { $sha = (git rev-parse HEAD).Trim() }
+
+          $planPath = Join-Path $env:RUNNER_TEMP 'web060-plan.md'
+          $badPlanPath = Join-Path $env:RUNNER_TEMP 'web060-bad-plan.md'
+          $proofPath = Join-Path $env:RUNNER_TEMP 'web060-windows-proof.json'
+          $badProofPath = Join-Path $env:RUNNER_TEMP 'web060-rocky-proof.json'
+
+          $rows = 1..59 | ForEach-Object { '| WEB-{0:D3} | DONE | synthetic contract row | certified |' -f $_ }
+          @('# WEB-060 synthetic parity plan','| ID | Status | Work item | Acceptance |','|---|---|---|---|') + $rows |
+            Set-Content -LiteralPath $planPath -Encoding utf8NoBOM
+          $badRows = @($rows)
+          $badRows[58] = '| WEB-059 | TODO | synthetic blocked row | not certified |'
+          @('# WEB-060 synthetic blocked plan','| ID | Status | Work item | Acceptance |','|---|---|---|---|') + $badRows |
+            Set-Content -LiteralPath $badPlanPath -Encoding utf8NoBOM
+
+          $proof = [ordered]@{
+            schema = 'fieldora.clean-runtime-certification.v1'
+            fieldora_ref = $sha.ToLowerInvariant()
+            platform = 'Windows11'
+            host_identity = 'Windows 10.0.26100.0'
+            started_at = '2026-08-29T00:00:00+00:00'
+            completed_at = '2026-08-29T00:10:00+00:00'
+            docker_server_version = 'synthetic-contract'
+            docker_compose_version = 'synthetic-contract'
+            install_root = 'D:\FDTEST'
+            services = @(
+              @{name='fieldora-postgres';running=$true;restart_count=0},
+              @{name='fieldora-server';running=$true;restart_count=0},
+              @{name='fieldora-worker';running=$true;restart_count=0},
+              @{name='fieldora-cert-renewer';running=$true;restart_count=0}
+            )
+            https = @{live=$true;ready=$true;openapi=$true;root=$true;docs=$true}
+            credential_handoff = @{present=$true;size_bytes=64;content_recorded=$false}
+            storage_service_mtls_desired_state = $true
+            offline_model = @{installed=$false;mounted_read_only=$false}
+            secrets_or_payloads_recorded = $false
+          }
+          $proof | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $proofPath -Encoding utf8NoBOM
+
+          & $gatePath -FieldoraRef $sha -WindowsProofPath $proofPath -ParityPlanPath $planPath
+          if (-not $?) { throw 'WEB-060 valid synthetic release proof was rejected.' }
+
+          $blocked = $false
+          try {
+            & $gatePath -FieldoraRef $sha -WindowsProofPath $proofPath -ParityPlanPath $badPlanPath
+          }
+          catch { $blocked = $true }
+          if (-not $blocked) { throw 'WEB-060 accepted incomplete mandatory parity status.' }
+
+          $proof.platform = 'RockyLinux9'
+          $proof | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $badProofPath -Encoding utf8NoBOM
+          $blocked = $false
+          try {
+            & $gatePath -FieldoraRef $sha -WindowsProofPath $badProofPath -ParityPlanPath $planPath
+          }
+          catch { $blocked = $true }
+          if (-not $blocked) { throw 'WEB-060 accepted a non-Windows runtime proof.' }
+
+          Write-Host 'WEB-060 release gate validator rejects incomplete parity and non-Windows proof: OK'

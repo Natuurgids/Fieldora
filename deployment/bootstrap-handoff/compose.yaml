@@ -1,0 +1,23 @@
+services:
+  fieldora-bootstrap-handoff-cleaner:
+    image: fieldora-v5-rocky:local
+    container_name: fieldora-bootstrap-handoff-cleaner
+    restart: unless-stopped
+    network_mode: none
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    command:
+      - python3.11
+      - -m
+      - natureai_next.bootstrap.bootstrap_handoff_cleanup_cli
+      - --directory
+      - /run/fieldora-bootstrap-handoff
+      - --interval-seconds
+      - "3600"
+    volumes:
+      - ./bootstrap-handoff:/run/fieldora-bootstrap-handoff
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,nodev,size=8m

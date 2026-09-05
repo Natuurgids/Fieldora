@@ -1,0 +1,135 @@
+name: Fieldora offline model bundle certification
+
+on:
+  pull_request:
+    paths:
+      - "src/natureai_next/bootstrap/model_bundle_cli.py"
+      - "src/natureai_next/bootstrap/platform_server_cli.py"
+      - "src/natureai_next/server/offline_model_store_api.py"
+      - "src/natureai_next/server/offline_first_api.py"
+      - "tests/test_model_bundle_cli.py"
+      - "tests/test_model_bundle_limits.py"
+      - "tests/test_model_bundle_signatures.py"
+      - "tests/test_model_bundle_scan_attestation.py"
+      - "tests/test_offline_model_store_api.py"
+      - "tests/test_platform_ai_administration_bootstrap.py"
+      - "Install-Fieldora-Offline-Model.ps1"
+      - "pyproject.toml"
+      - ".github/workflows/offline-model-bundle-certification.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  offline-model-bundle-certification:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install certification dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -e ".[dev]"
+      - name: Ruff offline model bundle discovery and bootstrap path
+        run: >-
+          python -m ruff check
+          src/natureai_next/bootstrap/model_bundle_cli.py
+          src/natureai_next/bootstrap/platform_server_cli.py
+          src/natureai_next/server/offline_model_store_api.py
+          src/natureai_next/server/offline_first_api.py
+          tests/test_model_bundle_cli.py
+          tests/test_model_bundle_limits.py
+          tests/test_model_bundle_signatures.py
+          tests/test_model_bundle_scan_attestation.py
+          tests/test_offline_model_store_api.py
+          tests/test_platform_ai_administration_bootstrap.py
+      - name: Offline model security discovery installation signature scan and PBAC tests
+        run: >-
+          python -m pytest -q
+          tests/test_model_bundle_cli.py
+          tests/test_model_bundle_limits.py
+          tests/test_model_bundle_signatures.py
+          tests/test_model_bundle_scan_attestation.py
+          tests/test_offline_model_store_api.py
+          tests/test_platform_ai_administration_bootstrap.py
+      - name: Certify installed CLI contract
+        run: |
+          fieldora-model-bundle --help >/dev/null
+          fieldora-model-bundle verify --help >/dev/null
+          fieldora-model-bundle install --help >/dev/null
+          fieldora-model-bundle verify --help | grep -- '--trusted-signing-key' >/dev/null
+          fieldora-model-bundle install --help | grep -- '--require-signature' >/dev/null
+          fieldora-model-bundle install --help | grep -- '--require-clean-scan' >/dev/null
+      - name: Certify no executable model formats are accepted
+        run: |
+          python - <<'PY'
+          from natureai_next.bootstrap import model_bundle_cli as m
+          forbidden = {'.py', '.pkl', '.pickle', '.pt', '.pth', '.bin', '.sh', '.ps1', '.exe'}
+          missing = forbidden - m._FORBIDDEN_EXTENSIONS
+          if missing:
+              raise SystemExit(f"missing forbidden model extensions: {sorted(missing)}")
+          if not {'.safetensors', '.onnx', '.gguf'} <= m._MODEL_EXTENSIONS:
+              raise SystemExit('safe model artifact allowlist is incomplete')
+          if m._MAX_MANIFEST_FILES > 10000 or m._MAX_MANIFEST_BYTES > 4 * 1024 * 1024:
+              raise SystemExit('manifest resource bounds are unexpectedly broad')
+          PY
+      - name: Parse portable offline model installer
+        shell: pwsh
+        run: |
+          $text = Get-Content -LiteralPath ./Install-Fieldora-Offline-Model.ps1 -Raw
+          [void][scriptblock]::Create($text)
+          foreach ($needle in @(
+            'Get-Command docker',
+            '"--network", "none"',
+            '"--read-only"',
+            '"--cap-drop", "ALL"',
+            '"--security-opt", "no-new-privileges:true"',
+            'fieldora-model-bundle',
+            '--trusted-signing-key',
+            '--require-signature',
+            '--require-clean-scan',
+            './fieldora-models:/var/lib/fieldora-models:ro',
+            'FIELDORA_MODEL_STORE: /var/lib/fieldora-models',
+            'compose.models.yaml',
+            'compose.override.yaml',
+            '$composeArgs',
+            'config -q'
+          )) {
+            if (-not $text.Contains($needle)) {
+              throw "Portable offline model installer is missing: $needle"
+            }
+          }
+          foreach ($forbidden in @('docker.exe','--network host','artifact_store_path')) {
+            if ($text.Contains($forbidden)) {
+              throw "Offline model installer violates portability or opacity contract: $forbidden"
+            }
+          }
+      - name: Certify browser-safe model discovery contract
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          text = Path('src/natureai_next/server/offline_model_store_api.py').read_text()
+          if 'artifact_store_path' in text or 'raw_log' in text:
+              raise SystemExit('filesystem paths or raw scanner logs must not be exposed by model discovery')
+          for required in (
+              'artifact_storage_id', '"view",\n                    "ai_model"', 'FIELDORA_MODEL_STORE',
+              'manifest_signature', 'signing_key_id', 'malware_scan', 'payload_sha256',
+          ):
+              if required not in text:
+                  raise SystemExit(f'missing governed discovery marker: {required}')
+          verifier = Path('src/natureai_next/bootstrap/model_bundle_cli.py').read_text()
+          for required in (
+              'Ed25519PublicKey', 'manifest.sig', 'require_signature', 'signing_key_id',
+              'require_clean_scan', 'malware scan attestation requires a verified signed manifest',
+              '_payload_tree_sha256', 'malware scan payload digest does not match manifest payload',
+          ):
+              if required not in verifier:
+                  raise SystemExit(f'missing trusted model verifier marker: {required}')
+          bootstrap = Path('src/natureai_next/bootstrap/platform_server_cli.py').read_text()
+          for required in ('Initial AI and integration administrator', 'purposes=("administration",)'):
+              if required not in bootstrap:
+                  raise SystemExit(f'missing AI administration bootstrap marker: {required}')
+          PY

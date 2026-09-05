@@ -18,7 +18,6 @@ from natureai_next.server.navigation_web_compatibility import patch_navigation_w
 from natureai_next.server.web_compatibility import patch_web_response
 from natureai_next.server.web_module_contracts import FOUNDATION_WEB_MODULES, WebModuleRegistry
 
-
 _PROJECT_MODULES = {
     "projects.core",
     "portfolio",

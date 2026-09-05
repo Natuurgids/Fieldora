@@ -6,7 +6,6 @@ from natureai_next.server.web_module_contracts import (
     WebModuleRegistry,
 )
 
-
 _PROJECT_CONTRACTS = {
     "projects.list.read",
     "projects.context.select",

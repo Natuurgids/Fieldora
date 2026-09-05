@@ -18,6 +18,10 @@ from natureai_next.server.contract_web_compatibility import patch_contract_web_r
 from natureai_next.server.facility_web_compatibility import patch_facility_web_response
 from natureai_next.server.modular_shell_web import patch_modular_shell_response
 from natureai_next.server.navigation_web_compatibility import patch_navigation_web_response
+from natureai_next.server.project_context_provider_web import (
+    patch_project_context_provider_response,
+)
+from natureai_next.server.project_core_module_web import patch_project_core_module_response
 from natureai_next.server.project_creation_module_web import (
     patch_project_creation_module_response,
 )
@@ -32,7 +36,7 @@ from natureai_next.server.web_module_contract_runtime import (
 
 
 @contextlib.contextmanager
-def _web_fixture(tmp_path: Path):
+def _web_fixture(tmp_path: Path, *, projects_core: bool = False):
     resource = Path("src/natureai_next/resources/server_web")
     (tmp_path / "index.html").write_bytes((resource / "index.html").read_bytes())
     response = ApiResponse(
@@ -48,11 +52,18 @@ def _web_fixture(tmp_path: Path):
         patch_browser_functionality_response,
         patch_science_workflow_web_response,
         patch_project_creation_module_response,
+    ):
+        response = patch("/app.js", response)
+    if projects_core:
+        response = patch_project_core_module_response("/app.js", response)
+    for patch in (
         patch_modular_shell_response,
         patch_runtime_contracts_response,
         patch_project_list_provider_response,
     ):
         response = patch("/app.js", response)
+    if projects_core:
+        response = patch_project_context_provider_response("/app.js", response)
     (tmp_path / "app.js").write_bytes(response.body)
 
     class Handler(SimpleHTTPRequestHandler):
@@ -87,6 +98,8 @@ class _WorkflowApi:
         self.observations: list[dict[str, object]] = []
         self.uploads: dict[str, dict[str, object]] = {}
         self.mutations: list[tuple[str, str, dict[str, object], str | None]] = []
+        self.project_get_failures_remaining = 0
+        self.project_get_requests = 0
         self._project_number = 0
         self._upload_number = 0
         self._media_number = 0
@@ -147,6 +160,10 @@ class _WorkflowApi:
         if path == "dossiers":
             return self._json(route, {"items": []})
         if path == "projects" and method == "GET":
+            self.project_get_requests += 1
+            if self.project_get_failures_remaining:
+                self.project_get_failures_remaining -= 1
+                return self._json(route, {"detail": "Project list unavailable"}, 503)
             return self._json(route, {"items": self.projects})
         if path == "projects" and method == "POST":
             body = self._body(route)
@@ -322,4 +339,67 @@ def test_web056_complete_create_import_link_edit_review_workflow(
             mutation for mutation in backend.mutations if "observation" in mutation[1]
         ]
         assert [mutation[3] for mutation in observation_mutations] == [None, "1", "2", "3"]
+        browser.close()
+
+
+@pytest.mark.parametrize("browser_name", ("chromium", "firefox", "webkit"))
+def test_web056_projects_list_context_scope_error_and_recovery(
+    tmp_path: Path, browser_name: str
+) -> None:
+    backend = _WorkflowApi()
+    backend.projects = [
+        {
+            "id": "project-alpha",
+            "name": "Alpha Project",
+            "status": "active",
+            "owner_id": "other-1",
+        },
+        {
+            "id": "project-beta",
+            "name": "Beta Project",
+            "status": "active",
+            "owner_id": "other-2",
+        },
+    ]
+    with _web_fixture(tmp_path, projects_core=True) as url, sync_playwright() as playwright:
+        browser = getattr(playwright, browser_name).launch(headless=True)
+        page = browser.new_page()
+        page.route("**/api/v1/**", backend)
+        page.add_init_script(
+            "sessionStorage.setItem('fieldora-session','projects-browser-certification-token')"
+        )
+        page.goto(url)
+        page.wait_for_selector("#workspace:not([hidden])")
+        baseline_requests = backend.project_get_requests
+        backend.project_get_failures_remaining = 1
+
+        page.locator('.nav[data-page="projects"]').click()
+        page.wait_for_selector("#page-projects:not([hidden])")
+        page.wait_for_function(
+            "document.querySelector('#project-core-module-status')?.classList.contains('error')"
+        )
+        assert backend.project_get_requests == baseline_requests + 1
+        assert page.evaluate("FieldoraProjectContext.current()") == ""
+
+        page.evaluate("FieldoraProjectList.refresh()")
+        page.wait_for_selector('[data-project-tree="project-alpha"]')
+        page.wait_for_selector('[data-project-tree="project-beta"]')
+        assert backend.project_get_requests == baseline_requests + 2
+
+        page.locator('[data-project-tree="project-alpha"]').click()
+        page.wait_for_function("FieldoraProjectContext.current()==='project-alpha'")
+        page.locator('[data-project-tree="project-beta"]').click()
+        page.wait_for_function("FieldoraProjectContext.current()==='project-beta'")
+
+        assert page.evaluate("FieldoraProjectContext.select('project-stale')") is False
+        assert page.evaluate("FieldoraProjectContext.current()") == "project-beta"
+        assert "no longer accessible" in page.locator("#project-core-module-status").inner_text()
+
+        page.locator('[data-project-scope="mine"]').click()
+        assert page.locator("[data-project-tree]").count() == 0
+        assert "No accessible projects." in page.locator("#project-cockpit-tree").inner_text()
+
+        page.locator('[data-project-scope="all"]').click()
+        assert page.locator("[data-project-tree]").count() == 2
+        assert page.evaluate("FieldoraProjectContext.current()") == "project-beta"
         browser.close()

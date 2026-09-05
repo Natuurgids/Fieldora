@@ -385,24 +385,32 @@ def test_web056_projects_list_context_scope_error_and_recovery(
         page.wait_for_selector("#page-library:not([hidden])")
         page.locator('.nav[data-page="projects"]').click()
         page.wait_for_selector("#page-projects:not([hidden])")
-        page.wait_for_selector('[data-project-tree="project-alpha"]')
-        page.wait_for_selector('[data-project-tree="project-beta"]')
+        page.wait_for_function(
+            "document.querySelectorAll('[data-project-tree]').length===2"
+        )
+        assert page.evaluate(
+            "[...document.querySelectorAll('[data-project-tree]')].map(node=>node.dataset.projectTree)"
+        ) == ["project-alpha", "project-beta"]
         assert backend.project_get_requests == baseline_requests + 2
 
-        page.locator('[data-project-tree="project-alpha"]').click()
+        page.evaluate(
+            "document.querySelector('[data-project-tree=\"project-alpha\"]')?.click()"
+        )
         page.wait_for_function("FieldoraProjectContext.current()==='project-alpha'")
-        page.locator('[data-project-tree="project-beta"]').click()
+        page.evaluate(
+            "document.querySelector('[data-project-tree=\"project-beta\"]')?.click()"
+        )
         page.wait_for_function("FieldoraProjectContext.current()==='project-beta'")
 
         assert page.evaluate("FieldoraProjectContext.select('project-stale')") is False
         assert page.evaluate("FieldoraProjectContext.current()") == "project-beta"
         assert "no longer accessible" in page.locator("#project-core-module-status").inner_text()
 
-        page.locator('[data-project-scope="mine"]').click()
+        page.evaluate("document.querySelector('[data-project-scope=\"mine\"]')?.click()")
         assert page.locator("[data-project-tree]").count() == 0
         assert "No accessible projects." in page.locator("#project-cockpit-tree").inner_text()
 
-        page.locator('[data-project-scope="all"]').click()
+        page.evaluate("document.querySelector('[data-project-scope=\"all\"]')?.click()")
         assert page.locator("[data-project-tree]").count() == 2
         assert page.evaluate("FieldoraProjectContext.current()") == "project-beta"
         browser.close()

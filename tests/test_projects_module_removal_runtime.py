@@ -18,6 +18,13 @@ _PROJECT_MODULES = {
     "research.dossiers",
     "dossiers.workspace",
 }
+_PROJECT_ROUTES = {
+    "/projects",
+    "/portfolio",
+    "/capacity",
+    "/research",
+    "/dossiers",
+}
 _UNRELATED_MODULES = {
     "home.activity",
     "library.catalog",
@@ -40,6 +47,9 @@ def test_projects_free_registry_generates_shell_and_contract_runtime() -> None:
     registry = _projects_free_registry()
 
     shell = modular_shell_composition.modular_shell_bootstrap(registry).decode("utf-8")
+    surface_filter = modular_shell_composition.modular_shell_surface_filter(registry).decode(
+        "utf-8"
+    )
     contracts = web_module_contract_runtime._runtime_script(registry).decode("utf-8")
 
     for module_id in _PROJECT_MODULES:
@@ -51,6 +61,12 @@ def test_projects_free_registry_generates_shell_and_contract_runtime() -> None:
         marker = f'"module_id":"{module_id}"'
         assert marker in shell
         assert marker in contracts
+
+    for route in _PROJECT_ROUTES:
+        assert f'"{route.lstrip("/")}"' in surface_filter
+
+    for route in {"/home", "/library", "/observations", "/knowledge", "/administration"}:
+        assert f'"{route.lstrip("/")}"' not in surface_filter
 
     for contract in _PROJECT_CONTRACTS:
         assert contract not in contracts

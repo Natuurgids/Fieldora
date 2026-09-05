@@ -25,6 +25,13 @@ _PROJECT_MODULES = {
     "research.dossiers",
     "dossiers.workspace",
 }
+_PROJECT_ROUTES = {
+    "/projects",
+    "/portfolio",
+    "/capacity",
+    "/research",
+    "/dossiers",
+}
 _PROJECT_CONTRACTS = {
     "projects.list.read",
     "projects.context.select",
@@ -122,7 +129,15 @@ def test_projects_free_browser_boots_and_keeps_unrelated_library_action(tmp_path
         for contract in _PROJECT_CONTRACTS:
             assert page.evaluate("contract=>FieldoraModuleContracts.provider(contract)", contract) is None
 
+        for route in _PROJECT_ROUTES:
+            page_name = route.lstrip("/")
+            assert not page.evaluate("route=>Boolean(FieldoraModules.resolve(route))", route)
+            assert page.locator(f'.nav[data-page="{page_name}"]').count() == 0
+            assert page.locator(f"#page-{page_name}").count() == 0
+
         assert page.evaluate("Boolean(FieldoraModules.resolve('/library'))")
+        assert page.locator('.nav[data-page="library"]').count() == 1
+        assert page.locator("#page-library").count() == 1
         page.locator('.nav[data-page="library"]').click()
         page.wait_for_selector("#page-library:not([hidden])")
         page.locator('[data-media-filter="image"]').click()

@@ -7,7 +7,10 @@ from urllib.parse import urlsplit
 
 from natureai_next.server import modular_shell_web
 from natureai_next.server.api import ApiResponse
-from natureai_next.server.web_module_contracts import WebModuleRegistry
+from natureai_next.server.web_module_contracts import (
+    FOUNDATION_WEB_MODULES,
+    WebModuleRegistry,
+)
 
 _MANIFEST_START = b" const specs="
 _MANIFEST_END = b";\n const byRoute="
@@ -35,6 +38,28 @@ def modular_shell_bootstrap(registry: WebModuleRegistry) -> bytes:
     return bootstrap[:start] + payload + bootstrap[end:]
 
 
+def modular_shell_surface_filter(registry: WebModuleRegistry) -> bytes:
+    """Remove DOM surfaces whose foundation-owned routes are not composed."""
+
+    active_routes = {spec.route for spec in registry.as_mapping().values()}
+    omitted_pages = sorted(
+        spec.route.lstrip("/")
+        for spec in FOUNDATION_WEB_MODULES
+        if spec.route not in active_routes
+    )
+    payload = json.dumps(omitted_pages, ensure_ascii=False, separators=(",", ":"))
+    return (
+        "\n\n/* WEB-MODULAR-SHELL-COMPOSITION: prune omitted module surfaces. */\n"
+        "(()=>{\n"
+        f" const omitted={payload};\n"
+        " omitted.forEach(page=>{\n"
+        "  document.querySelectorAll(`.nav[data-page=\"${page}\"]`).forEach(node=>node.remove());\n"
+        "  document.getElementById(`page-${page}`)?.remove();\n"
+        " });\n"
+        "})();\n"
+    ).encode()
+
+
 def patch_modular_shell_response(
     target: str,
     response: ApiResponse,
@@ -58,7 +83,12 @@ def patch_modular_shell_response(
         body = body.replace(_DOSSIER_SENTINEL, modular_shell_web._DOSSIER_OWNER_MARKER)
 
     bootstrap = modular_shell_bootstrap(registry)
-    body = body.replace(modular_shell_web._MODULAR_SHELL_BOOTSTRAP, bootstrap, 1)
+    surface_filter = modular_shell_surface_filter(registry)
+    body = body.replace(
+        modular_shell_web._MODULAR_SHELL_BOOTSTRAP,
+        surface_filter + bootstrap,
+        1,
+    )
     if body == response.body:
         return response
     return ApiResponse(response.status, body, response.content_type, response.headers)

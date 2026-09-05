@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from natureai_next.server import modular_shell_web, web_module_contract_runtime
+from natureai_next.server import modular_shell_composition, web_module_contract_runtime
 from natureai_next.server.web_module_contracts import (
     FOUNDATION_WEB_MODULES,
     WebModuleRegistry,
@@ -36,11 +36,10 @@ def _projects_free_registry() -> WebModuleRegistry:
     return registry
 
 
-def test_projects_free_registry_generates_shell_and_contract_runtime(monkeypatch) -> None:
+def test_projects_free_registry_generates_shell_and_contract_runtime() -> None:
     registry = _projects_free_registry()
-    monkeypatch.setattr(modular_shell_web, "foundation_registry", lambda: registry)
 
-    shell = modular_shell_web._bootstrap_script().decode("utf-8")
+    shell = modular_shell_composition.modular_shell_bootstrap(registry).decode("utf-8")
     contracts = web_module_contract_runtime._runtime_script(registry).decode("utf-8")
 
     for module_id in _PROJECT_MODULES:

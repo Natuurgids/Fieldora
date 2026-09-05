@@ -9,7 +9,7 @@ from urllib.parse import urlsplit
 
 from playwright.sync_api import Route, sync_playwright
 
-from natureai_next.server import modular_shell_web, web_module_contract_runtime
+from natureai_next.server import modular_shell_composition, web_module_contract_runtime
 from natureai_next.server.api import ApiResponse
 from natureai_next.server.browser_functionality_web import patch_browser_functionality_response
 from natureai_next.server.contract_web_compatibility import patch_contract_web_response
@@ -42,12 +42,8 @@ def _projects_free_registry() -> WebModuleRegistry:
 
 
 @contextlib.contextmanager
-def _projects_free_web(tmp_path: Path, monkeypatch):
+def _projects_free_web(tmp_path: Path):
     registry = _projects_free_registry()
-    monkeypatch.setattr(modular_shell_web, "foundation_registry", lambda: registry)
-    monkeypatch.setattr(
-        modular_shell_web, "_MODULAR_SHELL_BOOTSTRAP", modular_shell_web._bootstrap_script()
-    )
 
     resource = Path("src/natureai_next/resources/server_web")
     (tmp_path / "index.html").write_bytes((resource / "index.html").read_bytes())
@@ -62,9 +58,11 @@ def _projects_free_web(tmp_path: Path, monkeypatch):
         patch_facility_web_response,
         patch_navigation_web_response,
         patch_browser_functionality_response,
-        modular_shell_web.patch_modular_shell_response,
     ):
         response = patch("/app.js", response)
+    response = modular_shell_composition.patch_modular_shell_response(
+        "/app.js", response, registry=registry
+    )
     response = web_module_contract_runtime.patch_runtime_contracts_response(
         "/app.js", response, registry=registry
     )
@@ -104,10 +102,8 @@ def _api(route: Route) -> None:
     route.fulfill(status=200, content_type="application/json", body=json.dumps(payload))
 
 
-def test_projects_free_browser_boots_and_keeps_unrelated_library_action(
-    tmp_path: Path, monkeypatch
-) -> None:
-    with _projects_free_web(tmp_path, monkeypatch) as url, sync_playwright() as playwright:
+def test_projects_free_browser_boots_and_keeps_unrelated_library_action(tmp_path: Path) -> None:
+    with _projects_free_web(tmp_path) as url, sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         page = browser.new_page()
         page.route("**/api/v1/**", _api)

@@ -36,7 +36,7 @@ Status legend: `[ ]` missing, `[~]` partial/evidence or migration in progress, `
 | P07 | [~] | Project work-data adapters | P03,A05 | Phases/tasks/sprints/allocations/evidence are accessed behind declared service contracts. |
 | P08 | [~] | Remove mutable global Projects coupling | P02-P07 | `projects`, `selectedProject`, direct feature globals and equivalent ambient state are no longer module integration APIs. |
 | P09 | [~] | Retire legacy Projects wiring | P01-P08 | Final `/app.js` contains one owner per migrated responsibility and no competing legacy listeners. |
-| P10 | [ ] | Module removal test | P01-P09 | Remove/disable Projects module and prove shell plus unrelated modules still boot/function. |
+| P10 | [x] | Module removal test | P01-P09 | Remove/disable Projects module and prove shell plus unrelated modules still boot/function. |
 | P11 | [~] | Module replacement test | P01-P09 | Substitute a minimal Projects provider implementing the same public contracts without shell/consumer changes. |
 | P12 | [~] | Dependency contract tests | A01-P11 | Duplicate ownership, missing providers and undeclared concrete coupling are rejected where mechanically testable. |
 | P13 | [ ] | Browser behavior certification | P02-P07 | Chromium/Firefox/WebKit cover list, context switch, strict empty `My work`, stale/inaccessible selection, error and recovery. |
@@ -46,8 +46,9 @@ Status legend: `[ ]` missing, `[~]` partial/evidence or migration in progress, `
 | P17 | [~] | Dependency graph maintained | A01-P16 | Required, optional and provided contracts are represented in registry/manifest and this ledger stays current. |
 | P18 | [ ] | Certify Project list/context | P01-P17 | Iteration 6 item may move from `[~]` only when behavior and removal/replacement boundaries are proven at one exact head. |
 
-## Current dependency findings at audit head `883ae2713fa4af48bee90c296a5b3f77f19267ce`
+## Current dependency findings at audit head `0ad0fc1127edf9dd520250e4f633f60de8e40734`
 
+- P10 is certified at exact head `0ad0fc1127edf9dd520250e4f633f60de8e40734`. The explicit Projects-free composition removes `projects.core`, `portfolio`, `capacity`, `research.dossiers` and `dossiers.workspace` from the shell and contract manifests, removes their foundation-owned navigation/page DOM surfaces, leaves their public Project contracts without providers, and still boots Chromium with unrelated Library navigation and media filtering functional. `Fieldora modular shell certification` run #329 and the full visible exact-head workflow set completed successfully for that head.
 - The registry and browser runtime now distinguish concrete module dependencies from public provided/required contracts. `projects.core` provides `projects.list.read`, `projects.context.select` and `projects.toolbar.extend`; Portfolio requires list/context contracts rather than the concrete Projects module ID.
 - `projects.list.read` has one Projects-owned provider with immutable snapshots, refresh deduplication and loaded-state reporting. Projects/Core and Portfolio consume that contract instead of reading ambient `projects`/`window.projects`.
 - `web_capabilities.py` routes modular initial Project loading through `projects.list.read`. When the modular contract runtime exists, missing `projects.list.read` now fails closed instead of falling back to ambient `projects` or directly fetching `/api/v1/projects`; the direct API bootstrap remains only for the non-modular legacy runtime.

@@ -15,8 +15,13 @@ from natureai_next.server.browser_functionality_web import patch_browser_functio
 from natureai_next.server.contract_web_compatibility import patch_contract_web_response
 from natureai_next.server.facility_web_compatibility import patch_facility_web_response
 from natureai_next.server.navigation_web_compatibility import patch_navigation_web_response
+from natureai_next.server.portfolio_module_web import patch_portfolio_module_response
 from natureai_next.server.web_compatibility import patch_web_response
-from natureai_next.server.web_module_contracts import FOUNDATION_WEB_MODULES, WebModuleRegistry
+from natureai_next.server.web_module_contracts import (
+    FOUNDATION_WEB_MODULES,
+    WebModuleRegistry,
+    WebModuleSpec,
+)
 
 _PROJECT_MODULES = {
     "projects.core",
@@ -37,6 +42,33 @@ _PROJECT_CONTRACTS = {
     "projects.context.select",
     "projects.toolbar.extend",
 }
+_REPLACEMENT_PROVIDER = b"""
+/* TEST-PROJECTS-REPLACEMENT: minimal public-contract implementation. */
+(()=>{
+ const contracts=window.FieldoraModuleContracts;
+ const state={
+  items:[{id:"replacement-1",name:"Replacement project",owner_id:"admin-1",status:"active"}],
+  selected:"",extensions:[]
+ };
+ contracts.register("projects.list.read","projects.replacement",Object.freeze({
+  items:()=>state.items.map(item=>({...item})),
+  refresh:async()=>state.items.map(item=>({...item})),
+  loaded:()=>true
+ }));
+ contracts.register("projects.context.select","projects.replacement",Object.freeze({
+  current:()=>state.selected,
+  select:id=>{state.selected=String(id||"");return true}
+ }));
+ contracts.register("projects.toolbar.extend","projects.replacement",Object.freeze({
+  register:extension=>{state.extensions.push(extension);return ()=>{}},
+  items:()=>[...state.extensions]
+ }));
+ window.FieldoraReplacementProjects=Object.freeze({
+  selected:()=>state.selected,
+  extensionCount:()=>state.extensions.length
+ });
+})();
+"""
 
 
 def _projects_free_registry() -> WebModuleRegistry:
@@ -48,12 +80,24 @@ def _projects_free_registry() -> WebModuleRegistry:
     return registry
 
 
-@contextlib.contextmanager
-def _projects_free_web(tmp_path: Path):
-    registry = _projects_free_registry()
+def _replacement_projects_registry() -> WebModuleRegistry:
+    replacement = WebModuleSpec(
+        "projects.replacement",
+        "/projects",
+        "Projects replacement",
+        provides_contracts=tuple(sorted(_PROJECT_CONTRACTS)),
+    )
+    registry = WebModuleRegistry(
+        replacement if spec.module_id == "projects.core" else spec
+        for spec in FOUNDATION_WEB_MODULES
+    )
+    registry.validate_dependencies()
+    registry.validate_contracts()
+    return registry
 
+
+def _patched_app(registry: WebModuleRegistry, *, portfolio: bool = False) -> ApiResponse:
     resource = Path("src/natureai_next/resources/server_web")
-    (tmp_path / "index.html").write_bytes((resource / "index.html").read_bytes())
     response = ApiResponse(
         200,
         (resource / "app.js").read_bytes(),
@@ -67,12 +111,20 @@ def _projects_free_web(tmp_path: Path):
         patch_browser_functionality_response,
     ):
         response = patch("/app.js", response)
+    if portfolio:
+        response = patch_portfolio_module_response("/app.js", response)
     response = modular_shell_composition.patch_modular_shell_response(
         "/app.js", response, registry=registry
     )
-    response = web_module_contract_runtime.patch_runtime_contracts_response(
+    return web_module_contract_runtime.patch_runtime_contracts_response(
         "/app.js", response, registry=registry
     )
+
+
+@contextlib.contextmanager
+def _serve_web(tmp_path: Path, response: ApiResponse):
+    resource = Path("src/natureai_next/resources/server_web")
+    (tmp_path / "index.html").write_bytes((resource / "index.html").read_bytes())
     (tmp_path / "app.js").write_bytes(response.body)
 
     class Handler(SimpleHTTPRequestHandler):
@@ -91,6 +143,25 @@ def _projects_free_web(tmp_path: Path):
         server.shutdown()
         server.server_close()
         thread.join(timeout=5)
+
+
+@contextlib.contextmanager
+def _projects_free_web(tmp_path: Path):
+    with _serve_web(tmp_path, _patched_app(_projects_free_registry())) as url:
+        yield url
+
+
+@contextlib.contextmanager
+def _replacement_projects_web(tmp_path: Path):
+    response = _patched_app(_replacement_projects_registry(), portfolio=True)
+    response = ApiResponse(
+        response.status,
+        response.body + _REPLACEMENT_PROVIDER,
+        response.content_type,
+        response.headers,
+    )
+    with _serve_web(tmp_path, response) as url:
+        yield url
 
 
 def _api(route: Route) -> None:
@@ -145,4 +216,37 @@ def test_projects_free_browser_boots_and_keeps_unrelated_library_action(tmp_path
             "node=>node.classList.contains('primary')"
         )
         assert page.locator("#media-grid").is_visible()
+        browser.close()
+
+
+def test_replacement_projects_provider_drives_unchanged_portfolio_consumer(
+    tmp_path: Path,
+) -> None:
+    with _replacement_projects_web(tmp_path) as url, sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page()
+        page.route("**/api/v1/**", _api)
+        page.add_init_script(
+            "sessionStorage.setItem('fieldora-session','projects-replacement-certification-token')"
+        )
+        page.goto(url)
+        page.wait_for_selector("#workspace:not([hidden])")
+
+        assert page.evaluate("FieldoraModules.resolve('/projects').module_id") == (
+            "projects.replacement"
+        )
+        for contract in _PROJECT_CONTRACTS:
+            assert page.evaluate(
+                "contract=>FieldoraModuleContracts.provider(contract)", contract
+            ) == "projects.replacement"
+        assert page.evaluate("FieldoraModuleContracts.unresolved('portfolio')") == []
+
+        page.evaluate("FieldoraPortfolio.mount()")
+        replacement = page.locator(
+            '#portfolio-list [data-portfolio-id="replacement-1"][data-kind="project"]'
+        )
+        replacement.wait_for()
+        assert "Replacement project" in replacement.inner_text()
+        replacement.click()
+        assert page.evaluate("FieldoraReplacementProjects.selected()") == "replacement-1"
         browser.close()

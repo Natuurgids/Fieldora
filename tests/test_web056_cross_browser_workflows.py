@@ -25,6 +25,9 @@ from natureai_next.server.project_core_module_web import patch_project_core_modu
 from natureai_next.server.project_creation_module_web import (
     patch_project_creation_module_response,
 )
+from natureai_next.server.project_facility_workspace_web import (
+    patch_project_facility_workspace_response,
+)
 from natureai_next.server.project_list_provider_web import (
     patch_project_list_provider_response,
 )
@@ -56,6 +59,7 @@ def _web_fixture(tmp_path: Path, *, projects_core: bool = False):
         response = patch("/app.js", response)
     if projects_core:
         response = patch_project_core_module_response("/app.js", response)
+        response = patch_project_facility_workspace_response("/app.js", response)
     for patch in (
         patch_modular_shell_response,
         patch_runtime_contracts_response,

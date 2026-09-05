@@ -45,14 +45,8 @@ def _projects_free_registry() -> WebModuleRegistry:
 def _projects_free_web(tmp_path: Path, monkeypatch):
     registry = _projects_free_registry()
     monkeypatch.setattr(modular_shell_web, "foundation_registry", lambda: registry)
-    monkeypatch.setattr(web_module_contract_runtime, "foundation_registry", lambda: registry)
     monkeypatch.setattr(
         modular_shell_web, "_MODULAR_SHELL_BOOTSTRAP", modular_shell_web._bootstrap_script()
-    )
-    monkeypatch.setattr(
-        web_module_contract_runtime,
-        "_RUNTIME_CONTRACT_PATCH",
-        web_module_contract_runtime._runtime_script(),
     )
 
     resource = Path("src/natureai_next/resources/server_web")
@@ -69,9 +63,11 @@ def _projects_free_web(tmp_path: Path, monkeypatch):
         patch_navigation_web_response,
         patch_browser_functionality_response,
         modular_shell_web.patch_modular_shell_response,
-        web_module_contract_runtime.patch_runtime_contracts_response,
     ):
         response = patch("/app.js", response)
+    response = web_module_contract_runtime.patch_runtime_contracts_response(
+        "/app.js", response, registry=registry
+    )
     (tmp_path / "app.js").write_bytes(response.body)
 
     class Handler(SimpleHTTPRequestHandler):

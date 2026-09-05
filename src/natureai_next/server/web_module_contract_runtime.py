@@ -6,13 +6,16 @@ import json
 from urllib.parse import urlsplit
 
 from natureai_next.server.api import ApiResponse
-from natureai_next.server.web_module_contracts import foundation_registry
+from natureai_next.server.web_module_contracts import WebModuleRegistry, foundation_registry
 
 
-def runtime_contract_manifest() -> tuple[dict[str, object], ...]:
+def runtime_contract_manifest(
+    registry: WebModuleRegistry | None = None,
+) -> tuple[dict[str, object], ...]:
     """Return browser-safe provider/consumer declarations in registry order."""
 
-    registry = foundation_registry()
+    if registry is None:
+        registry = foundation_registry()
     return tuple(
         {
             "module_id": spec.module_id,
@@ -23,9 +26,9 @@ def runtime_contract_manifest() -> tuple[dict[str, object], ...]:
     )
 
 
-def _runtime_script() -> bytes:
+def _runtime_script(registry: WebModuleRegistry | None = None) -> bytes:
     manifest = json.dumps(
-        runtime_contract_manifest(), ensure_ascii=False, separators=(",", ":")
+        runtime_contract_manifest(registry), ensure_ascii=False, separators=(",", ":")
     )
     return (
         "\n\n/* WEB-MODULE-CONTRACT-RUNTIME: replaceable module service boundary. */\n"
@@ -61,19 +64,25 @@ def _runtime_script() -> bytes:
 _RUNTIME_CONTRACT_PATCH = _runtime_script()
 
 
-def patch_runtime_contracts_response(target: str, response: ApiResponse) -> ApiResponse:
+def patch_runtime_contracts_response(
+    target: str,
+    response: ApiResponse,
+    *,
+    registry: WebModuleRegistry | None = None,
+) -> ApiResponse:
     """Append the runtime registry after the finalized modular shell exactly once."""
 
+    patch = _RUNTIME_CONTRACT_PATCH if registry is None else _runtime_script(registry)
     if (
         urlsplit(target).path != "/app.js"
         or response.status != 200
         or b"WEB-MODULAR-SHELL: registry-owned navigation bridge" not in response.body
-        or _RUNTIME_CONTRACT_PATCH in response.body
+        or patch in response.body
     ):
         return response
     return ApiResponse(
         response.status,
-        response.body + _RUNTIME_CONTRACT_PATCH,
+        response.body + patch,
         response.content_type,
         response.headers,
     )

@@ -385,6 +385,14 @@ def test_web056_projects_list_context_scope_error_and_recovery(
         assert backend.project_get_requests == baseline_requests + 1
         assert page.evaluate("FieldoraProjectContext.current()") == ""
 
+        page.evaluate(
+            """
+            window.__fieldoraProjectContextEvents = [];
+            document.addEventListener('fieldora:project-context-changed', event => {
+                window.__fieldoraProjectContextEvents.push(event.detail?.project_id || '');
+            });
+            """
+        )
         page.locator('.nav[data-page="library"]').click()
         page.wait_for_selector("#page-library:not([hidden])")
         page.locator('.nav[data-page="projects"]').click()
@@ -396,13 +404,36 @@ def test_web056_projects_list_context_scope_error_and_recovery(
             "[...document.querySelectorAll('[data-project-tree]')].map(node=>node.dataset.projectTree)"
         ) == ["project-alpha", "project-beta"]
         assert backend.project_get_requests == baseline_requests + 2
+        page.wait_for_function(
+            "window.__fieldoraProjectContextEvents.includes('project-alpha')"
+        )
 
         page.evaluate(
-            "document.querySelector('[data-project-tree=\"project-alpha\"]')?.click()"
+            """
+            () => new Promise(resolve => {
+                const done = event => {
+                    if (event.detail?.project_id !== 'project-alpha') return;
+                    document.removeEventListener('fieldora:project-context-changed', done);
+                    resolve();
+                };
+                document.addEventListener('fieldora:project-context-changed', done);
+                document.querySelector('[data-project-tree="project-alpha"]')?.click();
+            })
+            """
         )
         page.wait_for_function("FieldoraProjectContext.current()==='project-alpha'")
         page.evaluate(
-            "document.querySelector('[data-project-tree=\"project-beta\"]')?.click()"
+            """
+            () => new Promise(resolve => {
+                const done = event => {
+                    if (event.detail?.project_id !== 'project-beta') return;
+                    document.removeEventListener('fieldora:project-context-changed', done);
+                    resolve();
+                };
+                document.addEventListener('fieldora:project-context-changed', done);
+                document.querySelector('[data-project-tree="project-beta"]')?.click();
+            })
+            """
         )
         page.wait_for_function("FieldoraProjectContext.current()==='project-beta'")
 

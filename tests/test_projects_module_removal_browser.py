@@ -241,6 +241,8 @@ def test_replacement_projects_provider_drives_unchanged_portfolio_consumer(
             ) == "projects.replacement"
         assert page.evaluate("FieldoraModuleContracts.unresolved('portfolio')") == []
 
+        page.locator('.nav[data-page="projects"]').click()
+        page.wait_for_selector("#page-projects:not([hidden])")
         page.evaluate("FieldoraPortfolio.mount()")
         replacement = page.locator(
             '#portfolio-list [data-portfolio-id="replacement-1"][data-kind="project"]'

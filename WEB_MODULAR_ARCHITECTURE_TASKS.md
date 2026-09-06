@@ -14,7 +14,7 @@ Status legend: `[ ]` missing, `[~]` partial/evidence or migration in progress, `
 
 | ID | Status | Task | Depends on | Completion contract |
 |---|---|---|---|---|
-| A01 | [~] | Module contract | — | Module identity, route, capability, owned actions, provided/required contracts and lifecycle are explicit. |
+| A01 | [x] | Module contract | — | Module identity, route, capability, owned actions, provided/required contracts and lifecycle are explicit. |
 | A02 | [~] | Module/capability registry | A01 | Shell discovers modules from a validated registry; duplicate ownership and unresolved requirements fail validation. |
 | A03 | [~] | Shared application contracts | A01 | Auth, project context, navigation, inspector and notifications are consumed through public contracts. |
 | A04 | [~] | Event/message boundary | A03 | Cross-module runtime changes use declared actions/events; producer and consumer ownership are known. |
@@ -22,6 +22,10 @@ Status legend: `[ ]` missing, `[~]` partial/evidence or migration in progress, `
 | A06 | [~] | State ownership | A03,A04 | Every shared state field has one owner; consumers use snapshots/read contracts/events and cannot mutate owner state directly. |
 | A07 | [~] | DOM ownership | A01 | Each module owns a bounded render root and does not reach into another module's private DOM. |
 | A08 | [~] | Shell decomposition | A01-A07 | Shell performs composition, capability gating, route/history and lifecycle only; feature business behavior is outside the shell. |
+
+### A01 certification at `98d2766f7a87b4e16930ccc342c1cbad2ee86651`
+
+`WebModuleSpec` explicitly defines module identity, route, label, capability, owned actions, concrete dependencies, and provided/required/optional public contracts, with normalization and duplicate/overlap validation. `WebModuleAdapter` defines the shared `mount(spec)` / `unmount(spec)` lifecycle contract, `WebModuleRuntime` owns lifecycle states, ordering and failure isolation, and the production browser shell emits `fieldora:module-unmount` before `fieldora:module-mount` while carrying the public module spec in each lifecycle event. Exact-head modular-shell run #390 is green and exercises the module-contract/runtime test suites.
 
 ## Projects slice — Project list and project context
 

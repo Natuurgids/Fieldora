@@ -24,7 +24,7 @@ _RESEARCH_RECORDS_PATCH = bytes(
  const byId=id=>document.getElementById(id);
  const html=value=>String(value??"").replace(/[&<>"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
  const projectContext=()=>window.FieldoraModuleContracts?.resolve?.("projects.context.select")||null;
- let governedResearchRecords=[],editingResearchRecord=null,integrationProjectId="";
+ let governedResearchRecords=[],editingResearchRecord=null,integrationProjectId="",researchLoadGeneration=0;
  const list=byId("research-domain-list"),save=byId("science-save"),recordsCard=list?.closest(".card");
  if(!list||!save||!recordsCard)return;
 
@@ -34,11 +34,14 @@ _RESEARCH_RECORDS_PATCH = bytes(
   list.innerHTML=governedResearchRecords.length?governedResearchRecords.map(item=>`<button type="button" class="row" data-research-record="${html(item.id)}"><strong>${html(item.name||item.id)}</strong><span>${html(item.project_id||"")}</span><span>${html(item.status||"")}</span><span>rev ${html(item.revision||1)}</span></button>`).join(""):'<div class="empty">No research records.</div>';
  }
  loadResearchDomain=async function(){
+  const generation=++researchLoadGeneration;
   try{
    const project=integrationProjectId||byId("science-project")?.value||projectContext()?.current?.()||"";
    const suffix=project?`?project_id=${encodeURIComponent(project)}`:"";
-   governedResearchRecords=(await api(`/api/v1/${researchDomain}${suffix}`)).items||[];render();
-  }catch(error){list.innerHTML=`<div class="empty">${html(error.message)}</div>`}
+   const items=(await api(`/api/v1/${researchDomain}${suffix}`)).items||[];
+   if(generation!==researchLoadGeneration)return;
+   governedResearchRecords=items;render();
+  }catch(error){if(generation===researchLoadGeneration)list.innerHTML=`<div class="empty">${html(error.message)}</div>`}
  };
  function clearEditor(){editingResearchRecord=null;for(const id of ["science-name","science-parent","science-description"]){if(byId(id))byId(id).value=""}if(byId("science-status"))byId("science-status").value="active";save.textContent="Save research record";status("science-save-status","")}
  async function openRecord(id){

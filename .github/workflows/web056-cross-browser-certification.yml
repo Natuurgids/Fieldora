@@ -43,4 +43,4 @@ jobs:
         run: python -m ruff check tests/test_web056_cross_browser_workflows.py
 
       - name: WEB-056 complete create import link edit review workflows
-        run: python -m pytest -vv -s tests/test_web056_cross_browser_workflows.py
+        run: python -m pytest -q tests/test_web056_cross_browser_workflows.py

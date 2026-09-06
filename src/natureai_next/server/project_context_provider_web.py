@@ -140,7 +140,6 @@ _PROJECT_CONTEXT_PROVIDER_PATCH = bytes(
  document.addEventListener('fieldora:project-list-changed',reconcile);
  document.addEventListener('fieldora:module-mount',event=>{if(event.detail?.module?.module_id===moduleId)renderToolbar()});
  document.addEventListener('fieldora:module-unmount',event=>{if(event.detail?.module?.module_id===moduleId)clearToolbar()});
- window.FieldoraProjectContext=implementation;
 })();
 """,
     "utf-8",

@@ -193,7 +193,8 @@ def test_context_provider_exposes_contract_not_portfolio_navigation() -> None:
         "/app.js", _list_contract_runtime()
     ).body.decode("utf-8")
 
-    assert "window.FieldoraProjectContext=implementation" in script
+    assert "window.FieldoraProjectContext" not in script
+    assert 'contractName="projects.context.select"' in script
     assert "window.openProject" not in script
 
 
@@ -217,6 +218,7 @@ def test_production_patch_composes_context_provider_after_list_and_runtime() -> 
     assert script.count("WEB-PROJECT-CONTEXT-PROVIDER") == 1
     assert script.count("WEB-PROJECT-TOOLBAR-EXTENSION-PROVIDER") == 1
     assert "window.FieldoraProjects=Object.freeze" not in script
+    assert "window.FieldoraProjectContext" not in script
     assert "projects=Array.from(list.items()||[],item=>({...item}))" not in script
     assert (
         '(window.FieldoraModuleContracts?.resolve?.("projects.list.read")?.items?.()||projects).map(p=>'

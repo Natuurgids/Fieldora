@@ -383,7 +383,9 @@ def test_web056_projects_list_context_scope_error_and_recovery(
             "document.querySelector('#project-core-module-status')?.classList.contains('error')"
         )
         assert backend.project_get_requests == baseline_requests + 1
-        assert page.evaluate("FieldoraProjectContext.current()") == ""
+        assert page.evaluate(
+            "window.FieldoraModuleContracts?.resolve?.('projects.context.select')?.current?.()"
+        ) == ""
 
         page.evaluate(
             """
@@ -407,7 +409,9 @@ def test_web056_projects_list_context_scope_error_and_recovery(
         page.wait_for_function(
             "window.__fieldoraProjectContextEvents.includes('project-alpha')"
         )
-        assert page.evaluate("FieldoraProjectContext.current()") == "project-alpha"
+        assert page.evaluate(
+            "window.FieldoraModuleContracts?.resolve?.('projects.context.select')?.current?.()"
+        ) == "project-alpha"
 
         page.evaluate(
             """
@@ -422,10 +426,16 @@ def test_web056_projects_list_context_scope_error_and_recovery(
             })
             """
         )
-        page.wait_for_function("FieldoraProjectContext.current()==='project-beta'")
+        page.wait_for_function(
+            "window.FieldoraModuleContracts?.resolve?.('projects.context.select')?.current?.()==='project-beta'"
+        )
 
-        assert page.evaluate("FieldoraProjectContext.select('project-stale')") is False
-        assert page.evaluate("FieldoraProjectContext.current()") == "project-beta"
+        assert page.evaluate(
+            "window.FieldoraModuleContracts?.resolve?.('projects.context.select')?.select?.('project-stale')"
+        ) is False
+        assert page.evaluate(
+            "window.FieldoraModuleContracts?.resolve?.('projects.context.select')?.current?.()"
+        ) == "project-beta"
 
         page.evaluate("document.querySelector('[data-project-scope=\"mine\"]')?.click()")
         assert page.locator("[data-project-tree]").count() == 0
@@ -433,5 +443,7 @@ def test_web056_projects_list_context_scope_error_and_recovery(
 
         page.evaluate("document.querySelector('[data-project-scope=\"all\"]')?.click()")
         assert page.locator("[data-project-tree]").count() == 2
-        assert page.evaluate("FieldoraProjectContext.current()") == "project-beta"
+        assert page.evaluate(
+            "window.FieldoraModuleContracts?.resolve?.('projects.context.select')?.current?.()"
+        ) == "project-beta"
         browser.close()

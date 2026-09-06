@@ -187,7 +187,14 @@ def test_observation_workspace_actions_use_revisioned_governed_contracts(
         checkbox.check()
         page.get_by_role("button", name="Accept selected", exact=True).click()
         page.wait_for_function(
-            "() => document.querySelector('#observation-list .pill')?.textContent.includes('confirmed')"
+            """() => {
+              const item=observations.find(value=>value.id==='observation-1');
+              const pill=document.querySelector('#observation-list .pill');
+              return selectedObservations.size===0
+                && item?.confirmation_state==='confirmed'
+                && item?.revision===2
+                && pill?.textContent.includes('confirmed');
+            }"""
         )
         review_request = next(
             item

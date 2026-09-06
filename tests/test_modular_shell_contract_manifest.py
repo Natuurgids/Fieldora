@@ -24,6 +24,7 @@ def test_browser_manifest_contract_metadata_matches_typed_registry() -> None:
         "projects.list.read",
         "projects.context.select",
         "projects.toolbar.extend",
+        "projects.selected-record.select",
         "projects.work-data.service",
         "projects.evidence.service",
     ]

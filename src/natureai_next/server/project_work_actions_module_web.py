@@ -21,6 +21,7 @@ _PROJECT_WORK_ACTIONS_MODULE_PATCH = bytes(
  const moduleId="projects.core",q=id=>document.getElementById(id);
  const state={mounted:false,controller:null,projectId:"",selectedWork:{kind:"project",id:""},canEdit:false};
  const escWork=value=>String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+ const workData=()=>window.FieldoraModuleContracts?.resolve?.("projects.work-data.service")||null;
  function emitError(error,fallback){
   const message=error?.message||fallback;
   document.dispatchEvent(new CustomEvent("fieldora:module-error",{detail:{module_id:moduleId,error:String(message)}}));
@@ -73,23 +74,24 @@ _PROJECT_WORK_ACTIONS_MODULE_PATCH = bytes(
  function fail(message){const node=q("project-core-child-message");if(node){node.textContent=message;node.classList.add("error")}return false}
  async function saveChild(){
   const host=editor(),kind=host?.dataset.kind;if(!host||!kind||!state.projectId)return;
-  let path="",record={project_id:state.projectId};
+  const service=workData();if(!service)return fail("Project work service is unavailable.");
+  let record={project_id:state.projectId};
   if(kind==="phase"){
-   record.name=q("project-core-child-name").value.trim();record.description=q("project-core-child-description").value.trim();path="/api/v1/phases";if(!record.name)return fail("Phase name is required.");
+   record.name=q("project-core-child-name").value.trim();record.description=q("project-core-child-description").value.trim();if(!record.name)return fail("Phase name is required.");
   }else if(kind==="task"||kind==="milestone"||kind==="subtask"){
-   record.title=q("project-core-child-title").value.trim();record.description=q("project-core-child-description").value.trim();record.owner_id=q("project-core-child-owner").value.trim();record.due_date=q("project-core-child-due").value;path="/api/v1/tasks";if(!record.title)return fail("Task title is required.");
+   record.title=q("project-core-child-title").value.trim();record.description=q("project-core-child-description").value.trim();record.owner_id=q("project-core-child-owner").value.trim();record.due_date=q("project-core-child-due").value;if(!record.title)return fail("Task title is required.");
    if(kind==="milestone")record.milestone=true;
    if(kind==="subtask")record.parent_task_id=state.selectedWork.id;else if(state.selectedWork.kind==="phase")record.phase_id=state.selectedWork.id;
   }else if(kind==="sprint"){
-   record.name=q("project-core-child-name").value.trim();record.start_date=q("project-core-child-start").value;record.end_date=q("project-core-child-end").value;record.goal=q("project-core-child-goal").value.trim();path="/api/v1/sprints";if(!record.name)return fail("Sprint name is required.");
+   record.name=q("project-core-child-name").value.trim();record.start_date=q("project-core-child-start").value;record.end_date=q("project-core-child-end").value;record.goal=q("project-core-child-goal").value.trim();if(!record.name)return fail("Sprint name is required.");
    if(record.start_date&&record.end_date&&record.end_date<record.start_date)return fail("Sprint end date must not be before start date.");
   }else if(kind==="allocation"){
-   record.user_id=q("project-core-child-user").value.trim();record.start_date=q("project-core-child-start").value;record.end_date=q("project-core-child-end").value;record.hours_per_week=Number(q("project-core-child-hours").value||0);record.allocation_percent=Number(q("project-core-child-percent").value||0);record.role=q("project-core-child-role").value.trim();if(state.selectedWork.kind==="phase")record.phase_id=state.selectedWork.id;path="/api/v1/allocations";
+   record.user_id=q("project-core-child-user").value.trim();record.start_date=q("project-core-child-start").value;record.end_date=q("project-core-child-end").value;record.hours_per_week=Number(q("project-core-child-hours").value||0);record.allocation_percent=Number(q("project-core-child-percent").value||0);record.role=q("project-core-child-role").value.trim();if(state.selectedWork.kind==="phase")record.phase_id=state.selectedWork.id;
    if(!record.user_id||!record.start_date)return fail("User and start date are required.");if(!Number.isFinite(record.hours_per_week)||record.hours_per_week<0)return fail("Hours per week must be zero or greater.");if(!Number.isFinite(record.allocation_percent)||record.allocation_percent<0||record.allocation_percent>100)return fail("Allocation must be between 0 and 100 percent.");if(record.end_date&&record.end_date<record.start_date)return fail("Allocation end date must not be before start date.");
   }
   try{
-   const result=await api(path,{method:"POST",purpose:"research",body:JSON.stringify(record)});host.hidden=true;
-   document.dispatchEvent(new CustomEvent("fieldora:project-work-changed",{detail:{module_id:moduleId,project_id:state.projectId,kind,item:result?.item||null}}));
+   const item=await service.create(kind,record);host.hidden=true;
+   document.dispatchEvent(new CustomEvent("fieldora:project-work-changed",{detail:{module_id:moduleId,project_id:state.projectId,kind,item:item||null}}));
   }catch(error){fail(error?.message||"Project work item could not be created.");emitError(error,"Project work item could not be created.")}
  }
  function mount(){

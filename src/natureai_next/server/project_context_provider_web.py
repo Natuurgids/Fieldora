@@ -51,6 +51,9 @@ _LEGACY_WORK_EDITOR_END = b"async function loadCapacity(){"
 _LEGACY_WORK_SAVE_WIRING = b'q("work-save").onclick=saveWorkItem;'
 _LEGACY_WORK_PROJECT_OPTIONS = b'"work-project","science-project"'
 _MANAGED_WORK_PROJECT_OPTIONS = b'"science-project"'
+_PROJECT_CORE_WORK_PROJECT_MIRROR = (
+    b'if(q("work-project"))q("work-project").value=state.projectId;'
+)
 
 
 def _patch_legacy_work_project_context(body: bytes) -> bytes:
@@ -99,6 +102,7 @@ def _retire_legacy_work_editor(body: bytes) -> bytes:
         return body
     body = _strip_legacy_range(body, _LEGACY_WORK_EDITOR_START, _LEGACY_WORK_EDITOR_END)
     body = body.replace(_LEGACY_WORK_SAVE_WIRING, b"", 1)
+    body = body.replace(_PROJECT_CORE_WORK_PROJECT_MIRROR, b"", 1)
     return body.replace(_LEGACY_WORK_PROJECT_OPTIONS, _MANAGED_WORK_PROJECT_OPTIONS, 1)
 
 

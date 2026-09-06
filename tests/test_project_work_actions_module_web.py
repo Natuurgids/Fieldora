@@ -39,27 +39,31 @@ def test_work_actions_adapter_is_idempotent_and_module_owned() -> None:
     assert "WEB-PROJECT-WORK-ACTIONS-MODULE" in script
     assert "window.FieldoraProjectWorkActions" in script
     assert 'moduleId="projects.core"' in script
+    assert 'resolve?.("projects.work-data.service")' in script
     assert 'data-project-work-create="phase"' in script
     assert 'data-project-work-create="subtask"' in script
     assert "showPage=" not in script
     assert "loadPortfolio=" not in script
 
 
-def test_work_actions_use_governed_hierarchy_apis_and_visible_validation() -> None:
+def test_work_actions_use_service_contract_and_visible_validation() -> None:
     patched = patch_project_work_actions_module_response(
         "/app.js", ApiResponse(200, b"", "text/javascript; charset=utf-8")
     )
     script = patched.body.decode("utf-8")
 
-    assert 'path="/api/v1/phases"' in script
-    assert 'path="/api/v1/tasks"' in script
-    assert 'path="/api/v1/sprints"' in script
-    assert 'path="/api/v1/allocations"' in script
+    assert 'resolve?.("projects.work-data.service")' in script
+    assert "const item=await service.create(kind,record);" in script
+    assert 'path="/api/v1/phases"' not in script
+    assert 'path="/api/v1/tasks"' not in script
+    assert 'path="/api/v1/sprints"' not in script
+    assert 'path="/api/v1/allocations"' not in script
     assert "Phase name is required." in script
     assert "Task title is required." in script
     assert "User and start date are required." in script
     assert "Allocation must be between 0 and 100 percent." in script
     assert "Sprint end date must not be before start date." in script
+    assert "Project work service is unavailable." in script
     assert "fieldora:project-work-changed" in script
 
 
@@ -72,9 +76,10 @@ def test_capability_projection_only_controls_browser_discoverability() -> None:
     assert "/capabilities" in script
     assert "fieldoraAuthorizationHidden" in script
     assert "caps?.actions?.edit===true" in script
-    # The browser still calls the governed POST endpoints; authorization is
-    # independently enforced by ProjectHierarchyWebApiMixin on the server.
-    assert 'method:"POST",purpose:"research"' in script
+    # The presentation adapter calls the governed service contract; the service
+    # and server API independently retain persistence and authorization boundaries.
+    assert "service.create(kind,record)" in script
+    assert 'method:"POST",purpose:"research"' not in script
 
 
 def test_final_shell_keeps_new_actions_and_retires_old_hierarchy_browser_owner() -> None:

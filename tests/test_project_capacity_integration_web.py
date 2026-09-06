@@ -25,6 +25,7 @@ def test_capacity_owns_project_integration_actions() -> None:
     assert capacity.module_id == "capacity"
     assert capacity.dependencies == ()
     assert capacity.requires_contracts == (
+        "notifications.publish",
         "projects.context.select",
         "projects.toolbar.extend",
     )

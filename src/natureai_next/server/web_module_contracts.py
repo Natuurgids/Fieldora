@@ -296,6 +296,10 @@ FOUNDATION_APPLICATION_CONTRACT_PROVIDERS: tuple[WebApplicationContractProvider,
         "application.auth",
         provides_contracts=("auth.current-user",),
     ),
+    WebApplicationContractProvider(
+        "application.notifications",
+        provides_contracts=("notifications.publish",),
+    ),
 )
 
 

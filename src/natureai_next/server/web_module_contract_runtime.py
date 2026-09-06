@@ -70,6 +70,11 @@ def _runtime_script(registry: WebModuleRegistry | None = None) -> bytes:
         " if(provider('auth.current-user')==='application.auth'){\n"
         "  register('auth.current-user','application.auth',Object.freeze({current:()=>typeof me==='undefined'||!me?null:Object.freeze({...me})}));\n"
         " }\n"
+        " if(provider('notifications.publish')==='application.notifications'){\n"
+        "  const notificationHost=()=>{let node=document.getElementById('fieldora-app-notification');if(node)return node;node=document.createElement('div');node.id='fieldora-app-notification';node.hidden=true;node.setAttribute('role','status');node.setAttribute('aria-live','polite');(document.body||document.documentElement).appendChild(node);return node;};\n"
+        "  const publishNotification=(message,options={})=>{const text=String(message||'').trim();if(!text)return null;const level=String(options.level||'info'),source_module=String(options.source_module||'');const detail=Object.freeze({message:text,level,source_module});const node=notificationHost();node.hidden=false;node.textContent=text;node.setAttribute('aria-live',level==='error'?'assertive':'polite');node.dataset.level=level;node.dataset.sourceModule=source_module;document.dispatchEvent(new CustomEvent('fieldora:notification',{detail}));if(level==='error')document.dispatchEvent(new CustomEvent('fieldora:module-error',{detail:{module_id:source_module,error:text}}));return detail;};\n"
+        "  register('notifications.publish','application.notifications',Object.freeze({publish:publishNotification}));\n"
+        " }\n"
         " document.dispatchEvent(new CustomEvent('fieldora:contracts-ready',{detail:{contracts:Object.freeze([...providers.keys()])}}));\n"
         "})();\n"
     ).encode()

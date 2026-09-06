@@ -24,6 +24,7 @@ def test_foundation_registry_has_separate_projects_and_portfolio_ownership() -> 
     projects = registry.resolve("/projects")
     portfolio = registry.resolve("/portfolio")
     auth = registry.contract_provider("auth.current-user")
+    notifications = registry.contract_provider("notifications.publish")
 
     assert projects is not None
     assert projects.module_id == "projects.core"
@@ -47,6 +48,10 @@ def test_foundation_registry_has_separate_projects_and_portfolio_ownership() -> 
     assert auth.provider_id == "application.auth"
     assert auth.provides_contracts == ("auth.current-user",)
     assert registry.resolve("/application.auth") is None
+    assert isinstance(notifications, WebApplicationContractProvider)
+    assert notifications.provider_id == "application.notifications"
+    assert notifications.provides_contracts == ("notifications.publish",)
+    assert registry.resolve("/application.notifications") is None
     assert registry.contract_provider("projects.list.read") is projects
     assert registry.contract_provider("projects.context.select") is projects
     assert registry.contract_provider("projects.toolbar.extend") is projects

@@ -15,6 +15,10 @@ def test_runtime_manifest_publishes_project_provider_and_portfolio_requirements(
 
     assert by_id["application.auth"]["provides_contracts"] == ["auth.current-user"]
     assert by_id["application.auth"]["requires_contracts"] == []
+    assert by_id["application.notifications"]["provides_contracts"] == [
+        "notifications.publish"
+    ]
+    assert by_id["application.notifications"]["requires_contracts"] == []
     assert by_id["projects.core"]["provides_contracts"] == [
         "projects.list.read",
         "projects.context.select",
@@ -52,6 +56,14 @@ def test_runtime_registry_is_inert_without_modular_shell_and_idempotent_with_it(
     assert "fieldora:contracts-ready" in script
     assert "provider('auth.current-user')==='application.auth'" in script
     assert "typeof me==='undefined'||!me?null:Object.freeze({...me})" in script
+    assert (
+        "provider('notifications.publish')==='application.notifications'" in script
+    )
+    assert "fieldora-app-notification" in script
+    assert "fieldora:notification" in script
+    assert "aria-live" in script
+    assert "publish:publishNotification" in script
+    assert "fieldora:module-error" in script
     assert script.index("WEB-MODULAR-SHELL") < script.index("WEB-MODULE-CONTRACT-RUNTIME")
 
 
@@ -66,7 +78,9 @@ def test_custom_registry_without_auth_provider_does_not_declare_auth_contract() 
     runtime = script.split("WEB-MODULE-CONTRACT-RUNTIME", 1)[1]
 
     assert '"module_id":"application.auth"' not in runtime
+    assert '"module_id":"application.notifications"' not in runtime
     assert "if(provider('auth.current-user')==='application.auth')" in runtime
+    assert "if(provider('notifications.publish')==='application.notifications')" in runtime
 
 
 def test_runtime_registry_rejects_wrong_or_duplicate_provider_in_script_contract() -> None:

@@ -30,6 +30,7 @@ class WebModuleSpec:
     dependencies: tuple[str, ...] = ()
     provides_contracts: tuple[str, ...] = ()
     requires_contracts: tuple[str, ...] = ()
+    optional_contracts: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         module_id = self.module_id.strip()
@@ -47,6 +48,10 @@ class WebModuleSpec:
         required = tuple(
             _normalize_token(value, "required contract")
             for value in self.requires_contracts
+        )
+        optional = tuple(
+            _normalize_token(value, "optional contract")
+            for value in self.optional_contracts
         )
 
         if not module_id:
@@ -75,12 +80,28 @@ class WebModuleSpec:
             raise WebModuleContractError(
                 f"module {module_id!r} declares duplicate required contracts"
             )
+        if len(set(optional)) != len(optional):
+            raise WebModuleContractError(
+                f"module {module_id!r} declares duplicate optional contracts"
+            )
         if module_id in dependencies:
             raise WebModuleContractError(f"module {module_id!r} cannot depend on itself")
         overlap = set(provided).intersection(required)
         if overlap:
             raise WebModuleContractError(
                 f"module {module_id!r} cannot require contracts it provides: {sorted(overlap)!r}"
+            )
+        optional_provider_overlap = set(provided).intersection(optional)
+        if optional_provider_overlap:
+            raise WebModuleContractError(
+                f"module {module_id!r} cannot optionally consume contracts it provides: "
+                f"{sorted(optional_provider_overlap)!r}"
+            )
+        required_optional_overlap = set(required).intersection(optional)
+        if required_optional_overlap:
+            raise WebModuleContractError(
+                f"module {module_id!r} cannot declare contracts as both required and optional: "
+                f"{sorted(required_optional_overlap)!r}"
             )
 
         object.__setattr__(self, "module_id", module_id)
@@ -91,6 +112,7 @@ class WebModuleSpec:
         object.__setattr__(self, "dependencies", dependencies)
         object.__setattr__(self, "provides_contracts", provided)
         object.__setattr__(self, "requires_contracts", required)
+        object.__setattr__(self, "optional_contracts", optional)
 
 
 def _normalize_token(value: str, kind: str) -> str:

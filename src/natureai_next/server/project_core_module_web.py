@@ -23,6 +23,7 @@ _PROJECT_CORE_MODULE_PATCH = bytes(
  const state={mounted:false,controller:null,projectId:"",centerView:"work",scope:"all",evidence:[],phases:[],tasks:[],sprints:[],allocations:[]};
  const escProject=value=>String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
  const currentUser=()=>window.FieldoraModuleContracts?.resolve?.("auth.current-user")?.current?.()||null;
+ const notifications=()=>window.FieldoraModuleContracts?.resolve?.("notifications.publish")||null;
  const projectList=()=>window.FieldoraModuleContracts?.resolve?.("projects.list.read")||null;
  const projectContext=()=>window.FieldoraModuleContracts?.resolve?.("projects.context.select")||null;
  const selectedRecord=()=>window.FieldoraModuleContracts?.resolve?.("projects.selected-record.select")||null;
@@ -38,7 +39,7 @@ _PROJECT_CORE_MODULE_PATCH = bytes(
  }
  function moduleError(error,fallback){
   const message=error?.message||fallback;status(message,true);
-  document.dispatchEvent(new CustomEvent("fieldora:module-error",{detail:{module_id:moduleId,error:String(message)}}));
+  notifications()?.publish?.(String(message),{level:"error",source_module:moduleId});
  }
  function visibleProjects(){
   const needle=(q("project-tree-filter")?.value||"").trim().toLowerCase(),identity=currentUser();

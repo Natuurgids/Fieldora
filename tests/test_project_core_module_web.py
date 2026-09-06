@@ -178,6 +178,34 @@ def test_project_evidence_surface_consumes_evidence_service_contract() -> None:
     assert "fieldora:project-evidence-changed" in script
 
 
+def test_project_core_consumes_shared_application_contracts() -> None:
+    from natureai_next.server.web_module_contract_runtime import runtime_contract_manifest
+    from natureai_next.server.web_module_contracts import foundation_registry
+
+    projects = foundation_registry().resolve("/projects")
+    assert projects is not None
+    assert projects.requires_contracts == (
+        "auth.current-user",
+        "notifications.publish",
+    )
+
+    by_id = {item["module_id"]: item for item in runtime_contract_manifest()}
+    assert by_id["projects.core"]["requires_contracts"] == [
+        "auth.current-user",
+        "notifications.publish",
+    ]
+
+    script = patch_project_core_module_response(
+        "/app.js", ApiResponse(200, b"", "text/javascript; charset=utf-8")
+    ).body.decode("utf-8")
+    assert 'resolve?.("auth.current-user")?.current?.()' in script
+    assert 'resolve?.("notifications.publish")' in script
+    assert 'notifications()?.publish?.(String(message),{level:"error",source_module:moduleId})' in script
+    assert "status(message,true)" in script
+    assert 'new CustomEvent("fieldora:module-error"' not in script
+    assert "me.identity_id" not in script
+
+
 def test_non_app_script_response_is_untouched() -> None:
     original = ApiResponse.json(200, {"ok": True})
     assert patch_project_core_module_response("/api/v1/status", original) is original

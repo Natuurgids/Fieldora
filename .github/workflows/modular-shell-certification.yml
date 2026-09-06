@@ -12,6 +12,7 @@ on:
       - "src/natureai_next/server/capacity_availability_module_web.py"
       - "src/natureai_next/server/capacity_module_web.py"
       - "src/natureai_next/server/project_capacity_integration_web.py"
+      - "src/natureai_next/server/project_context_provider_web.py"
       - "src/natureai_next/server/project_core_module_web.py"
       - "src/natureai_next/server/project_creation_module_web.py"
       - "src/natureai_next/server/project_evidence_actions_module_web.py"
@@ -40,6 +41,7 @@ on:
       - "tests/test_projects_module_removal_browser.py"
       - "tests/test_capacity_availability_module_web.py"
       - "tests/test_project_capacity_integration_web.py"
+      - "tests/test_project_context_provider_web.py"
       - "tests/test_project_core_module_web.py"
       - "tests/test_project_creation_module_web.py"
       - "tests/test_project_data_service_providers.py"
@@ -93,6 +95,7 @@ jobs:
           src/natureai_next/server/capacity_availability_module_web.py
           src/natureai_next/server/capacity_module_web.py
           src/natureai_next/server/project_capacity_integration_web.py
+          src/natureai_next/server/project_context_provider_web.py
           src/natureai_next/server/project_core_module_web.py
           src/natureai_next/server/project_creation_module_web.py
           src/natureai_next/server/project_evidence_actions_module_web.py
@@ -122,6 +125,7 @@ jobs:
           tests/test_projects_module_removal_browser.py
           tests/test_capacity_availability_module_web.py
           tests/test_project_capacity_integration_web.py
+          tests/test_project_context_provider_web.py
           tests/test_project_core_module_web.py
           tests/test_project_creation_module_web.py
           tests/test_project_data_service_providers.py
@@ -148,6 +152,7 @@ jobs:
           tests/test_projects_module_removal_browser.py
           tests/test_capacity_availability_module_web.py
           tests/test_project_capacity_integration_web.py
+          tests/test_project_context_provider_web.py
           tests/test_project_core_module_web.py
           tests/test_project_creation_module_web.py
           tests/test_project_data_service_providers.py

@@ -156,14 +156,14 @@ def patch_managed_web_response(target: str, response):
         # Runtime contract declarations must execute after the finalized shell so
         # consumers can discover providers without depending on implementation IDs.
         patch_runtime_contracts_response,
+        # Work/evidence services must exist before list registration can trigger
+        # Project Core's initial selected-project load.
+        patch_project_work_data_provider_response,
+        patch_project_evidence_service_provider_response,
         # Projects owns the accessible-list snapshot behind the declared read contract.
         patch_project_list_provider_response,
         # Projects exposes context selection through a replaceable public contract.
         patch_project_context_provider_response,
-        # Project work hierarchy and creation consume one governed data-service contract.
-        patch_project_work_data_provider_response,
-        # Project evidence surfaces and linking consume one governed evidence contract.
-        patch_project_evidence_service_provider_response,
     ):
         response = patch(target, response)
     return response

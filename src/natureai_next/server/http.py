@@ -45,11 +45,17 @@ from natureai_next.server.offline_models_web import patch_offline_models_web_res
 from natureai_next.server.project_context_provider_web import (
     patch_project_context_provider_response,
 )
+from natureai_next.server.project_evidence_service_provider_web import (
+    patch_project_evidence_service_provider_response,
+)
 from natureai_next.server.project_facility_workspace_web import (
     patch_project_facility_workspace_response,
 )
 from natureai_next.server.project_list_provider_web import (
     patch_project_list_provider_response,
+)
+from natureai_next.server.project_work_data_provider_web import (
+    patch_project_work_data_provider_response,
 )
 from natureai_next.server.science_workflow_web import patch_science_workflow_web_response
 from natureai_next.server.web_capabilities import (
@@ -154,6 +160,10 @@ def patch_managed_web_response(target: str, response):
         patch_project_list_provider_response,
         # Projects exposes context selection through a replaceable public contract.
         patch_project_context_provider_response,
+        # Project work hierarchy and creation consume one governed data-service contract.
+        patch_project_work_data_provider_response,
+        # Project evidence surfaces and linking consume one governed evidence contract.
+        patch_project_evidence_service_provider_response,
     ):
         response = patch(target, response)
     return response

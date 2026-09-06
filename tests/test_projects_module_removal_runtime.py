@@ -10,6 +10,8 @@ _PROJECT_CONTRACTS = {
     "projects.list.read",
     "projects.context.select",
     "projects.toolbar.extend",
+    "projects.work-data.service",
+    "projects.evidence.service",
 }
 _PROJECT_MODULES = {
     "projects.core",

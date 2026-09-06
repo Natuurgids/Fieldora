@@ -16,6 +16,14 @@ from natureai_next.server.contract_web_compatibility import patch_contract_web_r
 from natureai_next.server.facility_web_compatibility import patch_facility_web_response
 from natureai_next.server.navigation_web_compatibility import patch_navigation_web_response
 from natureai_next.server.portfolio_module_web import patch_portfolio_module_response
+from natureai_next.server.project_context_provider_web import (
+    patch_project_context_provider_response,
+)
+from natureai_next.server.project_core_module_web import patch_project_core_module_response
+from natureai_next.server.project_facility_workspace_web import (
+    patch_project_facility_workspace_response,
+)
+from natureai_next.server.project_list_provider_web import patch_project_list_provider_response
 from natureai_next.server.web_compatibility import patch_web_response
 from natureai_next.server.web_module_contracts import (
     FOUNDATION_WEB_MODULES,
@@ -139,6 +147,34 @@ def _patched_app(registry: WebModuleRegistry, *, portfolio: bool = False) -> Api
     )
 
 
+def _managed_projects_app() -> ApiResponse:
+    registry = _managed_projects_registry()
+    resource = Path("src/natureai_next/resources/server_web")
+    response = ApiResponse(
+        200,
+        (resource / "app.js").read_bytes(),
+        "text/javascript; charset=utf-8",
+    )
+    for patch in (
+        patch_contract_web_response,
+        patch_web_response,
+        patch_facility_web_response,
+        patch_navigation_web_response,
+        patch_browser_functionality_response,
+    ):
+        response = patch("/app.js", response)
+    response = patch_project_core_module_response("/app.js", response)
+    response = patch_project_facility_workspace_response("/app.js", response)
+    response = modular_shell_composition.patch_modular_shell_response(
+        "/app.js", response, registry=registry
+    )
+    response = web_module_contract_runtime.patch_runtime_contracts_response(
+        "/app.js", response, registry=registry
+    )
+    response = patch_project_list_provider_response("/app.js", response)
+    return patch_project_context_provider_response("/app.js", response)
+
+
 @contextlib.contextmanager
 def _serve_web(tmp_path: Path, response: ApiResponse):
     resource = Path("src/natureai_next/resources/server_web")
@@ -171,7 +207,7 @@ def _projects_free_web(tmp_path: Path):
 
 @contextlib.contextmanager
 def _managed_projects_web(tmp_path: Path):
-    with _serve_web(tmp_path, _patched_app(_managed_projects_registry())) as url:
+    with _serve_web(tmp_path, _managed_projects_app()) as url:
         yield url
 
 

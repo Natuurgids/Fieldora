@@ -29,6 +29,7 @@ def test_foundation_registry_has_separate_projects_and_portfolio_ownership() -> 
         "projects.list.read",
         "projects.context.select",
         "projects.toolbar.extend",
+        "projects.selected-record.select",
         "projects.work-data.service",
         "projects.evidence.service",
     )
@@ -42,6 +43,7 @@ def test_foundation_registry_has_separate_projects_and_portfolio_ownership() -> 
     assert registry.contract_provider("projects.list.read") is projects
     assert registry.contract_provider("projects.context.select") is projects
     assert registry.contract_provider("projects.toolbar.extend") is projects
+    assert registry.contract_provider("projects.selected-record.select") is projects
     assert registry.contract_provider("projects.work-data.service") is projects
     assert registry.contract_provider("projects.evidence.service") is projects
 

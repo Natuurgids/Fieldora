@@ -20,6 +20,7 @@ def test_project_core_adapter_is_idempotent_and_owns_project_interactions() -> N
     assert "window.FieldoraProjects" in script
     assert 'moduleId="projects.core"' in script
     assert "fieldora:project-context-changed" in script
+    assert 'resolve?.("projects.context.select")' in script
     assert 'resolve?.("projects.work-data.service")' in script
     assert 'resolve?.("projects.evidence.service")' in script
     assert "fieldora:project-evidence-changed" in script
@@ -46,25 +47,31 @@ def test_project_core_consumes_project_list_contract_and_waits_for_provider() ->
 
     assert 'window.FieldoraModuleContracts?.resolve?.("projects.list.read")' in script
     assert "const projectItems=()=>projectList()?.items?.()||[];" in script
-    assert "await list.refresh();renderTree();" in script
+    assert "await list.refresh();" in script
     assert 'event.detail?.contract==="projects.list.read"&&state.mounted' in script
     assert "fieldora:project-list-changed" in script
     assert "Array.isArray(projects)" not in script
 
 
-def test_project_context_rejects_ids_outside_the_accessible_project_list() -> None:
+def test_project_hierarchy_consumes_context_contract_instead_of_owning_selection() -> None:
     patched = patch_project_core_module_response(
         "/app.js", ApiResponse(200, b"", "text/javascript; charset=utf-8")
     )
     script = patched.body.decode("utf-8")
 
-    assert 'const requested=String(id||""),project=requested?projectById(requested):null;' in script
-    assert 'if(requested&&!project){status("That project is no longer accessible.",true);return false}' in script
+    assert 'resolve?.("projects.context.select")' in script
+    assert "function requestProject(id)" in script
+    assert "const selected=context.select(id);" in script
+    assert "async function applyProjectContext(id)" in script
     assert "state.projectId=requested;state.workSelection=null;" in script
+    assert 'document.addEventListener("fieldora:project-context-changed"' in script
+    assert 'new CustomEvent("fieldora:project-context-changed"' not in script
+    assert "async function selectProject(id)" not in script
+    assert "if(requested&&!project)" not in script
+    assert 'selectProject:id=>projectContext()?.select?.(id)??false' in script
+    assert 'currentProject:()=>String(projectContext()?.current?.()||"")' in script
     assert "selectedProject" not in script
     assert 'q("work-project")' in script
-    assert "renderTree();renderInspector(project);selectInspector(\"properties\");" in script
-    assert "return true;" in script
 
 
 def test_my_work_scope_is_strict_when_no_matching_projects_exist() -> None:

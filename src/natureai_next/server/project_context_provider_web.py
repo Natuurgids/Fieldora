@@ -40,11 +40,24 @@ _PROJECT_CONTEXT_PROVIDER_PATCH = bytes(
 (()=>{
  if(window.__fieldoraProjectContextProviderWired)return;window.__fieldoraProjectContextProviderWired=true;
  const moduleId="projects.core",contractName="projects.context.select",toolbarContractName="projects.toolbar.extend";
- const owner=()=>window.FieldoraProjects||null;
- const implementation=Object.freeze({
-  select:id=>{const projects=owner();if(!projects?.selectProject)throw new Error("Projects context owner is unavailable.");return projects.selectProject(id)},
-  current:()=>owner()?.currentProject?.()||""
- });
+ const state={projectId:""};
+ const projectList=()=>window.FieldoraModuleContracts?.resolve?.("projects.list.read")||null;
+ const projectItems=()=>projectList()?.items?.()||[];
+ const projectById=id=>projectItems().find(project=>String(project.id)===String(id))||null;
+ function publish(){document.dispatchEvent(new CustomEvent("fieldora:project-context-changed",{detail:{module_id:moduleId,project_id:state.projectId}}))}
+ function select(id){
+  const requested=String(id||"");
+  if(requested&&!projectById(requested))return false;
+  if(state.projectId===requested)return true;
+  state.projectId=requested;publish();return true;
+ }
+ function reconcile(){
+  if(state.projectId&&projectById(state.projectId))return state.projectId;
+  const fallback=String(projectItems()[0]?.id||"");
+  if(fallback!==state.projectId){state.projectId=fallback;publish()}
+  return state.projectId;
+ }
+ const implementation=Object.freeze({select,current:()=>state.projectId});
  const toolbarEntries=new Map();
  const toolbar=()=>document.getElementById("project-desktop-cockpit")?.querySelector(".cockpit-center .cockpit-toolbar")||null;
  function toolbarButton(key){const host=toolbar();if(!host)return null;return Array.from(host.querySelectorAll("[data-fieldora-extension-key]")).find(button=>button.dataset.fieldoraExtensionKey===key)||null}
@@ -72,8 +85,9 @@ _PROJECT_CONTEXT_PROVIDER_PATCH = bytes(
  }
  function register(){return registerContract(contractName,implementation)}
  function registerToolbar(){return registerContract(toolbarContractName,toolbarImplementation)}
- register();registerToolbar();
- document.addEventListener('fieldora:contracts-ready',()=>{register();registerToolbar()},{once:true});
+ register();registerToolbar();reconcile();
+ document.addEventListener('fieldora:contracts-ready',()=>{register();registerToolbar();reconcile()},{once:true});
+ document.addEventListener('fieldora:project-list-changed',reconcile);
  document.addEventListener('fieldora:module-mount',event=>{if(event.detail?.module?.module_id===moduleId)renderToolbar()});
  document.addEventListener('fieldora:module-unmount',event=>{if(event.detail?.module?.module_id===moduleId)clearToolbar()});
  window.FieldoraProjectContext=implementation;
@@ -84,12 +98,12 @@ _PROJECT_CONTEXT_PROVIDER_PATCH = bytes(
 
 
 def patch_project_context_provider_response(target: str, response: ApiResponse) -> ApiResponse:
-    """Append Projects-owned public providers after module and contract wiring."""
+    """Append Projects-owned public providers after list and contract wiring."""
 
     if (
         urlsplit(target).path != "/app.js"
         or response.status != 200
-        or b"WEB-PROJECT-CORE-MODULE" not in response.body
+        or b"WEB-PROJECT-LIST-PROVIDER" not in response.body
         or b"WEB-MODULE-CONTRACT-RUNTIME" not in response.body
         or _PROJECT_CONTEXT_PROVIDER_PATCH in response.body
     ):

@@ -1,9 +1,9 @@
 """Module-owned Projects browser adapter for the managed Fieldora web client.
 
-The desktop-density cockpit markup remains transitional while Projects/Core owns
-project context, its work hierarchy, center-view switching, inspector feedback
-and project evidence loading. Portfolio remains a separate module and no longer
-provides the Projects work surface.
+The desktop-density cockpit markup remains transitional while Projects/Core
+consumes canonical Project context and work-data services to render the Project
+hierarchy, center views, inspector feedback and evidence surface. Portfolio
+remains a separate module and no longer provides the Projects work surface.
 """
 
 from __future__ import annotations
@@ -22,6 +22,7 @@ _PROJECT_CORE_MODULE_PATCH = bytes(
  const state={mounted:false,controller:null,projectId:"",centerView:"work",scope:"all",evidence:[],phases:[],tasks:[],sprints:[],allocations:[],workSelection:null};
  const escProject=value=>String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
  const projectList=()=>window.FieldoraModuleContracts?.resolve?.("projects.list.read")||null;
+ const projectContext=()=>window.FieldoraModuleContracts?.resolve?.("projects.context.select")||null;
  const workData=()=>window.FieldoraModuleContracts?.resolve?.("projects.work-data.service")||null;
  const evidenceData=()=>window.FieldoraModuleContracts?.resolve?.("projects.evidence.service")||null;
  const projectItems=()=>projectList()?.items?.()||[];
@@ -106,28 +107,25 @@ _PROJECT_CORE_MODULE_PATCH = bytes(
   const service=evidenceData();if(!service){moduleError(new Error("Project evidence service is unavailable."),"Project evidence could not be loaded.");return}
   try{state.evidence=[...(await service.projectItems(state.projectId))];renderEvidence();status("")}catch(error){renderEvidence();moduleError(error,"Project evidence could not be loaded.")}
  }
- async function selectProject(id){
-  const requested=String(id||""),project=requested?projectById(requested):null;
-  if(requested&&!project){status("That project is no longer accessible.",true);return false}
+ async function applyProjectContext(id){
+  const requested=String(id||"");
+  if(state.projectId===requested){renderTree();return true}
   state.projectId=requested;state.workSelection=null;
   if(q("work-project"))q("work-project").value=state.projectId;
-  renderTree();renderInspector(project);selectInspector("properties");
-  await Promise.all([loadWork(),loadEvidence()]);
-  document.dispatchEvent(new CustomEvent("fieldora:project-context-changed",{detail:{module_id:moduleId,project_id:state.projectId}}));
+  renderTree();renderInspector(projectById(state.projectId));selectInspector("properties");
+  await Promise.all([loadWork(),loadEvidence()]);return true;
+ }
+ function requestProject(id){
+  const context=projectContext();if(!context?.select){moduleError(new Error("Project context service is unavailable."),"Project could not be selected.");return false}
+  const selected=context.select(id);if(selected===false){status("That project is no longer accessible.",true);return false}
   return true;
  }
  async function loadProjects(){
   const list=projectList();if(!list){renderTree();return false}
   try{
-   await list.refresh();renderTree();
-   const selected=projectById(state.projectId);
-   if(state.projectId&&!selected){
-    state.projectId="";state.workSelection=null;
-    if(q("work-project"))q("work-project").value="";
-   }
-   if(!state.projectId&&projectItems().length)return selectProject(projectItems()[0].id);
-   renderInspector(projectById(state.projectId));
-   await Promise.all([loadWork(),loadEvidence()]);return true;
+   await list.refresh();
+   const context=projectContext();if(!context){moduleError(new Error("Project context service is unavailable."),"Projects could not be loaded.");return false}
+   await applyProjectContext(context.current?.()||"");return true;
   }catch(error){renderTree();moduleError(error,"Projects could not be loaded.");return false}
  }
  function setCenter(view){
@@ -147,18 +145,19 @@ _PROJECT_CORE_MODULE_PATCH = bytes(
   if(state.mounted)return;state.mounted=true;state.controller=new AbortController();const signal=state.controller.signal;ensureWorkSurface();
   const legacy=q("portfolio-list")?.closest(".card");if(legacy)legacy.dataset.projectCoreLegacyHidden=String(legacy.hidden),legacy.hidden=true;
   q("project-tree-filter")?.addEventListener("input",renderTree,{signal});
-  q("project-cockpit-tree")?.addEventListener("click",event=>{const project=event.target.closest?.("[data-project-tree]"),scope=event.target.closest?.("[data-project-scope]");if(project)selectProject(project.dataset.projectTree);else if(scope){state.scope=scope.dataset.projectScope==="mine"?"mine":"all";renderTree()}},{signal});
+  q("project-cockpit-tree")?.addEventListener("click",event=>{const project=event.target.closest?.("[data-project-tree]"),scope=event.target.closest?.("[data-project-scope]");if(project)requestProject(project.dataset.projectTree);else if(scope){state.scope=scope.dataset.projectScope==="mine"?"mine":"all";renderTree()}},{signal});
   q("project-desktop-cockpit")?.addEventListener("click",event=>{const center=event.target.closest?.("[data-project-center]");if(center)setCenter(center.dataset.projectCenter);else inspectWorkItem(event.target)},{signal});
   renderTree();setCenter(state.centerView);loadProjects();
  }
  function unmount(){if(!state.mounted)return;state.controller?.abort();state.controller=null;state.mounted=false;const legacy=q("portfolio-list")?.closest(".card");if(legacy&&"projectCoreLegacyHidden" in legacy.dataset){legacy.hidden=legacy.dataset.projectCoreLegacyHidden==="true";delete legacy.dataset.projectCoreLegacyHidden}status("")}
  document.addEventListener("fieldora:module-mount",event=>{if(event.detail?.module?.module_id===moduleId)mount()});
  document.addEventListener("fieldora:module-unmount",event=>{if(event.detail?.module?.module_id===moduleId)unmount()});
- document.addEventListener("fieldora:contract-registered",event=>{if(event.detail?.contract==="projects.list.read"&&state.mounted)loadProjects()});
+ document.addEventListener("fieldora:contract-registered",event=>{if(event.detail?.contract==="projects.list.read"&&state.mounted)loadProjects();else if(event.detail?.contract==="projects.context.select"&&state.mounted)applyProjectContext(projectContext()?.current?.()||"")});
  document.addEventListener("fieldora:project-list-changed",()=>{if(state.mounted)renderTree()});
+ document.addEventListener("fieldora:project-context-changed",event=>{if(state.mounted)applyProjectContext(event.detail?.project_id||"")});
  document.addEventListener("fieldora:project-work-changed",event=>{if(event.detail?.project_id===state.projectId)loadWork()});
  document.addEventListener("fieldora:project-evidence-changed",event=>{if(event.detail?.project_id===state.projectId)loadEvidence()});
- window.FieldoraProjects=Object.freeze({mount,unmount,selectProject,setCenter,refreshWork:loadWork,refreshEvidence:loadEvidence,currentProject:()=>state.projectId,currentView:()=>state.centerView});
+ window.FieldoraProjects=Object.freeze({mount,unmount,selectProject:id=>projectContext()?.select?.(id)??false,setCenter,refreshWork:loadWork,refreshEvidence:loadEvidence,currentProject:()=>String(projectContext()?.current?.()||""),currentView:()=>state.centerView});
  if(window.FieldoraModules?.current?.()?.module_id===moduleId)mount();
 })();
 """,

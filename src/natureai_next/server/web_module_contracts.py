@@ -264,6 +264,7 @@ FOUNDATION_WEB_MODULES: tuple[WebModuleSpec, ...] = (
             "projects.list.read",
             "projects.context.select",
             "projects.toolbar.extend",
+            "projects.selected-record.select",
             "projects.work-data.service",
             "projects.evidence.service",
         ),

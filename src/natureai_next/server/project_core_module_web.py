@@ -22,6 +22,8 @@ _PROJECT_CORE_MODULE_PATCH = bytes(
  const state={mounted:false,controller:null,projectId:"",centerView:"work",scope:"all",evidence:[],phases:[],tasks:[],sprints:[],allocations:[],workSelection:null};
  const escProject=value=>String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
  const projectList=()=>window.FieldoraModuleContracts?.resolve?.("projects.list.read")||null;
+ const workData=()=>window.FieldoraModuleContracts?.resolve?.("projects.work-data.service")||null;
+ const evidenceData=()=>window.FieldoraModuleContracts?.resolve?.("projects.evidence.service")||null;
  const projectItems=()=>projectList()?.items?.()||[];
  const projectById=id=>projectItems().find(project=>project.id===id)||null;
  function status(message,error=false){
@@ -76,15 +78,10 @@ _PROJECT_CORE_MODULE_PATCH = bytes(
  }
  async function loadWork(){
   state.phases=[];state.tasks=[];state.sprints=[];state.allocations=[];renderWork();if(!state.projectId)return;
-  const pid=encodeURIComponent(state.projectId);
+  const service=workData();if(!service){moduleError(new Error("Project work-data service is unavailable."),"Project work could not be loaded.");return}
   try{
-   const [phases,tasks,sprints,allocations]=await Promise.all([
-    api(`/api/v1/phases?project_id=${pid}`,{purpose:"research"}),
-    api(`/api/v1/tasks?project_id=${pid}`,{purpose:"research"}),
-    api(`/api/v1/sprints?project_id=${pid}`,{purpose:"research"}),
-    api(`/api/v1/allocations?project_id=${pid}`,{purpose:"research"})
-   ]);
-   state.phases=phases.items||[];state.tasks=tasks.items||[];state.sprints=sprints.items||[];state.allocations=allocations.items||[];renderWork();renderTree();status("");
+   const snapshot=await service.load(state.projectId);
+   state.phases=[...(snapshot?.phases||[])];state.tasks=[...(snapshot?.tasks||[])];state.sprints=[...(snapshot?.sprints||[])];state.allocations=[...(snapshot?.allocations||[])];renderWork();renderTree();status("");
   }catch(error){renderWork();moduleError(error,"Project work could not be loaded.")}
  }
  function selectInspector(key){
@@ -106,8 +103,8 @@ _PROJECT_CORE_MODULE_PATCH = bytes(
  }
  async function loadEvidence(){
   state.evidence=[];renderEvidence();if(!state.projectId)return;
-  const pid=encodeURIComponent(state.projectId);
-  try{const result=await api(`/api/v1/media?project_id=${pid}&limit=200`,{purpose:"research"});state.evidence=result.items||[];renderEvidence();status("")}catch(error){renderEvidence();moduleError(error,"Project evidence could not be loaded.")}
+  const service=evidenceData();if(!service){moduleError(new Error("Project evidence service is unavailable."),"Project evidence could not be loaded.");return}
+  try{state.evidence=[...(await service.projectItems(state.projectId))];renderEvidence();status("")}catch(error){renderEvidence();moduleError(error,"Project evidence could not be loaded.")}
  }
  async function selectProject(id){
   const requested=String(id||""),project=requested?projectById(requested):null;

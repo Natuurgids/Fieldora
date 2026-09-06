@@ -31,11 +31,11 @@ _MANAGED_PROJECT_CONTEXT_READ = (
 _LEGACY_PROJECT_OPTIONS_SOURCE = (
     'function projectOptions(){const options=\'<option value="">Select project…</option>\'+'
     'projects.map(p=>'
-).encode("utf-8")
+).encode()
 _MANAGED_PROJECT_OPTIONS_SOURCE = (
     'function projectOptions(){const options=\'<option value="">Select project…</option>\'+'
     '(window.FieldoraModuleContracts?.resolve?.("projects.list.read")?.items?.()||projects).map(p=>'
-).encode("utf-8")
+).encode()
 _LEGACY_PROJECT_LIST_MIRROR = (
     b'projects=Array.from(list.items()||[],item=>({...item}));projectOptions();'
 )

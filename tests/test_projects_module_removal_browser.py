@@ -41,6 +41,8 @@ _PROJECT_CONTRACTS = {
     "projects.list.read",
     "projects.context.select",
     "projects.toolbar.extend",
+    "projects.work-data.service",
+    "projects.evidence.service",
 }
 _REPLACEMENT_PROVIDER = b"""
 /* TEST-PROJECTS-REPLACEMENT: minimal public-contract implementation. */
@@ -62,6 +64,15 @@ _REPLACEMENT_PROVIDER = b"""
  contracts.register("projects.toolbar.extend","projects.replacement",Object.freeze({
   register:extension=>{state.extensions.push(extension);return ()=>{}},
   items:()=>[...state.extensions]
+ }));
+ contracts.register("projects.work-data.service","projects.replacement",Object.freeze({
+  load:async()=>Object.freeze({phases:Object.freeze([]),tasks:Object.freeze([]),sprints:Object.freeze([]),allocations:Object.freeze([])}),
+  create:async()=>null
+ }));
+ contracts.register("projects.evidence.service","projects.replacement",Object.freeze({
+  projectItems:async()=>Object.freeze([]),
+  libraryItems:async()=>Object.freeze([]),
+  link:async()=>null
  }));
  window.FieldoraReplacementProjects=Object.freeze({
   selected:()=>state.selected,

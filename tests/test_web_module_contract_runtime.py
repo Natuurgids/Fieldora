@@ -15,6 +15,10 @@ def test_runtime_manifest_publishes_project_provider_and_portfolio_requirements(
 
     assert by_id["application.auth"]["provides_contracts"] == ["auth.current-user"]
     assert by_id["application.auth"]["requires_contracts"] == []
+    assert by_id["application.navigation"]["provides_contracts"] == [
+        "navigation.navigate"
+    ]
+    assert by_id["application.navigation"]["requires_contracts"] == []
     assert by_id["application.notifications"]["provides_contracts"] == [
         "notifications.publish"
     ]
@@ -30,6 +34,7 @@ def test_runtime_manifest_publishes_project_provider_and_portfolio_requirements(
     assert by_id["projects.core"]["optional_contracts"] == []
     assert by_id["portfolio"]["requires_contracts"] == [
         "auth.current-user",
+        "navigation.navigate",
         "projects.list.read",
         "projects.context.select",
     ]
@@ -57,6 +62,11 @@ def test_runtime_registry_is_inert_without_modular_shell_and_idempotent_with_it(
     assert "provider('auth.current-user')==='application.auth'" in script
     assert "typeof me==='undefined'||!me?null:Object.freeze({...me})" in script
     assert (
+        "provider('navigation.navigate')==='application.navigation'" in script
+    )
+    assert "window.FieldoraModules.navigate(route,source,historyMode)" in script
+    assert "register('navigation.navigate','application.navigation'" in script
+    assert (
         "provider('notifications.publish')==='application.notifications'" in script
     )
     assert "fieldora-app-notification" in script
@@ -78,8 +88,10 @@ def test_custom_registry_without_auth_provider_does_not_declare_auth_contract() 
     runtime = script.split("WEB-MODULE-CONTRACT-RUNTIME", 1)[1]
 
     assert '"module_id":"application.auth"' not in runtime
+    assert '"module_id":"application.navigation"' not in runtime
     assert '"module_id":"application.notifications"' not in runtime
     assert "if(provider('auth.current-user')==='application.auth')" in runtime
+    assert "if(provider('navigation.navigate')==='application.navigation'" in runtime
     assert "if(provider('notifications.publish')==='application.notifications')" in runtime
 
 
@@ -104,6 +116,8 @@ def test_production_managed_patch_places_contract_runtime_after_finalized_shell(
 
     assert script.count("WEB-MODULAR-SHELL: registry-owned navigation bridge") == 1
     assert script.count("WEB-MODULE-CONTRACT-RUNTIME") == 1
+    assert 'resolve?.("navigation.navigate")' in script
+    assert 'navigator.navigate("/projects",moduleId,"push")' in script
     assert script.rfind("WEB-MODULE-CONTRACT-RUNTIME") > script.rfind(
         "WEB-MODULAR-SHELL: registry-owned navigation bridge"
     )

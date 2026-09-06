@@ -297,6 +297,10 @@ FOUNDATION_APPLICATION_CONTRACT_PROVIDERS: tuple[WebApplicationContractProvider,
         provides_contracts=("auth.current-user",),
     ),
     WebApplicationContractProvider(
+        "application.navigation",
+        provides_contracts=("navigation.navigate",),
+    ),
+    WebApplicationContractProvider(
         "application.notifications",
         provides_contracts=("notifications.publish",),
     ),
@@ -354,6 +358,7 @@ FOUNDATION_WEB_MODULES: tuple[WebModuleSpec, ...] = (
         ),
         requires_contracts=(
             "auth.current-user",
+            "navigation.navigate",
             "projects.list.read",
             "projects.context.select",
         ),

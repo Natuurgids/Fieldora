@@ -22,6 +22,7 @@ _PORTFOLIO_MODULE_PATCH = bytes(
  const escPortfolio=value=>String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
  const itemName=item=>item?.name||item?.title||item?.label||item?.id||"Untitled";
  const currentUser=()=>window.FieldoraModuleContracts?.resolve?.("auth.current-user")?.current?.()||null;
+ const navigation=()=>window.FieldoraModuleContracts?.resolve?.("navigation.navigate")||null;
  const projectList=()=>window.FieldoraModuleContracts?.resolve?.("projects.list.read")||null;
  const projectContext=()=>window.FieldoraModuleContracts?.resolve?.("projects.context.select")||null;
  function status(message,error=false){
@@ -107,8 +108,11 @@ _PORTFOLIO_MODULE_PATCH = bytes(
  }
  function openProjectFrom(target){
   const rowNode=target?.closest?.('[data-portfolio-id][data-kind="project"]');if(!rowNode)return false;
-  const context=projectContext();if(!context?.select){status("Project context is not available.",true);return false}
-  context.select(rowNode.dataset.portfolioId);return true;
+  const context=projectContext(),navigator=navigation();
+  if(!context?.select){status("Project context is not available.",true);return false}
+  if(!navigator?.navigate){status("Navigation is not available.",true);return false}
+  if(context.select(rowNode.dataset.portfolioId)===false){status("That project is no longer accessible.",true);return false}
+  navigator.navigate("/projects",moduleId,"push");return true;
  }
  function mount(){
   if(state.mounted)return;state.mounted=true;state.controller=new AbortController();const signal=state.controller.signal;

@@ -29,15 +29,19 @@ def test_portfolio_module_patch_is_idempotent_and_lifecycle_owned() -> None:
     assert "showPage=function" not in script
 
 
-def test_portfolio_module_uses_projects_contracts_and_owns_work_data_loading() -> None:
+def test_portfolio_module_uses_public_contracts_and_owns_work_data_loading() -> None:
     patched = patch_portfolio_module_response(
         "/app.js", ApiResponse(200, b"", "text/javascript; charset=utf-8")
     )
     script = patched.body.decode("utf-8")
 
+    assert 'resolve?.("auth.current-user")?.current?.()' in script
     assert 'resolve?.("projects.list.read")' in script
     assert 'resolve?.("projects.context.select")' in script
     assert "allProjects=projectList()?.items?.()||[]" in script
+    assert "identity=currentUser()" in script
+    assert "identity.identity_id" in script
+    assert "window.me" not in script
     assert "if(list?.refresh)await list.refresh()" in script
     assert "context.select(rowNode.dataset.portfolioId)" in script
     assert "window.projects" not in script

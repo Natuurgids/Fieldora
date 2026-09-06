@@ -4,6 +4,7 @@ import pytest
 
 from natureai_next.server.web_module_contracts import (
     FOUNDATION_WEB_MODULES,
+    WebApplicationContractProvider,
     WebModuleContractError,
     WebModuleRegistry,
     WebModuleSpec,
@@ -22,6 +23,7 @@ def test_foundation_registry_has_separate_projects_and_portfolio_ownership() -> 
 
     projects = registry.resolve("/projects")
     portfolio = registry.resolve("/portfolio")
+    auth = registry.contract_provider("auth.current-user")
 
     assert projects is not None
     assert projects.module_id == "projects.core"
@@ -37,9 +39,14 @@ def test_foundation_registry_has_separate_projects_and_portfolio_ownership() -> 
     assert portfolio.module_id == "portfolio"
     assert portfolio.dependencies == ()
     assert portfolio.requires_contracts == (
+        "auth.current-user",
         "projects.list.read",
         "projects.context.select",
     )
+    assert isinstance(auth, WebApplicationContractProvider)
+    assert auth.provider_id == "application.auth"
+    assert auth.provides_contracts == ("auth.current-user",)
+    assert registry.resolve("/application.auth") is None
     assert registry.contract_provider("projects.list.read") is projects
     assert registry.contract_provider("projects.context.select") is projects
     assert registry.contract_provider("projects.toolbar.extend") is projects
@@ -176,6 +183,30 @@ def test_registry_rejects_duplicate_contract_provider() -> None:
                 "Replacement Projects",
                 provides_contracts=("projects.list.read",),
             )
+        )
+
+
+def test_registry_rejects_application_provider_collisions() -> None:
+    provider = WebApplicationContractProvider(
+        "application.auth",
+        provides_contracts=("auth.current-user",),
+    )
+    registry = WebModuleRegistry(application_providers=(provider,))
+
+    with pytest.raises(WebModuleContractError, match="duplicate provider_id"):
+        registry.register_application_provider(provider)
+
+    with pytest.raises(WebModuleContractError, match="already provided"):
+        registry.register_application_provider(
+            WebApplicationContractProvider(
+                "application.identity",
+                provides_contracts=("auth.current-user",),
+            )
+        )
+
+    with pytest.raises(WebModuleContractError, match="duplicate module_id"):
+        registry.register(
+            WebModuleSpec("application.auth", "/auth-provider", "Invalid auth route")
         )
 
 

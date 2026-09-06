@@ -7,11 +7,14 @@ from natureai_next.server.web_module_contract_runtime import (
     patch_runtime_contracts_response,
     runtime_contract_manifest,
 )
+from natureai_next.server.web_module_contracts import WebModuleRegistry, WebModuleSpec
 
 
 def test_runtime_manifest_publishes_project_provider_and_portfolio_requirements() -> None:
     by_id = {item["module_id"]: item for item in runtime_contract_manifest()}
 
+    assert by_id["application.auth"]["provides_contracts"] == ["auth.current-user"]
+    assert by_id["application.auth"]["requires_contracts"] == []
     assert by_id["projects.core"]["provides_contracts"] == [
         "projects.list.read",
         "projects.context.select",
@@ -22,6 +25,7 @@ def test_runtime_manifest_publishes_project_provider_and_portfolio_requirements(
     ]
     assert by_id["projects.core"]["optional_contracts"] == []
     assert by_id["portfolio"]["requires_contracts"] == [
+        "auth.current-user",
         "projects.list.read",
         "projects.context.select",
     ]
@@ -46,7 +50,23 @@ def test_runtime_registry_is_inert_without_modular_shell_and_idempotent_with_it(
     assert "optional_contracts:Object.freeze" in script
     assert "fieldora:contract-registered" in script
     assert "fieldora:contracts-ready" in script
+    assert "provider('auth.current-user')==='application.auth'" in script
+    assert "typeof me==='undefined'||!me?null:Object.freeze({...me})" in script
     assert script.index("WEB-MODULAR-SHELL") < script.index("WEB-MODULE-CONTRACT-RUNTIME")
+
+
+def test_custom_registry_without_auth_provider_does_not_declare_auth_contract() -> None:
+    registry = WebModuleRegistry((WebModuleSpec("home.activity", "/home", "Home"),))
+    shell = patch_modular_shell_response(
+        "/app.js", ApiResponse(200, b"", "text/javascript; charset=utf-8")
+    )
+    script = patch_runtime_contracts_response(
+        "/app.js", shell, registry=registry
+    ).body.decode("utf-8")
+    runtime = script.split("WEB-MODULE-CONTRACT-RUNTIME", 1)[1]
+
+    assert '"module_id":"application.auth"' not in runtime
+    assert "if(provider('auth.current-user')==='application.auth')" in runtime
 
 
 def test_runtime_registry_rejects_wrong_or_duplicate_provider_in_script_contract() -> None:

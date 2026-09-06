@@ -115,6 +115,31 @@ class WebModuleSpec:
         object.__setattr__(self, "optional_contracts", optional)
 
 
+@dataclass(frozen=True, slots=True)
+class WebApplicationContractProvider:
+    """Non-route platform provider for shared application contracts."""
+
+    provider_id: str
+    provides_contracts: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        provider_id = _normalize_token(self.provider_id, "application provider")
+        provided = tuple(
+            _normalize_token(value, "provided contract")
+            for value in self.provides_contracts
+        )
+        if not provided:
+            raise WebModuleContractError(
+                f"application provider {provider_id!r} must provide a contract"
+            )
+        if len(set(provided)) != len(provided):
+            raise WebModuleContractError(
+                f"application provider {provider_id!r} declares duplicate provided contracts"
+            )
+        object.__setattr__(self, "provider_id", provider_id)
+        object.__setattr__(self, "provides_contracts", provided)
+
+
 def _normalize_token(value: str, kind: str) -> str:
     token = value.strip()
     if not token:
@@ -134,18 +159,46 @@ def normalize_route(route: str) -> str:
 class WebModuleRegistry:
     """Validated ordered registry for modular web-shell ownership."""
 
-    def __init__(self, specs: Iterable[WebModuleSpec] = ()) -> None:
+    def __init__(
+        self,
+        specs: Iterable[WebModuleSpec] = (),
+        application_providers: Iterable[WebApplicationContractProvider] = (),
+    ) -> None:
         self._specs: dict[str, WebModuleSpec] = {}
+        self._application_providers: dict[str, WebApplicationContractProvider] = {}
         self._routes: dict[str, str] = {}
         self._actions: dict[str, str] = {}
         self._contracts: dict[str, str] = {}
+        for provider in application_providers:
+            self.register_application_provider(provider)
         for spec in specs:
             self.register(spec)
+
+    def register_application_provider(
+        self, provider: WebApplicationContractProvider
+    ) -> None:
+        if not isinstance(provider, WebApplicationContractProvider):
+            raise WebModuleContractError(
+                "registry accepts WebApplicationContractProvider instances only"
+            )
+        if provider.provider_id in self._application_providers or provider.provider_id in self._specs:
+            raise WebModuleContractError(
+                f"duplicate provider_id: {provider.provider_id!r}"
+            )
+        for contract in provider.provides_contracts:
+            if contract in self._contracts:
+                owner = self._contracts[contract]
+                raise WebModuleContractError(
+                    f"contract {contract!r} is already provided by {owner!r}"
+                )
+        self._application_providers[provider.provider_id] = provider
+        for contract in provider.provides_contracts:
+            self._contracts[contract] = provider.provider_id
 
     def register(self, spec: WebModuleSpec) -> None:
         if not isinstance(spec, WebModuleSpec):
             raise WebModuleContractError("registry accepts WebModuleSpec instances only")
-        if spec.module_id in self._specs:
+        if spec.module_id in self._specs or spec.module_id in self._application_providers:
             raise WebModuleContractError(f"duplicate module_id: {spec.module_id!r}")
         if spec.route in self._routes:
             owner = self._routes[spec.route]
@@ -211,9 +264,13 @@ class WebModuleRegistry:
         module_id = self._actions.get(action.strip())
         return self._specs.get(module_id) if module_id else None
 
-    def contract_provider(self, contract: str) -> WebModuleSpec | None:
-        module_id = self._contracts.get(contract.strip())
-        return self._specs.get(module_id) if module_id else None
+    def contract_provider(
+        self, contract: str
+    ) -> WebModuleSpec | WebApplicationContractProvider | None:
+        owner_id = self._contracts.get(contract.strip())
+        if not owner_id:
+            return None
+        return self._specs.get(owner_id) or self._application_providers.get(owner_id)
 
     def visible_specs(self, capabilities: Iterable[str]) -> tuple[WebModuleSpec, ...]:
         """Project discoverability; this is never an authorization decision."""
@@ -227,6 +284,19 @@ class WebModuleRegistry:
 
     def as_mapping(self) -> Mapping[str, WebModuleSpec]:
         return dict(self._specs)
+
+    def application_contract_providers(
+        self,
+    ) -> Mapping[str, WebApplicationContractProvider]:
+        return dict(self._application_providers)
+
+
+FOUNDATION_APPLICATION_CONTRACT_PROVIDERS: tuple[WebApplicationContractProvider, ...] = (
+    WebApplicationContractProvider(
+        "application.auth",
+        provides_contracts=("auth.current-user",),
+    ),
+)
 
 
 FOUNDATION_WEB_MODULES: tuple[WebModuleSpec, ...] = (
@@ -278,7 +348,11 @@ FOUNDATION_WEB_MODULES: tuple[WebModuleSpec, ...] = (
             "portfolio.scope.select",
             "portfolio.project.open",
         ),
-        requires_contracts=("projects.list.read", "projects.context.select"),
+        requires_contracts=(
+            "auth.current-user",
+            "projects.list.read",
+            "projects.context.select",
+        ),
     ),
     WebModuleSpec(
         "capacity",
@@ -333,7 +407,10 @@ FOUNDATION_WEB_MODULES: tuple[WebModuleSpec, ...] = (
 
 
 def foundation_registry() -> WebModuleRegistry:
-    registry = WebModuleRegistry(FOUNDATION_WEB_MODULES)
+    registry = WebModuleRegistry(
+        FOUNDATION_WEB_MODULES,
+        application_providers=FOUNDATION_APPLICATION_CONTRACT_PROVIDERS,
+    )
     registry.validate_dependencies()
     registry.validate_contracts()
     return registry

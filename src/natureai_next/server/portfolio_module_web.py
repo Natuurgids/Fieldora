@@ -21,6 +21,7 @@ _PORTFOLIO_MODULE_PATCH = bytes(
  const state={mounted:false,controller:null,view:"hierarchy"};
  const escPortfolio=value=>String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
  const itemName=item=>item?.name||item?.title||item?.label||item?.id||"Untitled";
+ const currentUser=()=>window.FieldoraModuleContracts?.resolve?.("auth.current-user")?.current?.()||null;
  const projectList=()=>window.FieldoraModuleContracts?.resolve?.("projects.list.read")||null;
  const projectContext=()=>window.FieldoraModuleContracts?.resolve?.("projects.context.select")||null;
  function status(message,error=false){
@@ -37,10 +38,10 @@ _PORTFOLIO_MODULE_PATCH = bytes(
  }
  function snapshot(){
   const list=q("portfolio-list"),tasks=JSON.parse(list?.dataset.tasks||"[]"),phases=JSON.parse(list?.dataset.phases||"[]"),sprints=JSON.parse(list?.dataset.sprints||"[]");
-  const scope=q("portfolio-scope")?.value||"all",allProjects=projectList()?.items?.()||[];
+  const scope=q("portfolio-scope")?.value||"all",allProjects=projectList()?.items?.()||[],identity=currentUser();
   let visibleProjects=allProjects;
-  if(scope==="mine"&&window.me){
-   visibleProjects=allProjects.filter(project=>!project.owner_id||project.owner_id===window.me.identity_id||tasks.some(task=>task.project_id===project.id&&task.assignee_id===window.me.identity_id));
+  if(scope==="mine"&&identity){
+   visibleProjects=allProjects.filter(project=>!project.owner_id||project.owner_id===identity.identity_id||tasks.some(task=>task.project_id===project.id&&task.assignee_id===identity.identity_id));
   }
   const projectIds=new Set(visibleProjects.map(project=>project.id));
   return {list,visibleProjects,tasks:tasks.filter(task=>projectIds.has(task.project_id)),phases:phases.filter(phase=>projectIds.has(phase.project_id)),sprints:sprints.filter(sprint=>projectIds.has(sprint.project_id))};

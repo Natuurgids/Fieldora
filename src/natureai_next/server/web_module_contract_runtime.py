@@ -16,7 +16,16 @@ def runtime_contract_manifest(
 
     if registry is None:
         registry = foundation_registry()
-    return tuple(
+    application_declarations = tuple(
+        {
+            "module_id": provider.provider_id,
+            "provides_contracts": list(provider.provides_contracts),
+            "requires_contracts": [],
+            "optional_contracts": [],
+        }
+        for provider in registry.application_contract_providers().values()
+    )
+    module_declarations = tuple(
         {
             "module_id": spec.module_id,
             "provides_contracts": list(spec.provides_contracts),
@@ -25,6 +34,7 @@ def runtime_contract_manifest(
         }
         for spec in registry.as_mapping().values()
     )
+    return application_declarations + module_declarations
 
 
 def _runtime_script(registry: WebModuleRegistry | None = None) -> bytes:
@@ -57,6 +67,9 @@ def _runtime_script(registry: WebModuleRegistry | None = None) -> bytes:
         " function unresolved(moduleId){return requirements(moduleId).filter(contract=>!implementations.has(contract));}\n"
         " const publicDeclarations=Object.freeze(declarations.map(spec=>Object.freeze({...spec,provides_contracts:Object.freeze([...spec.provides_contracts]),requires_contracts:Object.freeze([...spec.requires_contracts]),optional_contracts:Object.freeze([...(spec.optional_contracts||[])])})));\n"
         " window.FieldoraModuleContracts=Object.freeze({declarations:publicDeclarations,provider,register,resolve,require:requireContract,requirements,unresolved});\n"
+        " if(provider('auth.current-user')==='application.auth'){\n"
+        "  register('auth.current-user','application.auth',Object.freeze({current:()=>typeof me==='undefined'||!me?null:Object.freeze({...me})}));\n"
+        " }\n"
         " document.dispatchEvent(new CustomEvent('fieldora:contracts-ready',{detail:{contracts:Object.freeze([...providers.keys()])}}));\n"
         "})();\n"
     ).encode()

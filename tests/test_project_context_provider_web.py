@@ -107,6 +107,25 @@ def test_context_provider_uses_list_contract_for_legacy_project_presentation() -
     assert ":projects.find(" not in script
 
 
+def test_context_provider_rewrites_projects_owned_initial_context_reads() -> None:
+    legacy_read = b"window.FieldoraProjects?.currentProject?.()"
+    legacy = ApiResponse(
+        200,
+        b";".join([b"const projectId=" + legacy_read + b'||""' for _ in range(4)]),
+        "text/javascript; charset=utf-8",
+    )
+    shell = patch_modular_shell_response("/app.js", legacy)
+    contracts = patch_runtime_contracts_response("/app.js", shell)
+    list_runtime = patch_project_list_provider_response("/app.js", contracts)
+    script = patch_project_context_provider_response(
+        "/app.js", list_runtime
+    ).body.decode("utf-8")
+
+    managed = 'window.FieldoraModuleContracts?.resolve?.("projects.context.select")?.current?.()'
+    assert "window.FieldoraProjects?.currentProject?.()" not in script
+    assert script.count(managed) == 4
+
+
 def test_projects_toolbar_extension_provider_owns_cockpit_dom_boundary() -> None:
     script = patch_project_context_provider_response(
         "/app.js", _list_contract_runtime()

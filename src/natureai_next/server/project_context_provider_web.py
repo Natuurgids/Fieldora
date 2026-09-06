@@ -24,6 +24,10 @@ _MANAGED_OPEN_PROJECT_LOOKUP = (
     b'const list=window.FieldoraModuleContracts?.resolve?.("projects.list.read"),'
     b'p=list?.items?Array.from(list.items()||[]).find(x=>x.id===id):null;'
 )
+_LEGACY_PROJECT_CONTEXT_READ = b"window.FieldoraProjects?.currentProject?.()"
+_MANAGED_PROJECT_CONTEXT_READ = (
+    b'window.FieldoraModuleContracts?.resolve?.("projects.context.select")?.current?.()'
+)
 
 
 def _patch_legacy_work_project_context(body: bytes) -> bytes:
@@ -36,6 +40,12 @@ def _patch_legacy_project_presentation_list(body: bytes) -> bytes:
     """Read managed Project presentation records from the canonical list contract."""
 
     return body.replace(_LEGACY_OPEN_PROJECT_LOOKUP, _MANAGED_OPEN_PROJECT_LOOKUP, 1)
+
+
+def _patch_projects_owned_context_reads(body: bytes) -> bytes:
+    """Route composed Projects adapters through the canonical context contract."""
+
+    return body.replace(_LEGACY_PROJECT_CONTEXT_READ, _MANAGED_PROJECT_CONTEXT_READ)
 
 
 _PROJECT_CONTEXT_PROVIDER_PATCH = bytes(
@@ -117,6 +127,7 @@ def patch_project_context_provider_response(target: str, response: ApiResponse) 
     selected = patch_project_selected_record_provider_response(target, response)
     body = _patch_legacy_work_project_context(selected.body)
     body = _patch_legacy_project_presentation_list(body)
+    body = _patch_projects_owned_context_reads(body)
     context = ApiResponse(
         selected.status,
         body + _PROJECT_CONTEXT_PROVIDER_PATCH,

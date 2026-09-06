@@ -198,9 +198,16 @@ def test_context_provider_exposes_contract_not_portfolio_navigation() -> None:
 
 
 def test_production_patch_composes_context_provider_after_list_and_runtime() -> None:
-    project = patch_project_core_module_response(
-        "/app.js", ApiResponse(200, b"const base=true;", "text/javascript; charset=utf-8")
+    legacy = ApiResponse(
+        200,
+        (
+            'function projectOptions(){const options=\'<option value="">Select project…</option>\'+'
+            'projects.map(p=>`<option value="${p.id}">${p.name}</option>`).join("");'
+            '["work-project","science-project"].forEach(id=>{if(q(id))q(id).innerHTML=options})}'
+        ).encode(),
+        "text/javascript; charset=utf-8",
     )
+    project = patch_project_core_module_response("/app.js", legacy)
     shell = patch_modular_shell_response("/app.js", project)
     final = patch_managed_web_response("/app.js", shell)
     script = final.body.decode("utf-8")

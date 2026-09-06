@@ -107,6 +107,36 @@ def test_context_provider_uses_list_contract_for_legacy_project_presentation() -
     assert ":projects.find(" not in script
 
 
+def test_context_provider_projects_legacy_selectors_without_ambient_list_mutation() -> None:
+    legacy = ApiResponse(
+        200,
+        (
+            'function projectOptions(){const options=\'<option value="">Select project…</option>\'+'
+            'projects.map(p=>`<option value="${p.id}">${p.name}</option>`).join("");'
+            '["work-project","science-project"].forEach(id=>{if(q(id))q(id).innerHTML=options})}'
+            'function syncLegacyProjectsFromListContract(){const list=window.FieldoraModuleContracts?.resolve?.('
+            '"projects.list.read");if(!list?.items)return;projects=Array.from(list.items()||[],item=>({...item}));projectOptions();}'
+            'document.addEventListener("fieldora:project-list-changed",syncLegacyProjectsFromListContract);'
+        ).encode("utf-8"),
+        "text/javascript; charset=utf-8",
+    )
+    shell = patch_modular_shell_response("/app.js", legacy)
+    contracts = patch_runtime_contracts_response("/app.js", shell)
+    list_runtime = patch_project_list_provider_response("/app.js", contracts)
+    script = patch_project_context_provider_response(
+        "/app.js", list_runtime
+    ).body.decode("utf-8")
+
+    assert (
+        '(window.FieldoraModuleContracts?.resolve?.("projects.list.read")?.items?.()||projects).map(p=>'
+        in script
+    )
+    assert "projects=Array.from(list.items()||[],item=>({...item}))" not in script
+    assert 'if(!list?.items)return;projectOptions();' in script
+    assert '"work-project","science-project"' in script
+    assert 'addEventListener("fieldora:project-list-changed",syncLegacyProjectsFromListContract)' in script
+
+
 def test_context_provider_rewrites_projects_owned_initial_context_reads() -> None:
     legacy_read = b"window.FieldoraProjects?.currentProject?.()"
     legacy = ApiResponse(
@@ -180,6 +210,11 @@ def test_production_patch_composes_context_provider_after_list_and_runtime() -> 
     assert script.count("WEB-PROJECT-CONTEXT-PROVIDER") == 1
     assert script.count("WEB-PROJECT-TOOLBAR-EXTENSION-PROVIDER") == 1
     assert "window.FieldoraProjects=Object.freeze" not in script
+    assert "projects=Array.from(list.items()||[],item=>({...item}))" not in script
+    assert (
+        '(window.FieldoraModuleContracts?.resolve?.("projects.list.read")?.items?.()||projects).map(p=>'
+        in script
+    )
     assert script.rfind("WEB-PROJECT-CONTEXT-PROVIDER") > script.rfind(
         "WEB-PROJECT-LIST-PROVIDER"
     )

@@ -28,6 +28,18 @@ _LEGACY_PROJECT_CONTEXT_READ = b"window.FieldoraProjects?.currentProject?.()"
 _MANAGED_PROJECT_CONTEXT_READ = (
     b'window.FieldoraModuleContracts?.resolve?.("projects.context.select")?.current?.()'
 )
+_LEGACY_PROJECT_OPTIONS_SOURCE = (
+    'function projectOptions(){const options=\'<option value="">Select project…</option>\'+'
+    'projects.map(p=>'
+).encode("utf-8")
+_MANAGED_PROJECT_OPTIONS_SOURCE = (
+    'function projectOptions(){const options=\'<option value="">Select project…</option>\'+'
+    '(window.FieldoraModuleContracts?.resolve?.("projects.list.read")?.items?.()||projects).map(p=>'
+).encode("utf-8")
+_LEGACY_PROJECT_LIST_MIRROR = (
+    b'projects=Array.from(list.items()||[],item=>({...item}));projectOptions();'
+)
+_MANAGED_PROJECT_SELECTOR_REFRESH = b"projectOptions();"
 _PROJECTS_COMPATIBILITY_FACADE = (
     b'window.FieldoraProjects=Object.freeze({mount,unmount,selectProject:id=>projectContext()?.select?.(id)??false,'
     b'setCenter,refreshWork:loadWork,refreshEvidence:loadEvidence,currentProject:()=>String(projectContext()?.current?.()||""),'
@@ -51,6 +63,17 @@ def _patch_projects_owned_context_reads(body: bytes) -> bytes:
     """Route composed Projects adapters through the canonical context contract."""
 
     return body.replace(_LEGACY_PROJECT_CONTEXT_READ, _MANAGED_PROJECT_CONTEXT_READ)
+
+
+def _patch_legacy_project_selector_source(body: bytes) -> bytes:
+    """Project legacy selectors from the list contract without mutating ambient state."""
+
+    body = body.replace(
+        _LEGACY_PROJECT_OPTIONS_SOURCE, _MANAGED_PROJECT_OPTIONS_SOURCE, 1
+    )
+    return body.replace(
+        _LEGACY_PROJECT_LIST_MIRROR, _MANAGED_PROJECT_SELECTOR_REFRESH, 1
+    )
 
 
 def _retire_projects_compatibility_facade(body: bytes) -> bytes:
@@ -139,6 +162,7 @@ def patch_project_context_provider_response(target: str, response: ApiResponse) 
     body = _patch_legacy_work_project_context(selected.body)
     body = _patch_legacy_project_presentation_list(body)
     body = _patch_projects_owned_context_reads(body)
+    body = _patch_legacy_project_selector_source(body)
     body = _retire_projects_compatibility_facade(body)
     context = ApiResponse(
         selected.status,

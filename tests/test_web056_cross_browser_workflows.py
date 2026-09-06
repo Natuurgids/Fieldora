@@ -407,21 +407,8 @@ def test_web056_projects_list_context_scope_error_and_recovery(
         page.wait_for_function(
             "window.__fieldoraProjectContextEvents.includes('project-alpha')"
         )
+        assert page.evaluate("FieldoraProjectContext.current()") == "project-alpha"
 
-        page.evaluate(
-            """
-            () => new Promise(resolve => {
-                const done = event => {
-                    if (event.detail?.project_id !== 'project-alpha') return;
-                    document.removeEventListener('fieldora:project-context-changed', done);
-                    resolve();
-                };
-                document.addEventListener('fieldora:project-context-changed', done);
-                document.querySelector('[data-project-tree="project-alpha"]')?.click();
-            })
-            """
-        )
-        page.wait_for_function("FieldoraProjectContext.current()==='project-alpha'")
         page.evaluate(
             """
             () => new Promise(resolve => {

@@ -21,6 +21,7 @@ def runtime_contract_manifest(
             "module_id": spec.module_id,
             "provides_contracts": list(spec.provides_contracts),
             "requires_contracts": list(spec.requires_contracts),
+            "optional_contracts": list(spec.optional_contracts),
         }
         for spec in registry.as_mapping().values()
     )
@@ -54,7 +55,7 @@ def _runtime_script(registry: WebModuleRegistry | None = None) -> bytes:
         " function requireContract(contract){const name=token(contract),implementation=resolve(name);if(implementation===null)throw new Error(`Required module contract is not registered: ${name}`);return implementation;}\n"
         " function requirements(moduleId){return [...(declaration(moduleId)?.requires_contracts||[])];}\n"
         " function unresolved(moduleId){return requirements(moduleId).filter(contract=>!implementations.has(contract));}\n"
-        " const publicDeclarations=Object.freeze(declarations.map(spec=>Object.freeze({...spec,provides_contracts:Object.freeze([...spec.provides_contracts]),requires_contracts:Object.freeze([...spec.requires_contracts])})));\n"
+        " const publicDeclarations=Object.freeze(declarations.map(spec=>Object.freeze({...spec,provides_contracts:Object.freeze([...spec.provides_contracts]),requires_contracts:Object.freeze([...spec.requires_contracts]),optional_contracts:Object.freeze([...(spec.optional_contracts||[])])})));\n"
         " window.FieldoraModuleContracts=Object.freeze({declarations:publicDeclarations,provider,register,resolve,require:requireContract,requirements,unresolved});\n"
         " document.dispatchEvent(new CustomEvent('fieldora:contracts-ready',{detail:{contracts:Object.freeze([...providers.keys()])}}));\n"
         "})();\n"

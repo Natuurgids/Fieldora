@@ -14,6 +14,8 @@ on:
       - "src/natureai_next/server/project_capacity_integration_web.py"
       - "src/natureai_next/server/project_context_provider_web.py"
       - "src/natureai_next/server/project_core_module_web.py"
+      - "src/natureai_next/server/project_inspector_module_web.py"
+      - "src/natureai_next/server/project_selected_record_provider_web.py"
       - "src/natureai_next/server/project_creation_module_web.py"
       - "src/natureai_next/server/project_evidence_actions_module_web.py"
       - "src/natureai_next/server/project_evidence_service_provider_web.py"
@@ -43,6 +45,7 @@ on:
       - "tests/test_project_capacity_integration_web.py"
       - "tests/test_project_context_provider_web.py"
       - "tests/test_project_core_module_web.py"
+      - "tests/test_project_selected_record_inspector_web.py"
       - "tests/test_project_creation_module_web.py"
       - "tests/test_project_data_service_providers.py"
       - "tests/test_project_evidence_actions_module_web.py"
@@ -97,6 +100,8 @@ jobs:
           src/natureai_next/server/project_capacity_integration_web.py
           src/natureai_next/server/project_context_provider_web.py
           src/natureai_next/server/project_core_module_web.py
+          src/natureai_next/server/project_inspector_module_web.py
+          src/natureai_next/server/project_selected_record_provider_web.py
           src/natureai_next/server/project_creation_module_web.py
           src/natureai_next/server/project_evidence_actions_module_web.py
           src/natureai_next/server/project_evidence_service_provider_web.py
@@ -127,6 +132,7 @@ jobs:
           tests/test_project_capacity_integration_web.py
           tests/test_project_context_provider_web.py
           tests/test_project_core_module_web.py
+          tests/test_project_selected_record_inspector_web.py
           tests/test_project_creation_module_web.py
           tests/test_project_data_service_providers.py
           tests/test_project_evidence_actions_module_web.py
@@ -154,6 +160,7 @@ jobs:
           tests/test_project_capacity_integration_web.py
           tests/test_project_context_provider_web.py
           tests/test_project_core_module_web.py
+          tests/test_project_selected_record_inspector_web.py
           tests/test_project_creation_module_web.py
           tests/test_project_data_service_providers.py
           tests/test_project_evidence_actions_module_web.py

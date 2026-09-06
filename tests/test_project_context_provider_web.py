@@ -117,7 +117,7 @@ def test_context_provider_projects_legacy_selectors_without_ambient_list_mutatio
             'function syncLegacyProjectsFromListContract(){const list=window.FieldoraModuleContracts?.resolve?.('
             '"projects.list.read");if(!list?.items)return;projects=Array.from(list.items()||[],item=>({...item}));projectOptions();}'
             'document.addEventListener("fieldora:project-list-changed",syncLegacyProjectsFromListContract);'
-        ).encode("utf-8"),
+        ).encode(),
         "text/javascript; charset=utf-8",
     )
     shell = patch_modular_shell_response("/app.js", legacy)

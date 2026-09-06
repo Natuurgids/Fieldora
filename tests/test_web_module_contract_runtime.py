@@ -15,11 +15,14 @@ def test_runtime_manifest_publishes_project_provider_and_portfolio_requirements(
     assert by_id["projects.core"]["provides_contracts"] == [
         "projects.list.read",
         "projects.context.select",
+        "projects.toolbar.extend",
     ]
+    assert by_id["projects.core"]["optional_contracts"] == []
     assert by_id["portfolio"]["requires_contracts"] == [
         "projects.list.read",
         "projects.context.select",
     ]
+    assert by_id["portfolio"]["optional_contracts"] == []
 
 
 def test_runtime_registry_is_inert_without_modular_shell_and_idempotent_with_it() -> None:
@@ -37,6 +40,7 @@ def test_runtime_registry_is_inert_without_modular_shell_and_idempotent_with_it(
     assert "function provider(contract)" in script
     assert "function register(contract,moduleId,implementation)" in script
     assert "function requireContract(contract)" in script
+    assert "optional_contracts:Object.freeze" in script
     assert "fieldora:contract-registered" in script
     assert "fieldora:contracts-ready" in script
     assert script.index("WEB-MODULAR-SHELL") < script.index("WEB-MODULE-CONTRACT-RUNTIME")

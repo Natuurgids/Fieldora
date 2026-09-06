@@ -31,6 +31,7 @@ def test_browser_manifest_contract_metadata_matches_typed_registry() -> None:
     assert manifest["portfolio"]["requires_contracts"] == [
         "auth.current-user",
         "navigation.navigate",
+        "notifications.publish",
         "projects.list.read",
         "projects.context.select",
     ]

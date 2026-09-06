@@ -43,6 +43,7 @@ def test_foundation_registry_has_separate_projects_and_portfolio_ownership() -> 
     assert portfolio.requires_contracts == (
         "auth.current-user",
         "navigation.navigate",
+        "notifications.publish",
         "projects.list.read",
         "projects.context.select",
     )

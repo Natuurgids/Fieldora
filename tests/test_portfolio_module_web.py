@@ -24,7 +24,12 @@ def test_portfolio_module_patch_is_idempotent_and_lifecycle_owned() -> None:
     assert "fieldora:module-unmount" in script
     assert "new AbortController()" in script
     assert 'q("portfolio-refresh")?.addEventListener("click",refresh,{signal})' in script
-    assert "fieldora:module-error" in script
+    assert 'resolve?.("notifications.publish")' in script
+    assert (
+        'notifications()?.publish?.(String(message),{level:"error",source_module:moduleId})'
+        in script
+    )
+    assert 'new CustomEvent("fieldora:module-error"' not in script
     assert "loadPortfolio=async function" not in script
     assert "showPage=function" not in script
 

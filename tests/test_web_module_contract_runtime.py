@@ -35,6 +35,7 @@ def test_runtime_manifest_publishes_project_provider_and_portfolio_requirements(
     assert by_id["portfolio"]["requires_contracts"] == [
         "auth.current-user",
         "navigation.navigate",
+        "notifications.publish",
         "projects.list.read",
         "projects.context.select",
     ]

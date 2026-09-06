@@ -246,6 +246,7 @@ def test_observation_workspace_actions_use_revisioned_governed_contracts(
         page.locator("#obs-type").select_option("habitat")
         page.locator("#obs-notes").fill("new habitat observation")
         page.get_by_role("button", name="Save observation", exact=True).click()
+        page.wait_for_selector("#observation-review-panel:not([hidden])")
         create_request = next(
             item
             for item in requests

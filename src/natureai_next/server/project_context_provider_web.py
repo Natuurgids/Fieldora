@@ -28,6 +28,11 @@ _LEGACY_PROJECT_CONTEXT_READ = b"window.FieldoraProjects?.currentProject?.()"
 _MANAGED_PROJECT_CONTEXT_READ = (
     b'window.FieldoraModuleContracts?.resolve?.("projects.context.select")?.current?.()'
 )
+_PROJECTS_COMPATIBILITY_FACADE = (
+    b'window.FieldoraProjects=Object.freeze({mount,unmount,selectProject:id=>projectContext()?.select?.(id)??false,'
+    b'setCenter,refreshWork:loadWork,refreshEvidence:loadEvidence,currentProject:()=>String(projectContext()?.current?.()||""),'
+    b'currentView:()=>state.centerView});'
+)
 
 
 def _patch_legacy_work_project_context(body: bytes) -> bytes:
@@ -46,6 +51,12 @@ def _patch_projects_owned_context_reads(body: bytes) -> bytes:
     """Route composed Projects adapters through the canonical context contract."""
 
     return body.replace(_LEGACY_PROJECT_CONTEXT_READ, _MANAGED_PROJECT_CONTEXT_READ)
+
+
+def _retire_projects_compatibility_facade(body: bytes) -> bytes:
+    """Remove the obsolete ambient Projects integration façade from final app.js."""
+
+    return body.replace(_PROJECTS_COMPATIBILITY_FACADE, b"", 1)
 
 
 _PROJECT_CONTEXT_PROVIDER_PATCH = bytes(
@@ -128,6 +139,7 @@ def patch_project_context_provider_response(target: str, response: ApiResponse) 
     body = _patch_legacy_work_project_context(selected.body)
     body = _patch_legacy_project_presentation_list(body)
     body = _patch_projects_owned_context_reads(body)
+    body = _retire_projects_compatibility_facade(body)
     context = ApiResponse(
         selected.status,
         body + _PROJECT_CONTEXT_PROVIDER_PATCH,

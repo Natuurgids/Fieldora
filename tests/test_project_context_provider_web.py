@@ -126,6 +126,22 @@ def test_context_provider_rewrites_projects_owned_initial_context_reads() -> Non
     assert script.count(managed) == 4
 
 
+def test_context_provider_retires_projects_compatibility_facade() -> None:
+    project = patch_project_core_module_response(
+        "/app.js", ApiResponse(200, b"const base=true;", "text/javascript; charset=utf-8")
+    )
+    assert b"window.FieldoraProjects=Object.freeze" in project.body
+    shell = patch_modular_shell_response("/app.js", project)
+    contracts = patch_runtime_contracts_response("/app.js", shell)
+    list_runtime = patch_project_list_provider_response("/app.js", contracts)
+    script = patch_project_context_provider_response(
+        "/app.js", list_runtime
+    ).body.decode("utf-8")
+
+    assert "window.FieldoraProjects=Object.freeze" not in script
+    assert 'resolve?.("projects.context.select")' in script
+
+
 def test_projects_toolbar_extension_provider_owns_cockpit_dom_boundary() -> None:
     script = patch_project_context_provider_response(
         "/app.js", _list_contract_runtime()
@@ -163,6 +179,7 @@ def test_production_patch_composes_context_provider_after_list_and_runtime() -> 
     assert script.count("WEB-PROJECT-LIST-PROVIDER") == 1
     assert script.count("WEB-PROJECT-CONTEXT-PROVIDER") == 1
     assert script.count("WEB-PROJECT-TOOLBAR-EXTENSION-PROVIDER") == 1
+    assert "window.FieldoraProjects=Object.freeze" not in script
     assert script.rfind("WEB-PROJECT-CONTEXT-PROVIDER") > script.rfind(
         "WEB-PROJECT-LIST-PROVIDER"
     )

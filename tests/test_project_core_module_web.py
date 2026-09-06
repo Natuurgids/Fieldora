@@ -20,13 +20,17 @@ def test_project_core_adapter_is_idempotent_and_owns_project_interactions() -> N
     assert "window.FieldoraProjects" in script
     assert 'moduleId="projects.core"' in script
     assert "fieldora:project-context-changed" in script
-    assert "/api/v1/media?project_id=${pid}&limit=200" in script
+    assert 'resolve?.("projects.work-data.service")' in script
+    assert 'resolve?.("projects.evidence.service")' in script
     assert "fieldora:project-evidence-changed" in script
     assert "refreshEvidence:loadEvidence" in script
-    assert 'api(`/api/v1/phases?project_id=${pid}`' in script
-    assert 'api(`/api/v1/tasks?project_id=${pid}`' in script
-    assert 'api(`/api/v1/sprints?project_id=${pid}`' in script
-    assert 'api(`/api/v1/allocations?project_id=${pid}`' in script
+    assert "await service.load(state.projectId)" in script
+    assert "await service.projectItems(state.projectId)" in script
+    assert "/api/v1/phases?project_id=" not in script
+    assert "/api/v1/tasks?project_id=" not in script
+    assert "/api/v1/sprints?project_id=" not in script
+    assert "/api/v1/allocations?project_id=" not in script
+    assert "/api/v1/media?project_id=" not in script
     assert 'id="project-core-work-list"' in script
     assert 'data-project-work-kind=' in script
     assert "loadPortfolio=" not in script
@@ -114,7 +118,7 @@ def test_final_shell_retires_old_hierarchy_browser_patch_when_project_owner_exis
     assert 'id="project-core-work-list"' in script
 
 
-def test_projects_work_surface_uses_governed_hierarchy_apis_not_portfolio_data() -> None:
+def test_projects_work_surface_consumes_governed_work_data_contract() -> None:
     patched = patch_project_core_module_response(
         "/app.js", ApiResponse(200, b"", "text/javascript; charset=utf-8")
     )
@@ -122,22 +126,29 @@ def test_projects_work_surface_uses_governed_hierarchy_apis_not_portfolio_data()
 
     assert "state={mounted:false" in script
     assert "phases:[],tasks:[],sprints:[],allocations:[]" in script
-    assert "Promise.all([" in script
-    assert "/api/v1/phases?project_id=" in script
-    assert "/api/v1/tasks?project_id=" in script
-    assert "/api/v1/sprints?project_id=" in script
-    assert "/api/v1/allocations?project_id=" in script
+    assert 'resolve?.("projects.work-data.service")' in script
+    assert "const snapshot=await service.load(state.projectId);" in script
+    assert "snapshot?.phases" in script
+    assert "snapshot?.tasks" in script
+    assert "snapshot?.sprints" in script
+    assert "snapshot?.allocations" in script
+    assert "/api/v1/phases?project_id=" not in script
+    assert "/api/v1/tasks?project_id=" not in script
+    assert "/api/v1/sprints?project_id=" not in script
+    assert "/api/v1/allocations?project_id=" not in script
     assert "JSON.parse(q(\"portfolio-list\")" not in script
     assert "data-project-work-kind" in script
 
 
-def test_project_evidence_surface_uses_association_aware_endpoint() -> None:
+def test_project_evidence_surface_consumes_evidence_service_contract() -> None:
     patched = patch_project_core_module_response(
         "/app.js", ApiResponse(200, b"", "text/javascript; charset=utf-8")
     )
     script = patched.body.decode("utf-8")
 
-    assert "/api/v1/media?project_id=${pid}&limit=200" in script
+    assert 'resolve?.("projects.evidence.service")' in script
+    assert "await service.projectItems(state.projectId)" in script
+    assert "/api/v1/media?project_id=" not in script
     assert 'filter(item=>item.project_id===state.projectId)' not in script
     assert "fieldora:project-evidence-changed" in script
 

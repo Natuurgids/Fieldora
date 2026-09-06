@@ -24,6 +24,7 @@ def test_foundation_registry_has_separate_projects_and_portfolio_ownership() -> 
     projects = registry.resolve("/projects")
     portfolio = registry.resolve("/portfolio")
     auth = registry.contract_provider("auth.current-user")
+    navigation = registry.contract_provider("navigation.navigate")
     notifications = registry.contract_provider("notifications.publish")
 
     assert projects is not None
@@ -41,6 +42,7 @@ def test_foundation_registry_has_separate_projects_and_portfolio_ownership() -> 
     assert portfolio.dependencies == ()
     assert portfolio.requires_contracts == (
         "auth.current-user",
+        "navigation.navigate",
         "projects.list.read",
         "projects.context.select",
     )
@@ -48,6 +50,10 @@ def test_foundation_registry_has_separate_projects_and_portfolio_ownership() -> 
     assert auth.provider_id == "application.auth"
     assert auth.provides_contracts == ("auth.current-user",)
     assert registry.resolve("/application.auth") is None
+    assert isinstance(navigation, WebApplicationContractProvider)
+    assert navigation.provider_id == "application.navigation"
+    assert navigation.provides_contracts == ("navigation.navigate",)
+    assert registry.resolve("/application.navigation") is None
     assert isinstance(notifications, WebApplicationContractProvider)
     assert notifications.provider_id == "application.notifications"
     assert notifications.provides_contracts == ("notifications.publish",)

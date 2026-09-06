@@ -116,8 +116,6 @@ def test_production_managed_patch_places_contract_runtime_after_finalized_shell(
 
     assert script.count("WEB-MODULAR-SHELL: registry-owned navigation bridge") == 1
     assert script.count("WEB-MODULE-CONTRACT-RUNTIME") == 1
-    assert 'resolve?.("navigation.navigate")' in script
-    assert 'navigator.navigate("/projects",moduleId,"push")' in script
     assert script.rfind("WEB-MODULE-CONTRACT-RUNTIME") > script.rfind(
         "WEB-MODULAR-SHELL: registry-owned navigation bridge"
     )

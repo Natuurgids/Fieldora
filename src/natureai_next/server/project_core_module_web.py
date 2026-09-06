@@ -22,6 +22,7 @@ _PROJECT_CORE_MODULE_PATCH = bytes(
  const moduleId="projects.core",q=id=>document.getElementById(id);
  const state={mounted:false,controller:null,projectId:"",centerView:"work",scope:"all",evidence:[],phases:[],tasks:[],sprints:[],allocations:[]};
  const escProject=value=>String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+ const currentUser=()=>window.FieldoraModuleContracts?.resolve?.("auth.current-user")?.current?.()||null;
  const projectList=()=>window.FieldoraModuleContracts?.resolve?.("projects.list.read")||null;
  const projectContext=()=>window.FieldoraModuleContracts?.resolve?.("projects.context.select")||null;
  const selectedRecord=()=>window.FieldoraModuleContracts?.resolve?.("projects.selected-record.select")||null;
@@ -40,11 +41,11 @@ _PROJECT_CORE_MODULE_PATCH = bytes(
   document.dispatchEvent(new CustomEvent("fieldora:module-error",{detail:{module_id:moduleId,error:String(message)}}));
  }
  function visibleProjects(){
-  const needle=(q("project-tree-filter")?.value||"").trim().toLowerCase();
+  const needle=(q("project-tree-filter")?.value||"").trim().toLowerCase(),identity=currentUser();
   let visible=projectItems();
-  if(state.scope==="mine"&&typeof me!=="undefined"&&me?.identity_id){
-   const assigned=new Set(state.tasks.filter(task=>task.assignee_id===me.identity_id||task.owner_id===me.identity_id).map(task=>task.project_id));
-   const mine=visible.filter(project=>project.owner_id===me.identity_id||project.created_by_id===me.identity_id||project.manager_id===me.identity_id||assigned.has(project.id));
+  if(state.scope==="mine"&&identity?.identity_id){
+   const assigned=new Set(state.tasks.filter(task=>task.assignee_id===identity.identity_id||task.owner_id===identity.identity_id).map(task=>task.project_id));
+   const mine=visible.filter(project=>project.owner_id===identity.identity_id||project.created_by_id===identity.identity_id||project.manager_id===identity.identity_id||assigned.has(project.id));
    visible=mine;
   }
   return needle?visible.filter(project=>JSON.stringify(project).toLowerCase().includes(needle)):visible;

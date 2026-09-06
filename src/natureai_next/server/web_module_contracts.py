@@ -346,6 +346,7 @@ FOUNDATION_WEB_MODULES: tuple[WebModuleSpec, ...] = (
             "projects.work-data.service",
             "projects.evidence.service",
         ),
+        requires_contracts=("auth.current-user",),
     ),
     WebModuleSpec(
         "portfolio",

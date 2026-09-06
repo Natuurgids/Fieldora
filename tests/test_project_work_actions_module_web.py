@@ -67,6 +67,32 @@ def test_work_actions_use_service_contract_and_visible_validation() -> None:
     assert "fieldora:project-work-changed" in script
 
 
+def test_task_creation_preserves_legacy_relationship_and_effort_inputs() -> None:
+    script = patch_project_work_actions_module_response(
+        "/app.js", ApiResponse(200, b"", "text/javascript; charset=utf-8")
+    ).body.decode("utf-8")
+
+    for field_id in (
+        "project-core-child-phase",
+        "project-core-child-parent",
+        "project-core-child-sprint",
+        "project-core-child-estimate",
+        "project-core-child-realized",
+    ):
+        assert f'id="{field_id}"' in script
+
+    assert 'record.phase_id=q("project-core-child-phase").value.trim()' in script
+    assert 'record.parent_task_id=q("project-core-child-parent").value.trim()' in script
+    assert 'record.sprint_id=q("project-core-child-sprint").value.trim()' in script
+    assert 'record.manual_estimate=Number(q("project-core-child-estimate").value||0)' in script
+    assert 'record.realized=Number(q("project-core-child-realized").value||0)' in script
+    assert 'kind==="subtask"?state.selectedWork.id:""' in script
+    assert 'state.selectedWork.kind==="phase"?state.selectedWork.id:""' in script
+    assert "Parent task is required for a subtask." in script
+    assert "Manual estimate must be zero or greater." in script
+    assert "Realized hours must be zero or greater." in script
+
+
 def test_capability_projection_only_controls_browser_discoverability() -> None:
     patched = patch_project_work_actions_module_response(
         "/app.js", ApiResponse(200, b"", "text/javascript; charset=utf-8")

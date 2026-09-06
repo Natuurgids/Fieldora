@@ -14,10 +14,8 @@ from natureai_next.server.web_module_contract_runtime import (
 
 
 def _list_contract_runtime() -> ApiResponse:
-    project = patch_project_core_module_response(
-        "/app.js", ApiResponse(200, b"const base=true;", "text/javascript; charset=utf-8")
-    )
-    shell = patch_modular_shell_response("/app.js", project)
+    base = ApiResponse(200, b"const base=true;", "text/javascript; charset=utf-8")
+    shell = patch_modular_shell_response("/app.js", base)
     contracts = patch_runtime_contracts_response("/app.js", shell)
     return patch_project_list_provider_response("/app.js", contracts)
 

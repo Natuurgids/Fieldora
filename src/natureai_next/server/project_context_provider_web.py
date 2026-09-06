@@ -5,6 +5,12 @@ from __future__ import annotations
 from urllib.parse import urlsplit
 
 from natureai_next.server.api import ApiResponse
+from natureai_next.server.project_inspector_module_web import (
+    patch_project_inspector_module_response,
+)
+from natureai_next.server.project_selected_record_provider_web import (
+    patch_project_selected_record_provider_response,
+)
 
 _LEGACY_WORK_PROJECT_ID = b'project_id:q("work-project").value,'
 _MANAGED_WORK_PROJECT_ID = (
@@ -98,7 +104,7 @@ _PROJECT_CONTEXT_PROVIDER_PATCH = bytes(
 
 
 def patch_project_context_provider_response(target: str, response: ApiResponse) -> ApiResponse:
-    """Append Projects-owned public providers after list and contract wiring."""
+    """Append selected-record, context, toolbar and replaceable inspector providers."""
 
     if (
         urlsplit(target).path != "/app.js"
@@ -108,11 +114,13 @@ def patch_project_context_provider_response(target: str, response: ApiResponse) 
         or _PROJECT_CONTEXT_PROVIDER_PATCH in response.body
     ):
         return response
-    body = _patch_legacy_work_project_context(response.body)
+    selected = patch_project_selected_record_provider_response(target, response)
+    body = _patch_legacy_work_project_context(selected.body)
     body = _patch_legacy_project_presentation_list(body)
-    return ApiResponse(
-        response.status,
+    context = ApiResponse(
+        selected.status,
         body + _PROJECT_CONTEXT_PROVIDER_PATCH,
-        response.content_type,
-        response.headers,
+        selected.content_type,
+        selected.headers,
     )
+    return patch_project_inspector_module_response(target, context)

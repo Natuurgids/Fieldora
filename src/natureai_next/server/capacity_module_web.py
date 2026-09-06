@@ -20,11 +20,12 @@ _CAPACITY_MODULE_PATCH = bytes(
  const moduleId="capacity",q=id=>document.getElementById(id);
  const state={mounted:false,controller:null,projectId:"",allocations:[]};
  const projectContext=()=>window.FieldoraModuleContracts?.resolve?.("projects.context.select")||null;
+ const notifications=()=>window.FieldoraModuleContracts?.resolve?.("notifications.publish")||null;
  const canonicalProjectId=()=>String(projectContext()?.current?.()||"");
  const esc=value=>String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
  function report(error,fallback){
   const text=error?.message||fallback,node=q("capacity-project-status");if(node){node.textContent=text;node.classList.add("error")}
-  document.dispatchEvent(new CustomEvent("fieldora:module-error",{detail:{module_id:moduleId,error:String(text)}}));
+  notifications()?.publish?.(String(text),{level:"error",source_module:moduleId});
  }
  function clearStatus(){const node=q("capacity-project-status");if(node){node.textContent="";node.classList.remove("error")}}
  function retireLegacyAllocationCreate(){

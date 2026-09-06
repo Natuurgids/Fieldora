@@ -26,6 +26,7 @@ from natureai_next.server.project_facility_workspace_web import (
 from natureai_next.server.project_list_provider_web import patch_project_list_provider_response
 from natureai_next.server.web_compatibility import patch_web_response
 from natureai_next.server.web_module_contracts import (
+    FOUNDATION_APPLICATION_CONTRACT_PROVIDERS,
     FOUNDATION_WEB_MODULES,
     WebModuleRegistry,
     WebModuleSpec,
@@ -100,7 +101,10 @@ def _projects_free_registry() -> WebModuleRegistry:
 
 
 def _managed_projects_registry() -> WebModuleRegistry:
-    registry = WebModuleRegistry(FOUNDATION_WEB_MODULES)
+    registry = WebModuleRegistry(
+        FOUNDATION_WEB_MODULES,
+        application_providers=FOUNDATION_APPLICATION_CONTRACT_PROVIDERS,
+    )
     registry.validate_dependencies()
     registry.validate_contracts()
     return registry
@@ -114,8 +118,11 @@ def _replacement_projects_registry() -> WebModuleRegistry:
         provides_contracts=tuple(sorted(_PROJECT_CONTRACTS)),
     )
     registry = WebModuleRegistry(
-        replacement if spec.module_id == "projects.core" else spec
-        for spec in FOUNDATION_WEB_MODULES
+        (
+            replacement if spec.module_id == "projects.core" else spec
+            for spec in FOUNDATION_WEB_MODULES
+        ),
+        application_providers=FOUNDATION_APPLICATION_CONTRACT_PROVIDERS,
     )
     registry.validate_dependencies()
     registry.validate_contracts()

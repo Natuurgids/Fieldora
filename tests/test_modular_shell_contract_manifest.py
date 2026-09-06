@@ -29,6 +29,7 @@ def test_browser_manifest_contract_metadata_matches_typed_registry() -> None:
         "projects.evidence.service",
     ]
     assert manifest["portfolio"]["requires_contracts"] == [
+        "auth.current-user",
         "projects.list.read",
         "projects.context.select",
     ]

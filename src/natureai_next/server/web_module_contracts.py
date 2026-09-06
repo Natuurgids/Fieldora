@@ -363,6 +363,7 @@ FOUNDATION_WEB_MODULES: tuple[WebModuleSpec, ...] = (
         requires_contracts=(
             "auth.current-user",
             "navigation.navigate",
+            "notifications.publish",
             "projects.list.read",
             "projects.context.select",
         ),

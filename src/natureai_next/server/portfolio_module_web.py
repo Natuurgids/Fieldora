@@ -23,6 +23,7 @@ _PORTFOLIO_MODULE_PATCH = bytes(
  const itemName=item=>item?.name||item?.title||item?.label||item?.id||"Untitled";
  const currentUser=()=>window.FieldoraModuleContracts?.resolve?.("auth.current-user")?.current?.()||null;
  const navigation=()=>window.FieldoraModuleContracts?.resolve?.("navigation.navigate")||null;
+ const notifications=()=>window.FieldoraModuleContracts?.resolve?.("notifications.publish")||null;
  const projectList=()=>window.FieldoraModuleContracts?.resolve?.("projects.list.read")||null;
  const projectContext=()=>window.FieldoraModuleContracts?.resolve?.("projects.context.select")||null;
  function status(message,error=false){
@@ -104,7 +105,7 @@ _PORTFOLIO_MODULE_PATCH = bytes(
   try{
    const list=projectList();if(list?.refresh)await list.refresh();
    await loadWorkData();render();selectTabs();status("");
-  }catch(error){status(error?.message||"Portfolio could not be loaded.",true);document.dispatchEvent(new CustomEvent("fieldora:module-error",{detail:{module_id:moduleId,error:String(error?.message||error)}}))}
+  }catch(error){const message=error?.message||"Portfolio could not be loaded.";status(message,true);notifications()?.publish?.(String(message),{level:"error",source_module:moduleId})}
  }
  function openProjectFrom(target){
   const rowNode=target?.closest?.('[data-portfolio-id][data-kind="project"]');if(!rowNode)return false;

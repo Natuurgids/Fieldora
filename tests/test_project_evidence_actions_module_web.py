@@ -21,7 +21,7 @@ def test_projects_core_owns_evidence_link_action() -> None:
     assert owner.module_id == "projects.core"
 
 
-def test_evidence_adapter_is_idempotent_and_uses_governed_link_api() -> None:
+def test_evidence_adapter_is_idempotent_and_uses_service_contract() -> None:
     original = ApiResponse(200, b"const baseApp=true;", "text/javascript; charset=utf-8")
 
     patched = patch_project_evidence_actions_module_response("/app.js", original)
@@ -31,9 +31,12 @@ def test_evidence_adapter_is_idempotent_and_uses_governed_link_api() -> None:
     script = patched.body.decode("utf-8")
     assert "WEB-PROJECT-EVIDENCE-ACTIONS-MODULE" in script
     assert "window.FieldoraProjectEvidenceActions" in script
-    assert "/api/v1/media?limit=200" in script
-    assert "/media-links" in script
-    assert 'method:"POST",purpose:"research"' in script
+    assert 'resolve?.("projects.evidence.service")' in script
+    assert "await service.libraryItems()" in script
+    assert "await service.link(state.projectId,mediaId)" in script
+    assert "/api/v1/media?limit=200" not in script
+    assert "/media-links" not in script
+    assert 'method:"POST",purpose:"research"' not in script
     assert "fieldora:project-evidence-changed" in script
     assert "loadPortfolio" not in script
     assert "showPage=" not in script
@@ -50,6 +53,7 @@ def test_evidence_link_discoverability_is_not_server_authorization() -> None:
     assert "caps?.actions?.edit===true" in script
     assert "Choose existing Library evidence." in script
     assert "without changing its identity" in script
+    assert "Project evidence service is unavailable." in script
 
 
 def test_final_shell_retires_legacy_project_runtime_only_after_both_replacements() -> None:

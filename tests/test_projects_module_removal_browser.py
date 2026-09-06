@@ -91,6 +91,13 @@ def _projects_free_registry() -> WebModuleRegistry:
     return registry
 
 
+def _managed_projects_registry() -> WebModuleRegistry:
+    registry = WebModuleRegistry(FOUNDATION_WEB_MODULES)
+    registry.validate_dependencies()
+    registry.validate_contracts()
+    return registry
+
+
 def _replacement_projects_registry() -> WebModuleRegistry:
     replacement = WebModuleSpec(
         "projects.replacement",
@@ -163,6 +170,12 @@ def _projects_free_web(tmp_path: Path):
 
 
 @contextlib.contextmanager
+def _managed_projects_web(tmp_path: Path):
+    with _serve_web(tmp_path, _patched_app(_managed_projects_registry())) as url:
+        yield url
+
+
+@contextlib.contextmanager
 def _replacement_projects_web(tmp_path: Path):
     response = _patched_app(_replacement_projects_registry(), portfolio=True)
     response = ApiResponse(
@@ -186,6 +199,29 @@ def _api(route: Route) -> None:
         }
     elif path == "runtime":
         payload = {"version": "5.4.0", "readiness": {"mode": "managed"}, "backends": {}}
+    else:
+        payload = {"items": []}
+    route.fulfill(status=200, content_type="application/json", body=json.dumps(payload))
+
+
+def _project_filter_api(route: Route) -> None:
+    parsed = urlsplit(route.request.url)
+    path = parsed.path.split("/api/v1/", 1)[-1]
+    if path == "me":
+        payload: object = {
+            "identity_id": "admin-1",
+            "display_name": "Administrator",
+            "organization_id": "local",
+        }
+    elif path == "runtime":
+        payload = {"version": "5.4.0", "readiness": {"mode": "managed"}, "backends": {}}
+    elif path == "projects":
+        payload = {
+            "items": [
+                {"id": "alpha", "name": "Alpha Survey", "owner_id": "admin-1", "status": "active"},
+                {"id": "beta", "name": "Beta Habitat", "owner_id": "admin-1", "status": "active"},
+            ]
+        }
     else:
         payload = {"items": []}
     route.fulfill(status=200, content_type="application/json", body=json.dumps(payload))
@@ -227,6 +263,35 @@ def test_projects_free_browser_boots_and_keeps_unrelated_library_action(tmp_path
             "node=>node.classList.contains('primary')"
         )
         assert page.locator("#media-grid").is_visible()
+        browser.close()
+
+
+def test_project_tree_filter_types_and_restores_visible_rows(tmp_path: Path) -> None:
+    with _managed_projects_web(tmp_path) as url, sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        page = browser.new_page()
+        page.route("**/api/v1/**", _project_filter_api)
+        page.add_init_script(
+            "sessionStorage.setItem('fieldora-session','project-filter-certification-token')"
+        )
+        page.goto(url)
+        page.wait_for_selector("#workspace:not([hidden])")
+        page.locator('.nav[data-page="projects"]').click()
+        page.wait_for_selector("#page-projects:not([hidden])")
+        page.wait_for_function("document.querySelectorAll('[data-project-tree]').length===2")
+
+        project_filter = page.locator("#project-tree-filter")
+        project_filter.press_sequentially("alpha")
+        page.wait_for_function("document.querySelectorAll('[data-project-tree]').length===1")
+        rows = page.locator("[data-project-tree]")
+        assert rows.count() == 1
+        assert "Alpha Survey" in rows.first.inner_text()
+
+        project_filter.fill("")
+        page.wait_for_function("document.querySelectorAll('[data-project-tree]').length===2")
+        assert page.locator("[data-project-tree]").count() == 2
+        assert page.locator('[data-project-tree="alpha"]').count() == 1
+        assert page.locator('[data-project-tree="beta"]').count() == 1
         browser.close()
 
 

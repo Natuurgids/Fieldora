@@ -19,6 +19,7 @@ _PROJECT_EVIDENCE_ACTIONS_MODULE_PATCH = bytes(
  if(window.__fieldoraProjectEvidenceActionsWired)return;window.__fieldoraProjectEvidenceActionsWired=true;
  const moduleId="projects.core",q=id=>document.getElementById(id);
  const state={mounted:false,controller:null,projectId:"",canEdit:false};
+ const evidenceData=()=>window.FieldoraModuleContracts?.resolve?.("projects.evidence.service")||null;
  function message(text,error=false){const node=q("project-core-evidence-link-message");if(node){node.textContent=text||"";node.classList.toggle("error",Boolean(error))}}
  function emitError(error,fallback){const text=error?.message||fallback;message(text,true);document.dispatchEvent(new CustomEvent("fieldora:module-error",{detail:{module_id:moduleId,error:String(text)}}))}
  function ensureSurface(){
@@ -39,8 +40,9 @@ _PROJECT_EVIDENCE_ACTIONS_MODULE_PATCH = bytes(
  }
  async function loadOptions(){
   const select=q("project-core-evidence-select");if(!select)return;select.innerHTML='<option value="">Choose evidence…</option>';
-  const result=await api("/api/v1/media?limit=200",{purpose:"research"});
-  (result.items||[]).forEach(item=>{const option=document.createElement("option");option.value=item.media_id;option.textContent=`${item.mime_type||"evidence"} · ${String(item.filename||item.name||item.media_id).slice(0,48)}`;select.appendChild(option)});
+  const service=evidenceData();if(!service)throw new Error("Project evidence service is unavailable.");
+  const items=await service.libraryItems();
+  items.forEach(item=>{const option=document.createElement("option");option.value=item.media_id;option.textContent=`${item.mime_type||"evidence"} · ${String(item.filename||item.name||item.media_id).slice(0,48)}`;select.appendChild(option)});
  }
  async function openPanel(){
   if(!state.projectId||!state.canEdit)return;const panel=q("project-core-evidence-link-panel");if(!panel)return;panel.hidden=false;message("");
@@ -49,9 +51,10 @@ _PROJECT_EVIDENCE_ACTIONS_MODULE_PATCH = bytes(
  function closePanel(){const panel=q("project-core-evidence-link-panel");if(panel)panel.hidden=true;message("")}
  async function linkEvidence(){
   const mediaId=q("project-core-evidence-select")?.value||"";if(!state.projectId||!mediaId)return message("Choose existing Library evidence.",true);
+  const service=evidenceData();if(!service)return message("Project evidence service is unavailable.",true);
   try{
    message("Linking evidence…");
-   await api(`/api/v1/projects/${encodeURIComponent(state.projectId)}/media-links`,{method:"POST",purpose:"research",body:JSON.stringify({media_id:mediaId})});
+   await service.link(state.projectId,mediaId);
    message("Existing Library evidence linked without changing its identity.");
    document.dispatchEvent(new CustomEvent("fieldora:project-evidence-changed",{detail:{module_id:moduleId,project_id:state.projectId,media_id:mediaId}}));
   }catch(error){emitError(error,"Evidence could not be linked to this project.")}

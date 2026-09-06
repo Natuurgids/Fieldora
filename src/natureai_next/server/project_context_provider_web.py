@@ -45,6 +45,12 @@ _PROJECTS_COMPATIBILITY_FACADE = (
     b'setCenter,refreshWork:loadWork,refreshEvidence:loadEvidence,currentProject:()=>String(projectContext()?.current?.()||""),'
     b'currentView:()=>state.centerView});'
 )
+_PROJECT_WORK_ACTIONS_OWNER_MARKER = b"WEB-PROJECT-WORK-ACTIONS-MODULE"
+_LEGACY_WORK_EDITOR_START = b"async function saveWorkItem(){"
+_LEGACY_WORK_EDITOR_END = b"async function loadCapacity(){"
+_LEGACY_WORK_SAVE_WIRING = b'q("work-save").onclick=saveWorkItem;'
+_LEGACY_WORK_PROJECT_OPTIONS = b'"work-project","science-project"'
+_MANAGED_WORK_PROJECT_OPTIONS = b'"science-project"'
 
 
 def _patch_legacy_work_project_context(body: bytes) -> bytes:
@@ -74,6 +80,26 @@ def _patch_legacy_project_selector_source(body: bytes) -> bytes:
     return body.replace(
         _LEGACY_PROJECT_LIST_MIRROR, _MANAGED_PROJECT_SELECTOR_REFRESH, 1
     )
+
+
+def _strip_legacy_range(body: bytes, start: bytes, end: bytes) -> bytes:
+    start_index = body.find(start)
+    if start_index < 0:
+        return body
+    end_index = body.find(end, start_index)
+    if end_index < 0:
+        return body
+    return body[:start_index] + body[end_index:]
+
+
+def _retire_legacy_work_editor(body: bytes) -> bytes:
+    """Retire the legacy Project work editor once its modular owner is present."""
+
+    if _PROJECT_WORK_ACTIONS_OWNER_MARKER not in body:
+        return body
+    body = _strip_legacy_range(body, _LEGACY_WORK_EDITOR_START, _LEGACY_WORK_EDITOR_END)
+    body = body.replace(_LEGACY_WORK_SAVE_WIRING, b"", 1)
+    return body.replace(_LEGACY_WORK_PROJECT_OPTIONS, _MANAGED_WORK_PROJECT_OPTIONS, 1)
 
 
 def _retire_projects_compatibility_facade(body: bytes) -> bytes:
@@ -162,6 +188,7 @@ def patch_project_context_provider_response(target: str, response: ApiResponse) 
     body = _patch_legacy_project_presentation_list(body)
     body = _patch_projects_owned_context_reads(body)
     body = _patch_legacy_project_selector_source(body)
+    body = _retire_legacy_work_editor(body)
     body = _retire_projects_compatibility_facade(body)
     context = ApiResponse(
         selected.status,

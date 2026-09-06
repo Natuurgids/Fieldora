@@ -21,6 +21,7 @@ def test_project_core_adapter_is_idempotent_and_owns_project_interactions() -> N
     assert 'moduleId="projects.core"' in script
     assert "fieldora:project-context-changed" in script
     assert 'resolve?.("projects.context.select")' in script
+    assert 'resolve?.("projects.selected-record.select")' in script
     assert 'resolve?.("projects.work-data.service")' in script
     assert 'resolve?.("projects.evidence.service")' in script
     assert "fieldora:project-evidence-changed" in script
@@ -63,7 +64,8 @@ def test_project_hierarchy_consumes_context_contract_instead_of_owning_selection
     assert "function requestProject(id)" in script
     assert "const selected=context.select(id);" in script
     assert "async function applyProjectContext(id)" in script
-    assert "state.projectId=requested;state.workSelection=null;" in script
+    assert "state.projectId=requested;" in script
+    assert "publishProjectSelection();" in script
     assert 'document.addEventListener("fieldora:project-context-changed"' in script
     assert 'new CustomEvent("fieldora:project-context-changed"' not in script
     assert "async function selectProject(id)" not in script
@@ -72,6 +74,22 @@ def test_project_hierarchy_consumes_context_contract_instead_of_owning_selection
     assert 'currentProject:()=>String(projectContext()?.current?.()||"")' in script
     assert "selectedProject" not in script
     assert 'q("work-project")' in script
+
+
+def test_project_hierarchy_publishes_selected_records_without_inspector_dom_ownership() -> None:
+    script = patch_project_core_module_response(
+        "/app.js", ApiResponse(200, b"", "text/javascript; charset=utf-8")
+    ).body.decode("utf-8")
+
+    assert 'resolve?.("projects.selected-record.select")' in script
+    assert 'selection.select({kind,id:String(id),record})' in script
+    assert 'selection.select(record?{kind:"project",id:String(record.id),record}:null)' in script
+    assert "fieldora:project-selected-record-changed" in script
+    assert "workSelection" not in script
+    assert "function renderInspector" not in script
+    assert "function selectInspector" not in script
+    assert 'querySelector(".cockpit-right")' not in script
+    assert "project-inspector-metadata" not in script
 
 
 def test_my_work_scope_is_strict_when_no_matching_projects_exist() -> None:

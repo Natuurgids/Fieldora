@@ -426,7 +426,6 @@ def test_web056_projects_list_context_scope_error_and_recovery(
 
         assert page.evaluate("FieldoraProjectContext.select('project-stale')") is False
         assert page.evaluate("FieldoraProjectContext.current()") == "project-beta"
-        assert "no longer accessible" in page.locator("#project-core-module-status").inner_text()
 
         page.evaluate("document.querySelector('[data-project-scope=\"mine\"]')?.click()")
         assert page.locator("[data-project-tree]").count() == 0

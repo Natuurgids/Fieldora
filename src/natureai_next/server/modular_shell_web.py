@@ -128,6 +128,9 @@ def modular_shell_manifest() -> tuple[dict[str, object], ...]:
             "capability": spec.capability,
             "owns_actions": list(spec.owns_actions),
             "dependencies": list(spec.dependencies),
+            "provides_contracts": list(spec.provides_contracts),
+            "requires_contracts": list(spec.requires_contracts),
+            "optional_contracts": list(spec.optional_contracts),
         }
         for spec in registry.as_mapping().values()
     )

@@ -35,6 +35,9 @@ def test_lifecycle_adapter_is_idempotent_and_does_not_depend_on_portfolio() -> N
     assert "WEB-PROJECT-LIFECYCLE-MODULE" in script
     assert "window.FieldoraProjectLifecycle" in script
     assert 'moduleId="projects.core"' in script
+    assert 'resolve?.("notifications.publish")' in script
+    assert 'notifications()?.publish?.(String(text),{level:"error",source_module:moduleId})' in script
+    assert 'new CustomEvent("fieldora:module-error"' not in script
     assert "loadPortfolio" not in script
     assert "portfolio-project-lifecycle" not in script
     assert "showPage=" not in script

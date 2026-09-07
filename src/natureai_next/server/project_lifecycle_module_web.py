@@ -21,9 +21,10 @@ _PROJECT_LIFECYCLE_MODULE_PATCH = bytes(
  const state={mounted:false,controller:null,projectId:"",editingId:"",canEdit:false};
  const projectContext=()=>window.FieldoraModuleContracts?.resolve?.("projects.context.select")||null;
  const projectList=()=>window.FieldoraModuleContracts?.resolve?.("projects.list.read")||null;
+ const notifications=()=>window.FieldoraModuleContracts?.resolve?.("notifications.publish")||null;
  const projectItems=()=>projectList()?.items?.()||[];
  const projectById=id=>projectItems().find(project=>String(project.id)===String(id))||null;
- function emitError(error,fallback){const text=error?.message||fallback;document.dispatchEvent(new CustomEvent("fieldora:module-error",{detail:{module_id:moduleId,error:String(text)}}))}
+ function emitError(error,fallback){const text=error?.message||fallback;notifications()?.publish?.(String(text),{level:"error",source_module:moduleId})}
  function ensureSurface(){
   const page=q("page-projects");if(!page)return false;
   let button=q("project-core-edit-project");

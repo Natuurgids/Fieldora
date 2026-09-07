@@ -107,6 +107,8 @@ def test_project_capacity_adapter_uses_replaceable_projects_contracts() -> None:
     assert 'resolve?.("projects.context.select")' in script
     assert 'resolve?.("projects.toolbar.extend")' in script
     assert "projectContext()?.current?.()" in script
+    assert 'function currentProject(){return projectContext()?.current?.()||""}' in script
+    assert "state.projectId" not in script
     assert "toolbar.upsert" in script
     assert 'action:"capacity.project.open"' in script
     assert 'event.detail?.contract' in script

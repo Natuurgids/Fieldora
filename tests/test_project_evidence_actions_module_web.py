@@ -31,6 +31,9 @@ def test_evidence_adapter_is_idempotent_and_uses_service_contract() -> None:
     script = patched.body.decode("utf-8")
     assert "WEB-PROJECT-EVIDENCE-ACTIONS-MODULE" in script
     assert "window.FieldoraProjectEvidenceActions" in script
+    assert 'resolve?.("projects.context.select")' in script
+    assert 'state.projectId=projectContext()?.current?.()||""' in script
+    assert "window.FieldoraProjects?.currentProject?.()" not in script
     assert 'resolve?.("projects.evidence.service")' in script
     assert "await service.libraryItems()" in script
     assert "await service.link(state.projectId,mediaId)" in script

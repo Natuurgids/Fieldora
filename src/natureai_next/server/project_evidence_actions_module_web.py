@@ -19,6 +19,7 @@ _PROJECT_EVIDENCE_ACTIONS_MODULE_PATCH = bytes(
  if(window.__fieldoraProjectEvidenceActionsWired)return;window.__fieldoraProjectEvidenceActionsWired=true;
  const moduleId="projects.core",q=id=>document.getElementById(id);
  const state={mounted:false,controller:null,projectId:"",canEdit:false};
+ const projectContext=()=>window.FieldoraModuleContracts?.resolve?.("projects.context.select")||null;
  const evidenceData=()=>window.FieldoraModuleContracts?.resolve?.("projects.evidence.service")||null;
  function message(text,error=false){const node=q("project-core-evidence-link-message");if(node){node.textContent=text||"";node.classList.toggle("error",Boolean(error))}}
  function emitError(error,fallback){const text=error?.message||fallback;message(text,true);document.dispatchEvent(new CustomEvent("fieldora:module-error",{detail:{module_id:moduleId,error:String(text)}}))}
@@ -62,10 +63,10 @@ _PROJECT_EVIDENCE_ACTIONS_MODULE_PATCH = bytes(
  function mount(){
   if(state.mounted)return;if(!ensureSurface())return;state.mounted=true;state.controller=new AbortController();const signal=state.controller.signal;
   q("project-core-evidence-link")?.addEventListener("click",openPanel,{signal});q("project-core-evidence-link-save")?.addEventListener("click",linkEvidence,{signal});q("project-core-evidence-link-cancel")?.addEventListener("click",closePanel,{signal});
-  state.projectId=window.FieldoraProjects?.currentProject?.()||"";refreshAuthority();
+  state.projectId=projectContext()?.current?.()||"";refreshAuthority();
  }
  function unmount(){if(!state.mounted)return;state.controller?.abort();state.controller=null;state.mounted=false;closePanel()}
- document.addEventListener("fieldora:project-context-changed",event=>{state.projectId=event.detail?.project_id||"";closePanel();refreshAuthority()});
+ document.addEventListener("fieldora:project-context-changed",()=>{state.projectId=projectContext()?.current?.()||"";closePanel();refreshAuthority()});
  document.addEventListener("fieldora:module-mount",event=>{if(event.detail?.module?.module_id===moduleId)mount()});
  document.addEventListener("fieldora:module-unmount",event=>{if(event.detail?.module?.module_id===moduleId)unmount()});
  window.FieldoraProjectEvidenceActions=Object.freeze({mount,unmount,openPanel,refreshAuthority});

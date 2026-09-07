@@ -23,6 +23,15 @@ def test_dossier_module_is_idempotent_and_owns_workspace_behavior() -> None:
     assert 'fieldora:dossier-workspace-changed' in script
 
 
+def test_dossier_module_uses_notification_contract_for_errors() -> None:
+    original = ApiResponse(200, b"const baseApp=true;", "text/javascript; charset=utf-8")
+    script = patch_dossier_module_response("/app.js", original).body.decode("utf-8")
+
+    assert 'resolve?.("notifications.publish")' in script
+    assert 'notifications()?.publish?.(String(text),{level:"error",source_module:moduleId})' in script
+    assert 'fieldora:module-error' not in script
+
+
 def test_dossier_module_uses_only_canonical_project_context_and_fails_closed() -> None:
     original = ApiResponse(200, b"const baseApp=true;", "text/javascript; charset=utf-8")
     script = patch_dossier_module_response("/app.js", original).body.decode("utf-8")

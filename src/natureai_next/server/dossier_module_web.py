@@ -23,8 +23,9 @@ _DOSSIER_MODULE_PATCH = bytes(
  const esc=value=>String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
  const nameOf=record=>record?.name||record?.title||record?.id||"Record";
  function context(){return window.FieldoraModuleContracts?.resolve?.("projects.context.select")||null}
+ function notifications(){return window.FieldoraModuleContracts?.resolve?.("notifications.publish")||null}
  function currentProject(){return String(context()?.current?.()||"")}
- function report(error,fallback){const text=error?.message||fallback,node=q("dossier-status");if(node){node.textContent=text;node.style.color="var(--danger)"}document.dispatchEvent(new CustomEvent("fieldora:module-error",{detail:{module_id:moduleId,error:String(text)}}))}
+ function report(error,fallback){const text=error?.message||fallback,node=q("dossier-status");if(node){node.textContent=text;node.style.color="var(--danger)"}notifications()?.publish?.(String(text),{level:"error",source_module:moduleId})}
  function clearStatus(){const node=q("dossier-status");if(node){node.textContent="";node.style.color=""}}
  function syncProjectContext(){state.projectId=currentProject();const selector=q("dossier-project");if(selector&&state.projectId&&selector.value!==state.projectId)selector.value=state.projectId;return state.projectId}
  function render(){const host=q("dossier-workspace-list");if(!host)return;const children=new Map();for(const dossier of state.dossiers){const parent=dossier.parent_dossier_id||"";if(!children.has(parent))children.set(parent,[]);children.get(parent).push(dossier)}const rows=[];const walk=(parent,depth)=>{for(const dossier of children.get(parent)||[]){rows.push(`<button type="button" class="row" data-dossier-workspace="${esc(dossier.id)}"><strong>${" ".repeat(depth)}${depth?"↳ ":""}${esc(nameOf(dossier))}</strong><span>${esc(dossier.dossier_type||"dossier")}</span><span>${esc(dossier.review_status||dossier.status||"draft")}</span></button>`);walk(dossier.id,depth+1)}};walk("",0);host.innerHTML=rows.join("")||'<p class="empty">No dossiers.</p>'}

@@ -411,7 +411,10 @@ FOUNDATION_WEB_MODULES: tuple[WebModuleSpec, ...] = (
             "dossiers.create",
             "dossiers.review.create",
         ),
-        requires_contracts=("projects.context.select",),
+        requires_contracts=(
+            "notifications.publish",
+            "projects.context.select",
+        ),
     ),
     WebModuleSpec("knowledge.center", "/knowledge", "Knowledge & AI"),
     WebModuleSpec(

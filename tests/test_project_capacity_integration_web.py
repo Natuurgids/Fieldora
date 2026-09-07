@@ -25,6 +25,7 @@ def test_capacity_owns_project_integration_actions() -> None:
     assert capacity.module_id == "capacity"
     assert capacity.dependencies == ()
     assert capacity.requires_contracts == (
+        "navigation.navigate",
         "notifications.publish",
         "projects.context.select",
         "projects.toolbar.extend",
@@ -97,7 +98,9 @@ def test_project_capacity_adapter_uses_replaceable_projects_contracts() -> None:
     assert "WEB-PROJECT-CAPACITY-INTEGRATION" in script
     assert 'ownerModule="capacity"' in script
     assert 'entryKey="capacity.project.open"' in script
-    assert 'navigate?.("/capacity","project-capacity-integration","push")' in script
+    assert 'resolve?.("navigation.navigate")' in script
+    assert 'navigation()?.navigate?.("/capacity","project-capacity-integration","push")' in script
+    assert 'window.FieldoraModules?.navigate?.("/capacity","project-capacity-integration","push")' not in script
     assert 'resolve?.("notifications.publish")' in script
     assert 'notifications()?.publish?.(String(text),{level:"error",source_module:ownerModule})' in script
     assert 'fieldora:module-error' not in script

@@ -382,6 +382,7 @@ FOUNDATION_WEB_MODULES: tuple[WebModuleSpec, ...] = (
             "capacity.obligation.create",
         ),
         requires_contracts=(
+            "navigation.navigate",
             "notifications.publish",
             "projects.context.select",
             "projects.toolbar.extend",

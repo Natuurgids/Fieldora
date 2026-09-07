@@ -47,6 +47,8 @@ def test_project_research_adapter_uses_replaceable_projects_contracts() -> None:
     assert 'notifications()?.publish?.(String(text),{level:"error",source_module:ownerModule})' in script
     assert 'new CustomEvent("fieldora:module-error"' not in script
     assert "projectContext()?.current?.()" in script
+    assert 'function currentProject(){return projectContext()?.current?.()||""}' in script
+    assert "state.projectId" not in script
     assert "projectToolbar()?.setEnabled?." in script
     assert 'toolbar.upsert({key:entryKey,label:"Open research"' in script
     assert 'action:"research.project.open"' in script

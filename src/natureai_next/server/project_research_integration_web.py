@@ -18,7 +18,6 @@ _PROJECT_RESEARCH_INTEGRATION_PATCH = bytes(
 (()=>{
  if(window.__fieldoraProjectResearchIntegrationWired)return;window.__fieldoraProjectResearchIntegrationWired=true;
  const ownerModule="research.dossiers",entryKey="research.project.open";
- const state={projectId:""};
  const projectContext=()=>window.FieldoraModuleContracts?.resolve?.("projects.context.select")||null;
  const projectToolbar=()=>window.FieldoraModuleContracts?.resolve?.("projects.toolbar.extend")||null;
  const navigation=()=>window.FieldoraModuleContracts?.resolve?.("navigation.navigate")||null;
@@ -28,7 +27,7 @@ _PROJECT_RESEARCH_INTEGRATION_PATCH = bytes(
   const text=error?.message||fallback;
   notifications()?.publish?.(String(text),{level:"error",source_module:ownerModule});
  }
- function currentProject(){return projectContext()?.current?.()||state.projectId||""}
+ function currentProject(){return projectContext()?.current?.()||""}
  function updateEntry(){return projectToolbar()?.setEnabled?.(entryKey,Boolean(currentProject()))??false}
  function ensureEntry(){
   const toolbar=projectToolbar();if(!toolbar?.upsert)return false;
@@ -76,8 +75,8 @@ _PROJECT_RESEARCH_INTEGRATION_PATCH = bytes(
  if(legacyOpenProject)openProject=openResearchProject;
  if(typeof editRecord==="function")editRecord=editResearchRecord;
  if(typeof exportProject==="function")exportProject=exportCurrentProject;
- document.addEventListener("fieldora:project-context-changed",event=>{state.projectId=event.detail?.project_id||"";ensureEntry();updateEntry()});
- document.addEventListener("fieldora:contract-registered",event=>{const name=event.detail?.contract;if(name==="projects.context.select"){state.projectId=currentProject();updateEntry()}else if(name==="projects.toolbar.extend")ensureEntry()});
+ document.addEventListener("fieldora:project-context-changed",()=>{ensureEntry();updateEntry()});
+ document.addEventListener("fieldora:contract-registered",event=>{const name=event.detail?.contract;if(name==="projects.context.select")updateEntry();else if(name==="projects.toolbar.extend")ensureEntry()});
  document.addEventListener("fieldora:module-mount",event=>{if(event.detail?.module?.module_id===ownerModule)applyResearchProject().catch(error=>report(error,"Research project context could not be applied."))});
  window.FieldoraProjectResearchIntegration=Object.freeze({openSelectedProject,openResearchProject,applyResearchProject,currentProject,editResearchRecord,exportCurrentProject});
  ensureEntry();if(window.FieldoraModules?.current?.()?.module_id===ownerModule)applyResearchProject().catch(()=>{});

@@ -89,6 +89,7 @@ def test_project_integrations_are_owned_by_bounded_modules() -> None:
     assert research.module_id == "research.dossiers"
     assert research.dependencies == ()
     assert research.requires_contracts == (
+        "notifications.publish",
         "projects.context.select",
         "projects.toolbar.extend",
     )

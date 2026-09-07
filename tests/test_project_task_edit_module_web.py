@@ -24,6 +24,9 @@ def test_task_editor_patch_is_lifecycle_owned_and_governed() -> None:
     assert "WEB-PROJECT-TASK-EDIT-MODULE" in script
     assert 'moduleId="projects.core"' in script
     assert "window.FieldoraProjectTaskEdit" in script
+    assert 'resolve?.("projects.context.select")' in script
+    assert 'state.projectId=projectContext()?.current?.()||""' in script
+    assert "window.FieldoraProjects?.currentProject?.()" not in script
     assert 'resolve?.("notifications.publish")' in script
     assert 'notifications()?.publish?.(String(error?.message||fallback),{level:"error",source_module:moduleId})' in script
     assert 'new CustomEvent("fieldora:module-error"' not in script

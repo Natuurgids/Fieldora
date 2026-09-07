@@ -20,6 +20,7 @@ _PROJECT_CREATION_MODULE_PATCH = bytes(
  const moduleId="projects.core",q=id=>document.getElementById(id);
  const state={mounted:false,controller:null};
  const notifications=()=>window.FieldoraModuleContracts?.resolve?.("notifications.publish")||null;
+ const navigation=()=>window.FieldoraModuleContracts?.resolve?.("navigation.navigate")||null;
  function message(text,error=false){const node=q("project-core-create-message");if(node){node.textContent=text||"";node.classList.toggle("error",Boolean(error))}}
  function emitError(error,fallback){const text=error?.message||fallback;message(text,true);notifications()?.publish?.(String(text),{level:"error",source_module:moduleId})}
  function ensureSurface(){
@@ -64,7 +65,7 @@ _PROJECT_CREATION_MODULE_PATCH = bytes(
  function handleCreateRequest(event){
   event?.preventDefault?.();
   const source=String(event?.detail?.source||"projects-create-request");
-  const target=window.FieldoraModules?.navigate?.("/projects",source,"push");
+  const target=navigation()?.navigate?.("/projects",source,"push");
   if(!target)return emitError(null,"Projects workspace is unavailable.");
   mount();openEditor();
  }

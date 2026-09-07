@@ -12,10 +12,12 @@ from natureai_next.server.web_module_contracts import foundation_registry
 
 
 def test_projects_core_owns_top_level_create_action() -> None:
-    owner = foundation_registry().action_owner("projects.create")
+    registry = foundation_registry()
+    owner = registry.action_owner("projects.create")
 
     assert owner is not None
     assert owner.module_id == "projects.core"
+    assert "navigation.navigate" in owner.requires_contracts
 
 
 def test_creation_adapter_is_idempotent_and_not_portfolio_coupled() -> None:
@@ -33,6 +35,9 @@ def test_creation_adapter_is_idempotent_and_not_portfolio_coupled() -> None:
     assert 'resolve?.("notifications.publish")' in script
     assert 'notifications()?.publish?.(String(text),{level:"error",source_module:moduleId})' in script
     assert "fieldora:module-error" not in script
+    assert 'resolve?.("navigation.navigate")' in script
+    assert 'navigation()?.navigate?.("/projects",source,"push")' in script
+    assert 'window.FieldoraModules?.navigate?.("/projects",source,"push")' not in script
     assert "loadPortfolio" not in script
     assert "portfolio-new-project" not in script
     assert "showPage=" not in script

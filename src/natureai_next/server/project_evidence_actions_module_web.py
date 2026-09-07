@@ -21,8 +21,9 @@ _PROJECT_EVIDENCE_ACTIONS_MODULE_PATCH = bytes(
  const state={mounted:false,controller:null,projectId:"",canEdit:false};
  const projectContext=()=>window.FieldoraModuleContracts?.resolve?.("projects.context.select")||null;
  const evidenceData=()=>window.FieldoraModuleContracts?.resolve?.("projects.evidence.service")||null;
+ const notifications=()=>window.FieldoraModuleContracts?.resolve?.("notifications.publish")||null;
  function message(text,error=false){const node=q("project-core-evidence-link-message");if(node){node.textContent=text||"";node.classList.toggle("error",Boolean(error))}}
- function emitError(error,fallback){const text=error?.message||fallback;message(text,true);document.dispatchEvent(new CustomEvent("fieldora:module-error",{detail:{module_id:moduleId,error:String(text)}}))}
+ function emitError(error,fallback){const text=error?.message||fallback;message(text,true);notifications()?.publish?.(String(text),{level:"error",source_module:moduleId})}
  function ensureSurface(){
   const page=q("page-projects"),top=page?.querySelector(".top");if(!page||!top)return false;
   let button=q("project-core-evidence-link");

@@ -20,6 +20,7 @@ _PROJECT_PROGRESS_MODULE_PATCH = bytes(
  const moduleId="projects.core",q=id=>document.getElementById(id);
  const state={mounted:false,controller:null,projectId:"",view:"overview",canEdit:false,project:null,tasks:[],statuses:[]};
  const esc=value=>String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+ const projectContext=()=>window.FieldoraModuleContracts?.resolve?.("projects.context.select")||null;
  function emitError(error,fallback){
   const text=error?.message||fallback;
   const node=q("project-core-progress-message");if(node){node.textContent=text;node.classList.add("error")}
@@ -90,7 +91,7 @@ _PROJECT_PROGRESS_MODULE_PATCH = bytes(
   }catch(error){emitError(error,"Task status could not be changed.");await refresh()}
  }
  async function refresh(){
-  if(!ensureSurface())return;const pid=state.projectId||window.FieldoraProjects?.currentProject?.()||"";state.projectId=pid;
+  if(!ensureSurface())return;const pid=state.projectId||projectContext()?.current?.()||"";state.projectId=pid;
   if(!pid){state.project=null;state.tasks=[];state.statuses=[];render();return}
   try{
    const encoded=encodeURIComponent(pid);
@@ -108,10 +109,10 @@ _PROJECT_PROGRESS_MODULE_PATCH = bytes(
   q("project-core-progress")?.addEventListener("dragstart",event=>{const task=event.target.closest?.("[data-project-kanban-task]");if(task&&state.canEdit)event.dataTransfer?.setData("text/x-fieldora-task-id",task.dataset.projectKanbanTask)},{signal});
   q("project-core-progress")?.addEventListener("dragover",event=>{if(state.canEdit&&event.target.closest?.("[data-project-kanban-drop]"))event.preventDefault()},{signal});
   q("project-core-progress")?.addEventListener("drop",event=>{const drop=event.target.closest?.("[data-project-kanban-drop]");if(!drop||!state.canEdit)return;event.preventDefault();const taskId=event.dataTransfer?.getData("text/x-fieldora-task-id")||"";moveTask(taskId,drop.dataset.projectKanbanDrop)},{signal});
-  state.projectId=window.FieldoraProjects?.currentProject?.()||"";refresh();
+  state.projectId=projectContext()?.current?.()||"";refresh();
  }
  function unmount(){if(!state.mounted)return;state.controller?.abort();state.controller=null;state.mounted=false}
- document.addEventListener("fieldora:project-context-changed",event=>{state.projectId=event.detail?.project_id||"";refresh()});
+ document.addEventListener("fieldora:project-context-changed",()=>{state.projectId=projectContext()?.current?.()||"";refresh()});
  document.addEventListener("fieldora:project-work-changed",event=>{if(event.detail?.project_id===state.projectId)refresh()});
  document.addEventListener("fieldora:project-lifecycle-changed",event=>{if(event.detail?.project_id===state.projectId)refresh()});
  document.addEventListener("fieldora:module-mount",event=>{if(event.detail?.module?.module_id===moduleId)mount()});

@@ -20,6 +20,10 @@ def test_progress_adapter_is_idempotent_and_projects_owned() -> None:
     assert 'moduleId="projects.core"' in script
     assert 'id="project-core-progress"' in script
     assert "window.FieldoraProjectProgress" in script
+    assert 'resolve?.("projects.context.select")' in script
+    assert 'state.projectId=projectContext()?.current?.()||""' in script
+    assert 'const pid=state.projectId||projectContext()?.current?.()||""' in script
+    assert "window.FieldoraProjects?.currentProject?.()" not in script
     assert "fieldora:project-context-changed" in script
     assert "fieldora:project-work-changed" in script
     assert "fieldora:project-lifecycle-changed" in script

@@ -9,6 +9,7 @@ from natureai_next.server.project_capacity_integration_web import (
 from natureai_next.server.project_context_provider_web import (
     _PROJECT_CONTEXT_PROVIDER_PATCH,
 )
+from natureai_next.server.project_creation_module_web import _PROJECT_CREATION_MODULE_PATCH
 from natureai_next.server.project_research_integration_web import (
     _PROJECT_RESEARCH_INTEGRATION_PATCH,
 )
@@ -131,3 +132,19 @@ def test_foundation_project_context_event_matches_managed_producer_and_consumers
     dossiers = _DOSSIER_MODULE_PATCH.decode("utf-8")
     assert 'const moduleId="dossiers.workspace"' in dossiers
     assert 'addEventListener("fieldora:project-context-changed"' in dossiers
+
+
+def test_foundation_project_create_request_matches_research_producer_and_projects_consumer() -> None:
+    event = foundation_event_registry().event("fieldora:projects-create-requested")
+
+    assert event is not None
+    assert event.producer_module_id == "research.dossiers"
+    assert event.consumer_module_ids == ("projects.core",)
+
+    research = _PROJECT_RESEARCH_INTEGRATION_PATCH.decode("utf-8")
+    assert 'const ownerModule="research.dossiers"' in research
+    assert 'new CustomEvent("fieldora:projects-create-requested"' in research
+
+    projects = _PROJECT_CREATION_MODULE_PATCH.decode("utf-8")
+    assert 'const moduleId="projects.core"' in projects
+    assert 'addEventListener("fieldora:projects-create-requested",handleCreateRequest)' in projects

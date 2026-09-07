@@ -96,6 +96,11 @@ FOUNDATION_WEB_MODULE_EVENTS: tuple[WebModuleEventSpec, ...] = (
         "projects.core",
         ("capacity", "research.dossiers", "dossiers.workspace"),
     ),
+    WebModuleEventSpec(
+        "fieldora:projects-create-requested",
+        "research.dossiers",
+        ("projects.core",),
+    ),
 )
 
 

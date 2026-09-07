@@ -60,8 +60,16 @@ _CAPACITY_MODULE_PATCH = bytes(
   }catch(error){report(error,"Project allocation could not be created.");return false}
  }
  async function openProject(projectId){state.projectId=String(projectId||"");document.dispatchEvent(new CustomEvent("fieldora:capacity-project-changed",{detail:{module_id:moduleId,project_id:state.projectId}}));await refresh();return state.projectId}
+ const openProjectAction=Object.freeze({openProject});
+ function registerOpenProjectAction(){
+  const runtime=window.FieldoraModuleContracts;if(!runtime||runtime.actionOwner?.("capacity.project.open")!==moduleId)return false;
+  const current=runtime.resolveAction?.("capacity.project.open");if(current)return current===openProjectAction;
+  runtime.registerAction?.("capacity.project.open",moduleId,openProjectAction);return true;
+ }
  function mount(){if(state.mounted)return;retireLegacyAllocationCreate();if(!ensureSurface())return;state.mounted=true;state.controller=new AbortController();q("capacity-project-refresh")?.addEventListener("click",refresh,{signal:state.controller.signal});q("capacity-project-allocation-create")?.addEventListener("submit",createAllocation,{signal:state.controller.signal});render();if(state.projectId)refresh()}
  function unmount(){if(!state.mounted)return;state.controller?.abort();state.controller=null;state.mounted=false}
+ registerOpenProjectAction();
+ document.addEventListener("fieldora:contracts-ready",registerOpenProjectAction,{once:true});
  document.addEventListener("fieldora:module-mount",event=>{if(event.detail?.module?.module_id===moduleId)mount()});
  document.addEventListener("fieldora:module-unmount",event=>{if(event.detail?.module?.module_id===moduleId)unmount()});
  window.FieldoraCapacity=Object.freeze({mount,unmount,openProject,refresh,createAllocation,currentProject:()=>state.projectId});

@@ -20,6 +20,7 @@ _PROJECT_CAPACITY_INTEGRATION_PATCH = bytes(
  const ownerModule="capacity",entryKey="capacity.project.open";
  const projectContext=()=>window.FieldoraModuleContracts?.resolve?.("projects.context.select")||null;
  const projectToolbar=()=>window.FieldoraModuleContracts?.resolve?.("projects.toolbar.extend")||null;
+ const capacityProject=()=>window.FieldoraModuleContracts?.resolveAction?.(entryKey)||null;
  const navigation=()=>window.FieldoraModuleContracts?.resolve?.("navigation.navigate")||null;
  const notifications=()=>window.FieldoraModuleContracts?.resolve?.("notifications.publish")||null;
  function report(error,fallback){const text=error?.message||fallback;notifications()?.publish?.(String(text),{level:"error",source_module:ownerModule})}
@@ -29,7 +30,7 @@ _PROJECT_CAPACITY_INTEGRATION_PATCH = bytes(
   const toolbar=projectToolbar();if(!toolbar?.upsert)return false;
   toolbar.upsert({key:entryKey,label:"Open capacity",ownerModule,action:"capacity.project.open",enabled:Boolean(currentProject()),activate:openSelectedProject});return true;
  }
- async function applyCapacityProject(){const pid=currentProject();if(!pid)return false;const bridge=window.FieldoraCapacity;if(!bridge?.openProject)throw new Error("Capacity workspace integration is unavailable.");await bridge.openProject(pid);return true}
+ async function applyCapacityProject(){const pid=currentProject();if(!pid)return false;const action=capacityProject();if(!action?.openProject)throw new Error("Capacity workspace integration is unavailable.");await action.openProject(pid);return true}
  async function openSelectedProject(){
   const pid=currentProject();if(!pid){report(null,"Select a project before opening Capacity.");return}
   try{const target=navigation()?.navigate?.("/capacity","project-capacity-integration","push");if(!target)throw new Error("Capacity workspace is unavailable.");await applyCapacityProject()}

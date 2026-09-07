@@ -24,6 +24,9 @@ def test_progress_adapter_is_idempotent_and_projects_owned() -> None:
     assert 'state.projectId=projectContext()?.current?.()||""' in script
     assert 'const pid=state.projectId||projectContext()?.current?.()||""' in script
     assert "window.FieldoraProjects?.currentProject?.()" not in script
+    assert 'resolve?.("notifications.publish")' in script
+    assert 'notifications()?.publish?.(String(text),{level:"error",source_module:moduleId})' in script
+    assert 'new CustomEvent("fieldora:module-error"' not in script
     assert "fieldora:project-context-changed" in script
     assert "fieldora:project-work-changed" in script
     assert "fieldora:project-lifecycle-changed" in script

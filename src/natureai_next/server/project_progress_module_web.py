@@ -21,10 +21,11 @@ _PROJECT_PROGRESS_MODULE_PATCH = bytes(
  const state={mounted:false,controller:null,projectId:"",view:"overview",canEdit:false,project:null,tasks:[],statuses:[]};
  const esc=value=>String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
  const projectContext=()=>window.FieldoraModuleContracts?.resolve?.("projects.context.select")||null;
+ const notifications=()=>window.FieldoraModuleContracts?.resolve?.("notifications.publish")||null;
  function emitError(error,fallback){
   const text=error?.message||fallback;
   const node=q("project-core-progress-message");if(node){node.textContent=text;node.classList.add("error")}
-  document.dispatchEvent(new CustomEvent("fieldora:module-error",{detail:{module_id:moduleId,error:String(text)}}));
+  notifications()?.publish?.(String(text),{level:"error",source_module:moduleId});
  }
  function ensureSurface(){
   const cockpit=q("project-desktop-cockpit");if(!cockpit)return false;

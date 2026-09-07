@@ -32,7 +32,8 @@ _PROJECT_TASK_EDIT_PATCH = bytes(
  const moduleId="projects.core",q=id=>document.getElementById(id);
  const state={mounted:false,controller:null,projectId:"",taskId:"",canEdit:false};
  const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
- function emitError(error,fallback){document.dispatchEvent(new CustomEvent("fieldora:module-error",{detail:{module_id:moduleId,error:String(error?.message||fallback)}}))}
+ const notifications=()=>window.FieldoraModuleContracts?.resolve?.("notifications.publish")||null;
+ function emitError(error,fallback){notifications()?.publish?.(String(error?.message||fallback),{level:"error",source_module:moduleId})}
  function ensureSurface(){const cockpit=q("project-desktop-cockpit");if(!cockpit)return false;let host=q("project-core-task-editor");if(!host){host=document.createElement("section");host.id="project-core-task-editor";host.className="card section";host.hidden=true;cockpit.before(host)}return true}
  async function authority(){state.canEdit=false;if(!state.projectId)return;try{const caps=await api(`/api/v1/projects/${encodeURIComponent(state.projectId)}/capabilities`,{purpose:"research"});state.canEdit=caps?.actions?.edit===true}catch(error){emitError(error,"Project permissions could not be loaded.")}}
  function fail(text){const node=q("project-core-task-edit-message");if(node){node.textContent=text;node.classList.add("error")}return false}

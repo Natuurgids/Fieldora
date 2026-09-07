@@ -11,6 +11,7 @@ def test_capacity_requires_notification_contract_in_registry_and_manifest() -> N
     manifest = {item["module_id"]: item for item in modular_shell_manifest()}
 
     assert spec.requires_contracts == (
+        "navigation.navigate",
         "notifications.publish",
         "projects.context.select",
         "projects.toolbar.extend",

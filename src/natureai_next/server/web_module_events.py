@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 
-from natureai_next.server.web_module_contracts import WebModuleRegistry
+from natureai_next.server.web_module_contracts import WebModuleRegistry, foundation_registry
 
 
 class WebModuleEventError(ValueError):
@@ -88,3 +88,20 @@ class WebModuleEventRegistry:
 
     def as_mapping(self) -> Mapping[str, WebModuleEventSpec]:
         return dict(self._events)
+
+
+FOUNDATION_WEB_MODULE_EVENTS: tuple[WebModuleEventSpec, ...] = (
+    WebModuleEventSpec(
+        "fieldora:project-context-changed",
+        "projects.core",
+        ("capacity", "research.dossiers", "dossiers.workspace"),
+    ),
+)
+
+
+def foundation_event_registry(
+    modules: WebModuleRegistry | None = None,
+) -> WebModuleEventRegistry:
+    """Return validated production event ownership for evidenced boundaries."""
+
+    return WebModuleEventRegistry(modules or foundation_registry(), FOUNDATION_WEB_MODULE_EVENTS)

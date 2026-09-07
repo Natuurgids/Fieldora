@@ -2,11 +2,22 @@ from __future__ import annotations
 
 import pytest
 
+from natureai_next.server.dossier_module_web import _DOSSIER_MODULE_PATCH
+from natureai_next.server.project_capacity_integration_web import (
+    _PROJECT_CAPACITY_INTEGRATION_PATCH,
+)
+from natureai_next.server.project_context_provider_web import (
+    _PROJECT_CONTEXT_PROVIDER_PATCH,
+)
+from natureai_next.server.project_research_integration_web import (
+    _PROJECT_RESEARCH_INTEGRATION_PATCH,
+)
 from natureai_next.server.web_module_contracts import WebModuleRegistry, WebModuleSpec
 from natureai_next.server.web_module_events import (
     WebModuleEventError,
     WebModuleEventRegistry,
     WebModuleEventSpec,
+    foundation_event_registry,
 )
 
 
@@ -92,3 +103,31 @@ def test_event_registry_rejects_non_event_specs() -> None:
 
     with pytest.raises(WebModuleEventError, match="WebModuleEventSpec"):
         registry.register(object())  # type: ignore[arg-type]
+
+
+def test_foundation_project_context_event_matches_managed_producer_and_consumers() -> None:
+    event = foundation_event_registry().event("fieldora:project-context-changed")
+
+    assert event is not None
+    assert event.producer_module_id == "projects.core"
+    assert event.consumer_module_ids == (
+        "capacity",
+        "research.dossiers",
+        "dossiers.workspace",
+    )
+
+    producer = _PROJECT_CONTEXT_PROVIDER_PATCH.decode("utf-8")
+    assert 'const moduleId="projects.core"' in producer
+    assert 'new CustomEvent("fieldora:project-context-changed"' in producer
+
+    capacity = _PROJECT_CAPACITY_INTEGRATION_PATCH.decode("utf-8")
+    assert 'const ownerModule="capacity"' in capacity
+    assert 'addEventListener("fieldora:project-context-changed"' in capacity
+
+    research = _PROJECT_RESEARCH_INTEGRATION_PATCH.decode("utf-8")
+    assert 'const ownerModule="research.dossiers"' in research
+    assert 'addEventListener("fieldora:project-context-changed"' in research
+
+    dossiers = _DOSSIER_MODULE_PATCH.decode("utf-8")
+    assert 'const moduleId="dossiers.workspace"' in dossiers
+    assert 'addEventListener("fieldora:project-context-changed"' in dossiers

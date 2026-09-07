@@ -22,6 +22,7 @@ _PROJECT_WORK_ACTIONS_MODULE_PATCH = bytes(
  const state={mounted:false,controller:null,projectId:"",selectedWork:{kind:"project",id:""},canEdit:false};
  const escWork=value=>String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
  const workData=()=>window.FieldoraModuleContracts?.resolve?.("projects.work-data.service")||null;
+ const projectContext=()=>window.FieldoraModuleContracts?.resolve?.("projects.context.select")||null;
  function emitError(error,fallback){
   const message=error?.message||fallback;
   document.dispatchEvent(new CustomEvent("fieldora:module-error",{detail:{module_id:moduleId,error:String(message)}}));
@@ -100,7 +101,7 @@ _PROJECT_WORK_ACTIONS_MODULE_PATCH = bytes(
   if(state.mounted)return;if(!ensureSurface())return;state.mounted=true;state.controller=new AbortController();const signal=state.controller.signal;
   actions()?.addEventListener("click",event=>{const button=event.target.closest?.("[data-project-work-create]");if(button)openEditor(button.dataset.projectWorkCreate)},{signal});
   q("project-desktop-cockpit")?.addEventListener("click",event=>{const row=event.target.closest?.("[data-project-work-kind]");if(row)setSelection(row.dataset.projectWorkKind,row.dataset.projectWorkId)},{signal});
-  state.projectId=window.FieldoraProjects?.currentProject?.()||"";setSelection("project",state.projectId);refreshAuthority();
+  state.projectId=String(projectContext()?.current?.()||"");setSelection("project",state.projectId);refreshAuthority();
  }
  function unmount(){if(!state.mounted)return;state.controller?.abort();state.controller=null;state.mounted=false;const host=editor();if(host)host.hidden=true}
  document.addEventListener("fieldora:project-context-changed",event=>{state.projectId=event.detail?.project_id||"";setSelection("project",state.projectId);refreshAuthority()});

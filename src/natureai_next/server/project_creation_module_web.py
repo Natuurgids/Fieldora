@@ -19,8 +19,9 @@ _PROJECT_CREATION_MODULE_PATCH = bytes(
  if(window.__fieldoraProjectCreationModuleWired)return;window.__fieldoraProjectCreationModuleWired=true;
  const moduleId="projects.core",q=id=>document.getElementById(id);
  const state={mounted:false,controller:null};
+ const notifications=()=>window.FieldoraModuleContracts?.resolve?.("notifications.publish")||null;
  function message(text,error=false){const node=q("project-core-create-message");if(node){node.textContent=text||"";node.classList.toggle("error",Boolean(error))}}
- function emitError(error,fallback){const text=error?.message||fallback;message(text,true);document.dispatchEvent(new CustomEvent("fieldora:module-error",{detail:{module_id:moduleId,error:String(text)}}))}
+ function emitError(error,fallback){const text=error?.message||fallback;message(text,true);notifications()?.publish?.(String(text),{level:"error",source_module:moduleId})}
  function ensureSurface(){
   const page=q("page-projects"),top=page?.querySelector(".top");if(!page||!top)return false;
   let button=q("project-core-create");

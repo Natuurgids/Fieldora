@@ -30,6 +30,9 @@ def test_creation_adapter_is_idempotent_and_not_portfolio_coupled() -> None:
     assert "window.FieldoraProjectCreation" in script
     assert 'id="project-core-create-editor"' in script
     assert 'api("/api/v1/projects",{method:"POST",purpose:"research"' in script
+    assert 'resolve?.("notifications.publish")' in script
+    assert 'notifications()?.publish?.(String(text),{level:"error",source_module:moduleId})' in script
+    assert "fieldora:module-error" not in script
     assert "loadPortfolio" not in script
     assert "portfolio-new-project" not in script
     assert "showPage=" not in script

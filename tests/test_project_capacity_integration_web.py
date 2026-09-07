@@ -98,6 +98,9 @@ def test_project_capacity_adapter_uses_replaceable_projects_contracts() -> None:
     assert 'ownerModule="capacity"' in script
     assert 'entryKey="capacity.project.open"' in script
     assert 'navigate?.("/capacity","project-capacity-integration","push")' in script
+    assert 'resolve?.("notifications.publish")' in script
+    assert 'notifications()?.publish?.(String(text),{level:"error",source_module:ownerModule})' in script
+    assert 'fieldora:module-error' not in script
     assert 'resolve?.("projects.context.select")' in script
     assert 'resolve?.("projects.toolbar.extend")' in script
     assert "projectContext()?.current?.()" in script

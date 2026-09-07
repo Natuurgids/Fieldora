@@ -47,9 +47,10 @@ _CAPACITY_AVAILABILITY_PATCH = bytes(
  const moduleId="capacity",q=id=>document.getElementById(id);
  const state={mounted:false,controller:null,projectId:"",rows:[],templates:[],canEdit:false,legacy:[]};
  const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+ const notifications=()=>window.FieldoraModuleContracts?.resolve?.("notifications.publish")||null;
  function fail(text){const node=q("capacity-availability-message");if(node){node.textContent=text;node.classList.add("error")}return false}
  function clearMessage(){const node=q("capacity-availability-message");if(node){node.textContent="";node.classList.remove("error")}}
- function report(error,fallback){const text=error?.message||fallback;fail(text);document.dispatchEvent(new CustomEvent("fieldora:module-error",{detail:{module_id:moduleId,error:String(text)}}))}
+ function report(error,fallback){const text=error?.message||fallback;fail(text);notifications()?.publish?.(String(text),{level:"error",source_module:moduleId})}
  function hideLegacy(){const page=q("page-capacity");if(!page)return;state.legacy=[...page.children].filter(node=>node.id!=="capacity-availability-owned"&&node.id!=="capacity-project-context"&&!node.classList.contains("top"));state.legacy.forEach(node=>node.hidden=true)}
  function restoreLegacy(){state.legacy.forEach(node=>node.hidden=false);state.legacy=[]}
  function ensureSurface(){

@@ -82,6 +82,7 @@ def test_project_integrations_are_owned_by_bounded_modules() -> None:
     assert capacity.module_id == "capacity"
     assert capacity.dependencies == ()
     assert capacity.requires_contracts == (
+        "navigation.navigate",
         "notifications.publish",
         "projects.context.select",
         "projects.toolbar.extend",

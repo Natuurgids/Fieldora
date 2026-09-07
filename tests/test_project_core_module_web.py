@@ -186,12 +186,14 @@ def test_project_core_consumes_shared_application_contracts() -> None:
     assert projects is not None
     assert projects.requires_contracts == (
         "auth.current-user",
+        "navigation.navigate",
         "notifications.publish",
     )
 
     by_id = {item["module_id"]: item for item in runtime_contract_manifest()}
     assert by_id["projects.core"]["requires_contracts"] == [
         "auth.current-user",
+        "navigation.navigate",
         "notifications.publish",
     ]
 

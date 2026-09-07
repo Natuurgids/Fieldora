@@ -97,6 +97,7 @@ def test_project_integrations_are_owned_by_bounded_modules() -> None:
     assert dossiers.module_id == "dossiers.workspace"
     assert dossiers.dependencies == ()
     assert dossiers.requires_contracts == (
+        "auth.current-user",
         "notifications.publish",
         "projects.context.select",
     )

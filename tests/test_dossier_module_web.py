@@ -32,6 +32,17 @@ def test_dossier_module_uses_notification_contract_for_errors() -> None:
     assert 'fieldora:module-error' not in script
 
 
+def test_dossier_module_uses_auth_contract_for_identity() -> None:
+    original = ApiResponse(200, b"const baseApp=true;", "text/javascript; charset=utf-8")
+    script = patch_dossier_module_response("/app.js", original).body.decode("utf-8")
+
+    assert 'resolve?.("auth.current-user")?.current?.()' in script
+    assert 'const identity=currentUser()' in script
+    assert 'state.identityId=String(identity?.identity_id||"")' in script
+    assert 'api("/api/v1/me")' not in script
+    assert "window.me" not in script
+
+
 def test_dossier_module_uses_only_canonical_project_context_and_fails_closed() -> None:
     original = ApiResponse(200, b"const baseApp=true;", "text/javascript; charset=utf-8")
     script = patch_dossier_module_response("/app.js", original).body.decode("utf-8")

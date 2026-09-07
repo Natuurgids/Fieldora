@@ -412,6 +412,7 @@ FOUNDATION_WEB_MODULES: tuple[WebModuleSpec, ...] = (
             "dossiers.review.create",
         ),
         requires_contracts=(
+            "auth.current-user",
             "notifications.publish",
             "projects.context.select",
         ),

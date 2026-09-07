@@ -23,9 +23,10 @@ _PROJECT_WORK_ACTIONS_MODULE_PATCH = bytes(
  const escWork=value=>String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
  const workData=()=>window.FieldoraModuleContracts?.resolve?.("projects.work-data.service")||null;
  const projectContext=()=>window.FieldoraModuleContracts?.resolve?.("projects.context.select")||null;
+ const notifications=()=>window.FieldoraModuleContracts?.resolve?.("notifications.publish")||null;
  function emitError(error,fallback){
   const message=error?.message||fallback;
-  document.dispatchEvent(new CustomEvent("fieldora:module-error",{detail:{module_id:moduleId,error:String(message)}}));
+  notifications()?.publish?.(String(message),{level:"error",source_module:moduleId});
  }
  function ensureSurface(){
   const cockpit=q("project-desktop-cockpit"),toolbar=cockpit?.querySelector(".cockpit-center .cockpit-toolbar");if(!cockpit||!toolbar)return false;

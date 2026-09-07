@@ -40,6 +40,9 @@ def test_work_actions_adapter_is_idempotent_and_module_owned() -> None:
     assert "window.FieldoraProjectWorkActions" in script
     assert 'moduleId="projects.core"' in script
     assert 'resolve?.("projects.work-data.service")' in script
+    assert 'resolve?.("notifications.publish")' in script
+    assert 'notifications()?.publish?.(String(message),{level:"error",source_module:moduleId})' in script
+    assert "fieldora:module-error" not in script
     assert 'data-project-work-create="phase"' in script
     assert 'data-project-work-create="subtask"' in script
     assert "showPage=" not in script

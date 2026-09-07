@@ -396,6 +396,7 @@ FOUNDATION_WEB_MODULES: tuple[WebModuleSpec, ...] = (
             "research.project.records.view",
         ),
         requires_contracts=(
+            "notifications.publish",
             "projects.context.select",
             "projects.toolbar.extend",
         ),

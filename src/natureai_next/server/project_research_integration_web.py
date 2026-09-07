@@ -21,10 +21,11 @@ _PROJECT_RESEARCH_INTEGRATION_PATCH = bytes(
  const state={projectId:""};
  const projectContext=()=>window.FieldoraModuleContracts?.resolve?.("projects.context.select")||null;
  const projectToolbar=()=>window.FieldoraModuleContracts?.resolve?.("projects.toolbar.extend")||null;
+ const notifications=()=>window.FieldoraModuleContracts?.resolve?.("notifications.publish")||null;
  const legacyOpenProject=typeof openProject==="function"?openProject:null;
  function report(error,fallback){
   const text=error?.message||fallback;
-  document.dispatchEvent(new CustomEvent("fieldora:module-error",{detail:{module_id:ownerModule,error:String(text)}}));
+  notifications()?.publish?.(String(text),{level:"error",source_module:ownerModule});
  }
  function currentProject(){return projectContext()?.current?.()||state.projectId||""}
  function updateEntry(){return projectToolbar()?.setEnabled?.(entryKey,Boolean(currentProject()))??false}

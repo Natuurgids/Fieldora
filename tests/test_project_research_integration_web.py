@@ -23,6 +23,7 @@ def test_research_owns_project_integration_actions() -> None:
     assert research.module_id == "research.dossiers"
     assert research.dependencies == ()
     assert research.requires_contracts == (
+        "notifications.publish",
         "projects.context.select",
         "projects.toolbar.extend",
     )
@@ -40,6 +41,9 @@ def test_project_research_adapter_uses_replaceable_projects_contracts() -> None:
     assert 'entryKey="research.project.open"' in script
     assert 'resolve?.("projects.context.select")' in script
     assert 'resolve?.("projects.toolbar.extend")' in script
+    assert 'resolve?.("notifications.publish")' in script
+    assert 'notifications()?.publish?.(String(text),{level:"error",source_module:ownerModule})' in script
+    assert 'new CustomEvent("fieldora:module-error"' not in script
     assert "projectContext()?.current?.()" in script
     assert "projectToolbar()?.setEnabled?." in script
     assert 'toolbar.upsert({key:entryKey,label:"Open research"' in script

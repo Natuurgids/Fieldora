@@ -96,3 +96,15 @@ def test_shared_operations_api_classifier_does_not_claim_unknown_paths() -> None
     assert operations_api_domain("/api/v1/projects") is None
     assert operations_api_domain("/api/v1/operations/") is None
     assert operations_api_owner("/api/v1/operations/unknown") is None
+
+
+def test_operations_browser_omission_patches_do_not_claim_administration_dom() -> None:
+    from natureai_next.server import operations_module_composition as composition
+
+    for patch in (
+        composition._OPERATIONS_WITH_FACILITIES_PATCH,
+        composition._OPERATIONS_WITHOUT_FACILITIES_PATCH,
+    ):
+        script = patch.decode("utf-8")
+        assert "administration-nav-group" not in script
+        assert "administration-nav-group-label" not in script

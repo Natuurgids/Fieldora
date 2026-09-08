@@ -26,11 +26,6 @@ _OPERATIONS_WITH_FACILITIES_PATCH = bytes(
  document.querySelectorAll('.nav[data-page="operations"]').forEach(button=>{
   button.innerHTML='<span class="nav-icon">⌂</span>Facilities';
  });
- document.querySelectorAll(".administration-nav-group").forEach(group=>{
-  if(!group.querySelector('[data-workspace-target="operations"]'))return;
-  const label=group.querySelector(".administration-nav-group-label");
-  if(label)label.textContent="Facilities";
- });
  let switched=false;
  if(
   typeof operationsDomain!=="undefined"&&
@@ -58,11 +53,6 @@ _OPERATIONS_WITHOUT_FACILITIES_PATCH = bytes(
  document.querySelectorAll('[data-workspace-target="operations"]').forEach(
   node=>node.remove()
  );
- document.querySelectorAll(".administration-nav-group").forEach(group=>{
-  if(!group.querySelector('[data-workspace-target="connectors"]'))return;
-  const label=group.querySelector(".administration-nav-group-label");
-  if(label)label.textContent="Integrations";
- });
  if(
   location.hash==="#operations"&&
   document.getElementById("page-administration")&&

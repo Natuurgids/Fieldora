@@ -5,7 +5,10 @@ from __future__ import annotations
 from urllib.parse import urlsplit
 
 from natureai_next.server.api import ApiResponse
-from natureai_next.server.operations_module_ownership import operations_api_owner
+from natureai_next.server.operations_module_ownership import (
+    OPERATIONS_API_PREFIX,
+    operations_api_owner,
+)
 from natureai_next.server.web_module_contracts import WebModuleRegistry
 from natureai_next.server.web_module_extensions import OPERATIONS_WEB_MODULE_ID
 
@@ -30,9 +33,9 @@ class OperationsModuleCompositionApiMixin:
         self, method: str, target: str, headers: dict[str, str], body: bytes
     ) -> ApiResponse:
         path = urlsplit(target).path
-        if (
-            not self._operations_composed
-            and operations_api_owner(path) == OPERATIONS_WEB_MODULE_ID
-        ):
+        owner = operations_api_owner(path)
+        if path.startswith(OPERATIONS_API_PREFIX) and owner is None:
+            return ApiResponse.json(404, {"error": "not_found"})
+        if not self._operations_composed and owner == OPERATIONS_WEB_MODULE_ID:
             return ApiResponse.json(404, {"error": "not_found"})
         return super().dispatch(method, target, headers, body)

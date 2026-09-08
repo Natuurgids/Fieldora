@@ -113,6 +113,22 @@ def test_nested_modules_are_non_route_composition_identities() -> None:
     assert '"module_id":"facilities"' not in bootstrap
 
 
+def test_unowned_shared_operations_api_path_fails_closed() -> None:
+    registry = foundation_composition_registry()
+    application = _ComposedRuntimeProbe()
+
+    handler_for(application, web_module_registry=registry)
+
+    assert application._operations_composed
+    assert application._facilities_composed
+    for method in ("GET", "POST"):
+        assert (
+            application.dispatch(method, "/api/v1/operations/unowned", {}, b"{}").status
+            == 404
+        )
+    assert application.dispatch("GET", "/api/v1/projects", {}, b"").status == 200
+
+
 def test_facilities_omission_suppresses_facility_browser_projections() -> None:
     enabled = _route_ids() + (OPERATIONS_WEB_MODULE_ID,)
     registry = foundation_composition_registry(enabled)

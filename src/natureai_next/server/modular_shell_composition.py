@@ -11,6 +11,9 @@ from natureai_next.server.api import ApiResponse
 from natureai_next.server.facility_module_composition import (
     suppress_facilities_browser_response,
 )
+from natureai_next.server.operations_module_composition import (
+    suppress_operations_browser_response,
+)
 from natureai_next.server.web_module_contracts import (
     FOUNDATION_APPLICATION_CONTRACT_PROVIDERS,
     FOUNDATION_WEB_MODULES,
@@ -20,6 +23,7 @@ from natureai_next.server.web_module_contracts import (
 from natureai_next.server.web_module_extensions import (
     FACILITIES_WEB_MODULE_ID,
     FOUNDATION_WEB_MODULE_EXTENSIONS,
+    OPERATIONS_WEB_MODULE_ID,
     WebModuleExtensionSpec,
 )
 
@@ -184,6 +188,18 @@ def finalize_modular_shell_response(
     ):
         return response
     selected_registry = foundation_composition_registry() if registry is None else registry
-    if not _extension_is_composed(selected_registry, FACILITIES_WEB_MODULE_ID):
+    facilities_composed = _extension_is_composed(
+        selected_registry, FACILITIES_WEB_MODULE_ID
+    )
+    operations_composed = _extension_is_composed(
+        selected_registry, OPERATIONS_WEB_MODULE_ID
+    )
+    if not facilities_composed:
         response = suppress_facilities_browser_response(target, response)
+    if not operations_composed:
+        response = suppress_operations_browser_response(
+            target,
+            response,
+            facilities_composed=facilities_composed,
+        )
     return patch_modular_shell_response(target, response, registry=selected_registry)

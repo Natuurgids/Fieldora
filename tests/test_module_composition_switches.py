@@ -17,11 +17,17 @@ from natureai_next.server.modular_shell_composition import (
 from natureai_next.server.modular_shell_web import (
     patch_modular_shell_response as install_modular_shell_response,
 )
+from natureai_next.server.operations_module_runtime import (
+    OperationsModuleCompositionApiMixin,
+)
 from natureai_next.server.web_module_contracts import (
     FOUNDATION_WEB_MODULES,
     WebModuleContractError,
 )
-from natureai_next.server.web_module_extensions import FACILITIES_WEB_MODULE_ID
+from natureai_next.server.web_module_extensions import (
+    FACILITIES_WEB_MODULE_ID,
+    OPERATIONS_WEB_MODULE_ID,
+)
 
 
 class _RuntimeProbeBase:
@@ -41,7 +47,8 @@ class _RuntimeProbeBase:
         return ApiResponse(200, body_value, content_type)
 
 
-class _FacilitiesRuntimeProbe(
+class _ComposedRuntimeProbe(
+    OperationsModuleCompositionApiMixin,
     FacilityModuleCompositionApiMixin,
     FacilityActionsApiMixin,
     _RuntimeProbeBase,
@@ -50,12 +57,16 @@ class _FacilitiesRuntimeProbe(
         self._facility_platform = object()
 
 
+def _route_ids() -> tuple[str, ...]:
+    return tuple(spec.module_id for spec in FOUNDATION_WEB_MODULES)
+
+
 def test_foundation_composition_can_disable_independent_module() -> None:
     enabled = tuple(
         spec.module_id
         for spec in FOUNDATION_WEB_MODULES
         if spec.module_id != "knowledge.center"
-    ) + (FACILITIES_WEB_MODULE_ID,)
+    ) + (OPERATIONS_WEB_MODULE_ID, FACILITIES_WEB_MODULE_ID)
 
     registry = foundation_composition_registry(enabled)
 
@@ -73,7 +84,7 @@ def test_production_finalizer_recomposes_installed_shell_from_registry() -> None
         spec.module_id
         for spec in FOUNDATION_WEB_MODULES
         if spec.module_id != "knowledge.center"
-    ) + (FACILITIES_WEB_MODULE_ID,)
+    ) + (OPERATIONS_WEB_MODULE_ID, FACILITIES_WEB_MODULE_ID)
     registry = foundation_composition_registry(enabled)
     original = ApiResponse(
         200,
@@ -91,18 +102,19 @@ def test_production_finalizer_recomposes_installed_shell_from_registry() -> None
     assert '"module_id":"projects.core"' in script
 
 
-def test_facilities_is_a_non_route_composition_identity() -> None:
+def test_nested_modules_are_non_route_composition_identities() -> None:
     registry = foundation_composition_registry()
 
+    assert registry.is_composed(OPERATIONS_WEB_MODULE_ID)
     assert registry.is_composed(FACILITIES_WEB_MODULE_ID)
     assert registry.resolve("/operations") is None
-    assert '"module_id":"facilities"' not in modular_shell_bootstrap(registry).decode(
-        "utf-8"
-    )
+    bootstrap = modular_shell_bootstrap(registry).decode("utf-8")
+    assert '"module_id":"operations"' not in bootstrap
+    assert '"module_id":"facilities"' not in bootstrap
 
 
 def test_facilities_omission_suppresses_facility_browser_projections() -> None:
-    enabled = tuple(spec.module_id for spec in FOUNDATION_WEB_MODULES)
+    enabled = _route_ids() + (OPERATIONS_WEB_MODULE_ID,)
     registry = foundation_composition_registry(enabled)
     original = ApiResponse(
         200,
@@ -116,6 +128,7 @@ def test_facilities_omission_suppresses_facility_browser_projections() -> None:
     script = final.body.decode("utf-8")
 
     assert not registry.is_composed(FACILITIES_WEB_MODULE_ID)
+    assert registry.is_composed(OPERATIONS_WEB_MODULE_ID)
     assert "window.__fieldoraFacilityActions" not in script
     assert "window.__fieldoraOfflineMapsWired" not in script
     assert "facility-planning-web" not in script
@@ -123,16 +136,18 @@ def test_facilities_omission_suppresses_facility_browser_projections() -> None:
     assert "WEB-FACILITIES-BASE-OMISSION" in script
     assert '["locations","drawings"].forEach' in script
     assert "Asset & Equipment Operations" in script
+    assert "WEB-OPERATIONS-BASE-OMISSION" not in script
     assert '"module_id":"projects.core"' in script
 
 
 def test_facilities_runtime_is_removed_when_omitted() -> None:
-    enabled = tuple(spec.module_id for spec in FOUNDATION_WEB_MODULES)
+    enabled = _route_ids() + (OPERATIONS_WEB_MODULE_ID,)
     registry = foundation_composition_registry(enabled)
-    application = _FacilitiesRuntimeProbe()
+    application = _ComposedRuntimeProbe()
 
     handler_for(application, web_module_registry=registry)
 
+    assert application._operations_composed
     assert not application._facilities_composed
     assert application._facility_platform is None
     facility_paths = (
@@ -141,6 +156,7 @@ def test_facilities_runtime_is_removed_when_omitted() -> None:
         "/api/v1/operations/drawings",
         "/api/v1/operations/storage-conditions",
         "/api/v1/operations/drawing-markers",
+        "/api/v1/operations/movements",
     )
     for path in facility_paths:
         assert application.dispatch("GET", path, {}, b"").status == 404
@@ -150,7 +166,6 @@ def test_facilities_runtime_is_removed_when_omitted() -> None:
         "/api/v1/operations/maintenance",
         "/api/v1/operations/calibrations",
         "/api/v1/operations/documents",
-        "/api/v1/operations/movements",
     )
     for path in operations_paths:
         assert application.dispatch("GET", path, {}, b"").status == 200
@@ -161,7 +176,82 @@ def test_facilities_runtime_is_removed_when_omitted() -> None:
     assert b"window.__fieldoraFacilityActions" not in browser_response.body
 
 
-def test_facilities_projection_remains_when_composed() -> None:
+def test_operations_omission_preserves_facilities_host() -> None:
+    enabled = _route_ids() + (FACILITIES_WEB_MODULE_ID,)
+    registry = foundation_composition_registry(enabled)
+    original = ApiResponse(
+        200,
+        b"const baseApp=true;",
+        "text/javascript; charset=utf-8",
+    )
+    installed = install_modular_shell_response("/app.js", original)
+
+    final = patch_managed_web_response("/app.js", installed, registry=registry)
+    script = final.body.decode("utf-8")
+
+    assert not registry.is_composed(OPERATIONS_WEB_MODULE_ID)
+    assert registry.is_composed(FACILITIES_WEB_MODULE_ID)
+    assert "WEB-OPERATIONS-BASE-OMISSION:FACILITIES" in script
+    assert '["assets","maintenance","calibrations"].forEach' in script
+    assert 'button.textContent="Facilities"' in script
+    assert 'operationsDomain="locations"' in script
+    assert "WEB-FACILITIES-BASE-OMISSION" not in script
+
+
+def test_operations_runtime_is_removed_when_omitted() -> None:
+    enabled = _route_ids() + (FACILITIES_WEB_MODULE_ID,)
+    registry = foundation_composition_registry(enabled)
+    application = _ComposedRuntimeProbe()
+
+    handler_for(application, web_module_registry=registry)
+
+    assert not application._operations_composed
+    assert application._facilities_composed
+    assert application._facility_platform is not None
+    operations_paths = (
+        "/api/v1/operations/assets",
+        "/api/v1/operations/maintenance",
+        "/api/v1/operations/calibrations",
+        "/api/v1/operations/documents",
+    )
+    for path in operations_paths:
+        assert application.dispatch("GET", path, {}, b"").status == 404
+
+    facility_paths = (
+        "/api/v1/operations/locations",
+        "/api/v1/operations/drawings",
+        "/api/v1/operations/storage-conditions",
+        "/api/v1/operations/drawing-markers",
+        "/api/v1/operations/movements",
+    )
+    for path in facility_paths:
+        assert application.dispatch("GET", path, {}, b"").status == 200
+
+    unrelated_response = application.dispatch("GET", "/api/v1/projects", {}, b"")
+    assert unrelated_response.status == 200
+
+
+def test_omitting_operations_and_facilities_removes_shared_host() -> None:
+    registry = foundation_composition_registry(_route_ids())
+    original = ApiResponse(
+        200,
+        b"const baseApp=true;",
+        "text/javascript; charset=utf-8",
+    )
+    installed = install_modular_shell_response("/app.js", original)
+
+    final = patch_managed_web_response("/app.js", installed, registry=registry)
+    script = final.body.decode("utf-8")
+
+    assert not registry.is_composed(OPERATIONS_WEB_MODULE_ID)
+    assert not registry.is_composed(FACILITIES_WEB_MODULE_ID)
+    assert "WEB-FACILITIES-BASE-OMISSION" in script
+    assert "WEB-OPERATIONS-BASE-OMISSION:EMPTY" in script
+    assert 'data-page="operations"' in script
+    assert "Integrations" in script
+
+
+def test_nested_projections_remain_when_both_modules_are_composed() -> None:
     registry = foundation_composition_registry()
     original = ApiResponse(
         200,
@@ -179,14 +269,20 @@ def test_facilities_projection_remains_when_composed() -> None:
     assert "facility-planning-web" in script
     assert "facility-desktop-cockpit" in script
     assert "WEB-FACILITIES-BASE-OMISSION" not in script
+    assert "WEB-OPERATIONS-BASE-OMISSION" not in script
 
-    application = _FacilitiesRuntimeProbe()
+    application = _ComposedRuntimeProbe()
     handler_for(application, web_module_registry=registry)
+    assert application._operations_composed
     assert application._facilities_composed
     location_response = application.dispatch(
         "GET", "/api/v1/operations/locations", {}, b""
     )
     assert location_response.status == 200
+    asset_response = application.dispatch(
+        "GET", "/api/v1/operations/assets", {}, b""
+    )
+    assert asset_response.status == 200
 
 
 def test_foundation_composition_rejects_unknown_enabled_module() -> None:
@@ -199,7 +295,7 @@ def test_foundation_composition_rejects_stranded_required_contracts() -> None:
         spec.module_id
         for spec in FOUNDATION_WEB_MODULES
         if spec.module_id != "projects.core"
-    ) + (FACILITIES_WEB_MODULE_ID,)
+    ) + (OPERATIONS_WEB_MODULE_ID, FACILITIES_WEB_MODULE_ID)
 
     with pytest.raises(WebModuleContractError, match="missing contract providers"):
         foundation_composition_registry(enabled)

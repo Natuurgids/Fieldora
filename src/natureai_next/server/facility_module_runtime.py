@@ -16,6 +16,7 @@ _FACILITY_OPERATION_DOMAINS = frozenset(
         "drawings",
         "storage-conditions",
         "drawing-markers",
+        "movements",
     }
 )
 

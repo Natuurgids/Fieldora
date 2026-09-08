@@ -32,9 +32,15 @@ class WebModuleExtensionSpec:
         object.__setattr__(self, "host_route", host_route)
 
 
+OPERATIONS_WEB_MODULE_ID = "operations"
 FACILITIES_WEB_MODULE_ID = "facilities"
 
 FOUNDATION_WEB_MODULE_EXTENSIONS: tuple[WebModuleExtensionSpec, ...] = (
+    WebModuleExtensionSpec(
+        OPERATIONS_WEB_MODULE_ID,
+        "Operations",
+        "/operations",
+    ),
     WebModuleExtensionSpec(
         FACILITIES_WEB_MODULE_ID,
         "Facilities",

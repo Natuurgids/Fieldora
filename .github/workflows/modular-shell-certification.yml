@@ -37,6 +37,7 @@ on:
       - "tests/test_web_module_events.py"
       - "tests/test_web_module_runtime.py"
       - "tests/test_web_module_contract_runtime.py"
+      - "tests/test_route_less_module_contract_runtime.py"
       - "tests/test_web_module_optional_contracts.py"
       - "tests/test_modular_shell_web.py"
       - "tests/test_modular_shell_contract_manifest.py"
@@ -128,6 +129,7 @@ jobs:
           tests/test_web_module_events.py
           tests/test_web_module_runtime.py
           tests/test_web_module_contract_runtime.py
+          tests/test_route_less_module_contract_runtime.py
           tests/test_web_module_optional_contracts.py
           tests/test_modular_shell_web.py
           tests/test_modular_shell_contract_manifest.py
@@ -159,6 +161,7 @@ jobs:
           tests/test_web_module_events.py
           tests/test_web_module_runtime.py
           tests/test_web_module_contract_runtime.py
+          tests/test_route_less_module_contract_runtime.py
           tests/test_web_module_optional_contracts.py
           tests/test_modular_shell_web.py
           tests/test_modular_shell_contract_manifest.py

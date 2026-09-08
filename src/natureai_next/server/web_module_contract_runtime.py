@@ -41,9 +41,9 @@ def runtime_contract_manifest(
             {
                 "module_id": spec.module_id,
                 "host_route": spec.host_route,
-                "provides_contracts": [],
-                "requires_contracts": [],
-                "optional_contracts": [],
+                "provides_contracts": list(spec.provides_contracts),
+                "requires_contracts": list(spec.requires_contracts),
+                "optional_contracts": list(spec.optional_contracts),
             }
             for spec in extension_mapping().values()
         )

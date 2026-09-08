@@ -125,11 +125,12 @@ def test_administration_navigation_projects_authorized_audit_without_eager_fetch
         nav = page.locator("#page-administration .administration-workspace-nav")
         assert nav.is_visible()
         groups = nav.locator(".administration-nav-group")
-        assert groups.count() == 3
+        assert groups.count() == 4
         assert groups.locator(".administration-nav-group-label").all_text_contents() == [
             "Governance & review",
-            "Operations",
+            "Integrations",
             "Platform services",
+            "Extensions",
         ]
         assert groups.nth(0).locator("button").all_inner_texts() == [
             "Governance",
@@ -137,15 +138,16 @@ def test_administration_navigation_projects_authorized_audit_without_eager_fetch
             "Intake & Review",
             "Reference Data",
         ]
-        assert groups.nth(1).locator("button").all_inner_texts() == [
-            "Assets & Facilities",
-            "Connectors",
-        ]
+        assert groups.nth(1).locator("button").all_inner_texts() == ["Connectors"]
         assert groups.nth(2).locator("button").all_inner_texts() == [
             "AI Platform",
             "Operator",
             "Platform",
         ]
+        assert groups.nth(3).locator("button").all_inner_texts() == [
+            "Assets & Facilities"
+        ]
+        assert groups.nth(3).get_attribute("aria-label") == "Extensions"
         assert nav.locator("button").count() == 9
         assert audit_requests == 0
 

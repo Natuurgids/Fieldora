@@ -6,8 +6,9 @@ _ADMINISTRATION_WORKSPACE_PATCH = bytes(
     r"""
 
 /* Fieldora Administration alignment: preserve every protected destination while
-   grouping them into understandable management domains. Audit is its own governed
-   workspace so its API authority can be projected independently from Governance. */
+   grouping Administration-owned destinations into understandable management
+   domains. Non-Administration workspace extensions are grouped generically so
+   their owning modules control whether they exist and what they represent. */
 (()=>{
  if(window.__fieldoraAdministrationWorkspaceWired)return;
  window.__fieldoraAdministrationWorkspaceWired=true;
@@ -61,10 +62,11 @@ _ADMINISTRATION_WORKSPACE_PATCH = bytes(
 
  const groups=[
   ["Governance & review",["administration","audit","intake-review","reference"]],
-  ["Operations",["operations","connectors"]],
+  ["Integrations",["connectors"]],
   ["Platform services",["aiadmin","operator","platform"]],
  ];
- const adminPages=["administration","audit","operations","intake-review","aiadmin","reference","connectors","operator","platform"];
+ const groupedTargets=new Set(groups.flatMap(([,targets])=>targets));
+ const adminPages=["administration","audit","intake-review","aiadmin","reference","connectors","operator","platform"];
  const existingAdminNav=governance?.querySelector(".workspace-subnav");
  if(auditPage&&existingAdminNav&&!auditPage.querySelector(".workspace-subnav")){
   const cloned=existingAdminNav.cloneNode(true);
@@ -73,6 +75,19 @@ _ADMINISTRATION_WORKSPACE_PATCH = bytes(
   });
   auditPage.querySelector(".top")?.after(cloned);
  }
+ const appendGroup=(nav,label,buttons)=>{
+  if(!buttons.length)return;
+  const group=document.createElement("div");
+  group.className="administration-nav-group";
+  group.setAttribute("role","group");
+  group.setAttribute("aria-label",label);
+  const heading=document.createElement("span");
+  heading.className="administration-nav-group-label";
+  heading.textContent=label;
+  group.appendChild(heading);
+  buttons.forEach(button=>group.appendChild(button));
+  nav.appendChild(group);
+ };
  adminPages.forEach(page=>{
   const host=document.getElementById(`page-${page}`);
   const nav=host?.querySelector(".workspace-subnav");
@@ -96,20 +111,15 @@ _ADMINISTRATION_WORKSPACE_PATCH = bytes(
   nav.classList.add("administration-workspace-nav");
   nav.dataset.administrationGrouped="true";
   groups.forEach(([label,targets])=>{
-   const group=document.createElement("div");
-   group.className="administration-nav-group";
-   group.setAttribute("role","group");
-   group.setAttribute("aria-label",label);
-   const heading=document.createElement("span");
-   heading.className="administration-nav-group-label";
-   heading.textContent=label;
-   group.appendChild(heading);
-   targets.forEach(target=>{
-    const button=buttons.get(target);
-    if(button)group.appendChild(button);
-   });
-   nav.appendChild(group);
+   appendGroup(nav,label,targets.map(target=>buttons.get(target)).filter(Boolean));
   });
+  appendGroup(
+   nav,
+   "Extensions",
+   [...buttons.entries()]
+    .filter(([target])=>!groupedTargets.has(target))
+    .map(([,button])=>button),
+  );
  });
 })();
 """,

@@ -163,10 +163,11 @@ def patch_managed_web_response(
     # registry after all append-only patches and move initial mount to the end.
     response = finalize_modular_shell_response(target, response, registry=registry)
 
+    # Runtime contract declarations must use the same production registry as the
+    # finalized shell so omitted modules are not advertised to browser consumers.
+    response = patch_runtime_contracts_response(target, response, registry=registry)
+
     for patch in (
-        # Runtime contract declarations must execute after the finalized shell so
-        # consumers can discover providers without depending on implementation IDs.
-        patch_runtime_contracts_response,
         # Work/evidence services must exist before list registration can trigger
         # Project Core's initial selected-project load.
         patch_project_work_data_provider_response,

@@ -72,9 +72,9 @@ from natureai_next.server.visible_control_audit_api import VisibleControlAuditAp
 
 class OfflineFirstFieldoraApi(
     ModularShellWebApiMixin,
+    BoundedUploadWebApiMixin,
     OperationsModuleCompositionApiMixin,
     FacilityModuleCompositionApiMixin,
-    BoundedUploadWebApiMixin,
     ProjectResearchIntegrationWebApiMixin,
     ProjectCapacityIntegrationWebApiMixin,
     DossierModuleWebApiMixin,

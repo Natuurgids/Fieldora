@@ -17,6 +17,10 @@ from natureai_next.server.modular_shell_composition import (
 from natureai_next.server.modular_shell_web import (
     patch_modular_shell_response as install_modular_shell_response,
 )
+from natureai_next.server.operations_module_ownership import (
+    FACILITIES_SCIENCE_ROUTES,
+    OPERATIONS_SCIENCE_ROUTES,
+)
 from natureai_next.server.operations_module_runtime import (
     OperationsModuleCompositionApiMixin,
 )
@@ -168,23 +172,13 @@ def test_facilities_runtime_is_removed_when_omitted() -> None:
     assert application._facility_platform is None
     facility_paths = (
         "/api/v1/facility-planning/drawings",
-        "/api/v1/operations/locations",
-        "/api/v1/operations/drawings",
-        "/api/v1/operations/storage-conditions",
-        "/api/v1/operations/drawing-markers",
-        "/api/v1/operations/movements",
+        *FACILITIES_SCIENCE_ROUTES,
     )
     for path in facility_paths:
         assert application.dispatch("GET", path, {}, b"").status == 404
         assert application.dispatch("POST", path, {}, b"{}").status == 404
 
-    operations_paths = (
-        "/api/v1/operations/assets",
-        "/api/v1/operations/maintenance",
-        "/api/v1/operations/calibrations",
-        "/api/v1/operations/documents",
-    )
-    for path in operations_paths:
+    for path in OPERATIONS_SCIENCE_ROUTES:
         assert application.dispatch("GET", path, {}, b"").status == 200
 
     unrelated_response = application.dispatch("GET", "/api/v1/projects", {}, b"")
@@ -225,24 +219,11 @@ def test_operations_runtime_is_removed_when_omitted() -> None:
     assert not application._operations_composed
     assert application._facilities_composed
     assert application._facility_platform is not None
-    operations_paths = (
-        "/api/v1/operations/assets",
-        "/api/v1/operations/maintenance",
-        "/api/v1/operations/calibrations",
-        "/api/v1/operations/documents",
-    )
-    for path in operations_paths:
+    for path in OPERATIONS_SCIENCE_ROUTES:
         assert application.dispatch("GET", path, {}, b"").status == 404
         assert application.dispatch("POST", path, {}, b"{}").status == 404
 
-    facility_paths = (
-        "/api/v1/operations/locations",
-        "/api/v1/operations/drawings",
-        "/api/v1/operations/storage-conditions",
-        "/api/v1/operations/drawing-markers",
-        "/api/v1/operations/movements",
-    )
-    for path in facility_paths:
+    for path in FACILITIES_SCIENCE_ROUTES:
         assert application.dispatch("GET", path, {}, b"").status == 200
 
     unrelated_response = application.dispatch("GET", "/api/v1/projects", {}, b"")

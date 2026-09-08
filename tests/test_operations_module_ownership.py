@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from natureai_next.server.operations_module_ownership import (
     FACILITIES_OPERATIONS_API_DOMAINS,
+    FACILITIES_SCIENCE_ROUTES,
     OPERATIONS_API_DOMAINS,
+    OPERATIONS_API_PREFIX,
+    OPERATIONS_SCIENCE_ROUTES,
+    SHARED_OPERATIONS_SCIENCE_ROUTES,
     operations_api_domain,
     operations_api_owner,
 )
@@ -24,6 +28,68 @@ def test_shared_operations_api_domains_have_single_module_owner() -> None:
         path = f"/api/v1/operations/{domain}/example"
         assert operations_api_domain(path) == domain
         assert operations_api_owner(path) == FACILITIES_WEB_MODULE_ID
+
+
+def test_shared_operations_science_routes_are_owned_and_complete() -> None:
+    assert set(OPERATIONS_SCIENCE_ROUTES).isdisjoint(FACILITIES_SCIENCE_ROUTES)
+    assert SHARED_OPERATIONS_SCIENCE_ROUTES == {
+        **OPERATIONS_SCIENCE_ROUTES,
+        **FACILITIES_SCIENCE_ROUTES,
+    }
+    assert OPERATIONS_API_DOMAINS == frozenset(
+        path.removeprefix(OPERATIONS_API_PREFIX) for path in OPERATIONS_SCIENCE_ROUTES
+    )
+    assert FACILITIES_OPERATIONS_API_DOMAINS == frozenset(
+        path.removeprefix(OPERATIONS_API_PREFIX) for path in FACILITIES_SCIENCE_ROUTES
+    )
+
+    for path in OPERATIONS_SCIENCE_ROUTES:
+        assert path.startswith(OPERATIONS_API_PREFIX)
+        assert operations_api_owner(path) == OPERATIONS_WEB_MODULE_ID
+    for path in FACILITIES_SCIENCE_ROUTES:
+        assert path.startswith(OPERATIONS_API_PREFIX)
+        assert operations_api_owner(path) == FACILITIES_WEB_MODULE_ID
+
+
+def test_shared_operations_science_route_contract_matches_legacy_api_surface() -> None:
+    assert SHARED_OPERATIONS_SCIENCE_ROUTES == {
+        "/api/v1/operations/assets": (
+            "ops_equipment_assets",
+            "operations_asset",
+        ),
+        "/api/v1/operations/maintenance": (
+            "ops_maintenance_events",
+            "operations_maintenance",
+        ),
+        "/api/v1/operations/calibrations": (
+            "ops_calibration_events",
+            "operations_calibration",
+        ),
+        "/api/v1/operations/documents": (
+            "ops_asset_documents",
+            "operations_document",
+        ),
+        "/api/v1/operations/locations": (
+            "ops_locations",
+            "operations_location",
+        ),
+        "/api/v1/operations/drawings": (
+            "ops_building_drawings",
+            "operations_drawing",
+        ),
+        "/api/v1/operations/storage-conditions": (
+            "ops_storage_conditions",
+            "operations_storage_condition",
+        ),
+        "/api/v1/operations/drawing-markers": (
+            "ops_drawing_markers",
+            "operations_drawing_marker",
+        ),
+        "/api/v1/operations/movements": (
+            "ops_asset_movements",
+            "operations_movement",
+        ),
+    }
 
 
 def test_shared_operations_api_classifier_does_not_claim_unknown_paths() -> None:

@@ -176,6 +176,7 @@ def test_facilities_runtime_is_removed_when_omitted() -> None:
     )
     for path in facility_paths:
         assert application.dispatch("GET", path, {}, b"").status == 404
+        assert application.dispatch("POST", path, {}, b"{}").status == 404
 
     operations_paths = (
         "/api/v1/operations/assets",
@@ -232,6 +233,7 @@ def test_operations_runtime_is_removed_when_omitted() -> None:
     )
     for path in operations_paths:
         assert application.dispatch("GET", path, {}, b"").status == 404
+        assert application.dispatch("POST", path, {}, b"{}").status == 404
 
     facility_paths = (
         "/api/v1/operations/locations",

@@ -11,6 +11,33 @@ from natureai_next.server.offline_maps_web import _OFFLINE_MAPS_WEB_PATCH
 
 _FACILITY_WORKSPACE_START = b" /* ---- Facility / CMDB cockpit"
 _FACILITY_WORKSPACE_END = b"})();"
+_FACILITY_BASE_OMISSION_PATCH = br"""
+
+/* WEB-FACILITIES-BASE-OMISSION: remove legacy Facilities controls. */
+(()=>{
+ const page=document.getElementById("page-operations");
+ if(!page)return;
+ ["locations","drawings"].forEach(domain=>{
+  page.querySelectorAll(`[data-operations-domain="${domain}"]`).forEach(
+   node=>node.remove()
+  );
+ });
+ const heading=page.querySelector(".top h1");
+ if(heading)heading.textContent="Asset & Equipment Operations";
+ document.querySelectorAll('[data-workspace-target="operations"]').forEach(button=>{
+  button.textContent="Asset & Equipment Operations";
+ });
+ document.querySelectorAll('.nav[data-page="operations"]').forEach(button=>{
+  button.innerHTML='<span class="nav-icon">⌂</span>Asset & Equipment Operations';
+ });
+ if(
+  typeof operationsDomain!=="undefined"&&
+  ["locations","drawings"].includes(operationsDomain)
+ ){
+  operationsDomain="assets";
+ }
+})();
+"""
 
 
 def suppress_facilities_browser_response(target: str, response: ApiResponse) -> ApiResponse:
@@ -29,6 +56,8 @@ def suppress_facilities_browser_response(target: str, response: ApiResponse) -> 
         end = body.find(_FACILITY_WORKSPACE_END, start)
         if end >= 0:
             body = body[:start] + body[end:]
+    if _FACILITY_BASE_OMISSION_PATCH not in body:
+        body += _FACILITY_BASE_OMISSION_PATCH
 
     if body == response.body:
         return response

@@ -120,6 +120,9 @@ def test_facilities_omission_suppresses_facility_browser_projections() -> None:
     assert "window.__fieldoraOfflineMapsWired" not in script
     assert "facility-planning-web" not in script
     assert "facility-desktop-cockpit" not in script
+    assert "WEB-FACILITIES-BASE-OMISSION" in script
+    assert '["locations","drawings"].forEach' in script
+    assert "Asset & Equipment Operations" in script
     assert '"module_id":"projects.core"' in script
 
 
@@ -132,10 +135,26 @@ def test_facilities_runtime_is_removed_when_omitted() -> None:
 
     assert not application._facilities_composed
     assert application._facility_platform is None
-    facility_response = application.dispatch(
-        "GET", "/api/v1/facility-planning/drawings", {}, b""
+    facility_paths = (
+        "/api/v1/facility-planning/drawings",
+        "/api/v1/operations/locations",
+        "/api/v1/operations/drawings",
+        "/api/v1/operations/storage-conditions",
+        "/api/v1/operations/drawing-markers",
     )
-    assert facility_response.status == 404
+    for path in facility_paths:
+        assert application.dispatch("GET", path, {}, b"").status == 404
+
+    operations_paths = (
+        "/api/v1/operations/assets",
+        "/api/v1/operations/maintenance",
+        "/api/v1/operations/calibrations",
+        "/api/v1/operations/documents",
+        "/api/v1/operations/movements",
+    )
+    for path in operations_paths:
+        assert application.dispatch("GET", path, {}, b"").status == 200
+
     unrelated_response = application.dispatch("GET", "/api/v1/projects", {}, b"")
     assert unrelated_response.status == 200
     browser_response = application.dispatch("GET", "/app.js", {}, b"")
@@ -159,6 +178,15 @@ def test_facilities_projection_remains_when_composed() -> None:
     assert "window.__fieldoraOfflineMapsWired" in script
     assert "facility-planning-web" in script
     assert "facility-desktop-cockpit" in script
+    assert "WEB-FACILITIES-BASE-OMISSION" not in script
+
+    application = _FacilitiesRuntimeProbe()
+    handler_for(application, web_module_registry=registry)
+    assert application._facilities_composed
+    location_response = application.dispatch(
+        "GET", "/api/v1/operations/locations", {}, b""
+    )
+    assert location_response.status == 200
 
 
 def test_foundation_composition_rejects_unknown_enabled_module() -> None:

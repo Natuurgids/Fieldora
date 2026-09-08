@@ -9,6 +9,22 @@ from natureai_next.server.web_module_contracts import WebModuleRegistry
 from natureai_next.server.web_module_extensions import FACILITIES_WEB_MODULE_ID
 
 _FACILITY_PLANNING_PREFIX = "/api/v1/facility-planning"
+_OPERATIONS_PREFIX = "/api/v1/operations/"
+_FACILITY_OPERATION_DOMAINS = frozenset(
+    {
+        "locations",
+        "drawings",
+        "storage-conditions",
+        "drawing-markers",
+    }
+)
+
+
+def _facility_owned_operations_path(path: str) -> bool:
+    if not path.startswith(_OPERATIONS_PREFIX):
+        return False
+    domain = path[len(_OPERATIONS_PREFIX) :].split("/", 1)[0]
+    return domain in _FACILITY_OPERATION_DOMAINS
 
 
 class FacilityModuleCompositionApiMixin:
@@ -29,9 +45,10 @@ class FacilityModuleCompositionApiMixin:
     def dispatch(
         self, method: str, target: str, headers: dict[str, str], body: bytes
     ) -> ApiResponse:
-        if (
-            not self._facilities_composed
-            and urlsplit(target).path.startswith(_FACILITY_PLANNING_PREFIX)
+        path = urlsplit(target).path
+        if not self._facilities_composed and (
+            path.startswith(_FACILITY_PLANNING_PREFIX)
+            or _facility_owned_operations_path(path)
         ):
             return ApiResponse.json(404, {"error": "not_found"})
         return super().dispatch(method, target, headers, body)

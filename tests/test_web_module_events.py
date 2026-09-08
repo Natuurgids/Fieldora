@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from natureai_next.server.dossier_module_web import _DOSSIER_MODULE_PATCH
+from natureai_next.server.portfolio_module_web import _PORTFOLIO_MODULE_PATCH
 from natureai_next.server.project_capacity_integration_web import (
     _PROJECT_CAPACITY_INTEGRATION_PATCH,
 )
@@ -10,6 +11,7 @@ from natureai_next.server.project_context_provider_web import (
     _PROJECT_CONTEXT_PROVIDER_PATCH,
 )
 from natureai_next.server.project_creation_module_web import _PROJECT_CREATION_MODULE_PATCH
+from natureai_next.server.project_list_provider_web import _PROJECT_LIST_PROVIDER_PATCH
 from natureai_next.server.project_research_integration_web import (
     _PROJECT_RESEARCH_INTEGRATION_PATCH,
 )
@@ -148,3 +150,19 @@ def test_foundation_project_create_request_matches_research_producer_and_project
     projects = _PROJECT_CREATION_MODULE_PATCH.decode("utf-8")
     assert 'const moduleId="projects.core"' in projects
     assert 'addEventListener("fieldora:projects-create-requested",handleCreateRequest)' in projects
+
+
+def test_foundation_project_list_event_matches_projects_producer_and_portfolio_consumer() -> None:
+    event = foundation_event_registry().event("fieldora:project-list-changed")
+
+    assert event is not None
+    assert event.producer_module_id == "projects.core"
+    assert event.consumer_module_ids == ("portfolio",)
+
+    projects = _PROJECT_LIST_PROVIDER_PATCH.decode("utf-8")
+    assert 'const moduleId="projects.core"' in projects
+    assert "new CustomEvent('fieldora:project-list-changed'" in projects
+
+    portfolio = _PORTFOLIO_MODULE_PATCH.decode("utf-8")
+    assert 'const moduleId="portfolio"' in portfolio
+    assert 'addEventListener("fieldora:project-list-changed"' in portfolio

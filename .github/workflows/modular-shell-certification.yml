@@ -40,6 +40,7 @@ on:
       - "tests/test_web_module_optional_contracts.py"
       - "tests/test_modular_shell_web.py"
       - "tests/test_modular_shell_contract_manifest.py"
+      - "tests/test_module_composition_switches.py"
       - "tests/test_projects_module_removal_contract.py"
       - "tests/test_projects_module_removal_runtime.py"
       - "tests/test_projects_module_removal_browser.py"
@@ -130,6 +131,7 @@ jobs:
           tests/test_web_module_optional_contracts.py
           tests/test_modular_shell_web.py
           tests/test_modular_shell_contract_manifest.py
+          tests/test_module_composition_switches.py
           tests/test_projects_module_removal_contract.py
           tests/test_projects_module_removal_runtime.py
           tests/test_projects_module_removal_browser.py
@@ -160,6 +162,7 @@ jobs:
           tests/test_web_module_optional_contracts.py
           tests/test_modular_shell_web.py
           tests/test_modular_shell_contract_manifest.py
+          tests/test_module_composition_switches.py
           tests/test_projects_module_removal_contract.py
           tests/test_projects_module_removal_runtime.py
           tests/test_projects_module_removal_browser.py

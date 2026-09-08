@@ -3,18 +3,46 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
 from urllib.parse import urlsplit
 
 from natureai_next.server import modular_shell_web
 from natureai_next.server.api import ApiResponse
 from natureai_next.server.web_module_contracts import (
+    FOUNDATION_APPLICATION_CONTRACT_PROVIDERS,
     FOUNDATION_WEB_MODULES,
+    WebModuleContractError,
     WebModuleRegistry,
 )
 
 _MANIFEST_START = b" const specs="
 _MANIFEST_END = b";\n const byRoute="
 _DOSSIER_SENTINEL = b"WEB-DOSSIER-MODULE-COMPOSITION-SENTINEL"
+
+
+def foundation_composition_registry(
+    enabled_module_ids: Iterable[str] | None = None,
+) -> WebModuleRegistry:
+    """Return a validated foundation registry containing only enabled modules."""
+
+    known_ids = {spec.module_id for spec in FOUNDATION_WEB_MODULES}
+    if enabled_module_ids is None:
+        enabled_ids = known_ids
+    else:
+        enabled_ids = {module_id.strip() for module_id in enabled_module_ids}
+        if "" in enabled_ids:
+            raise WebModuleContractError("enabled module ids may not be blank")
+        unknown = sorted(enabled_ids - known_ids)
+        if unknown:
+            raise WebModuleContractError(f"unknown enabled module ids: {unknown!r}")
+
+    registry = WebModuleRegistry(
+        tuple(spec for spec in FOUNDATION_WEB_MODULES if spec.module_id in enabled_ids),
+        application_providers=FOUNDATION_APPLICATION_CONTRACT_PROVIDERS,
+    )
+    registry.validate_dependencies()
+    registry.validate_contracts()
+    return registry
 
 
 def modular_shell_bootstrap(registry: WebModuleRegistry) -> bytes:

@@ -10,6 +10,9 @@ on:
       - "src/natureai_next/server/web_module_contract_runtime.py"
       - "src/natureai_next/server/modular_shell_web.py"
       - "src/natureai_next/server/modular_shell_composition.py"
+      - "src/natureai_next/server/facility_module_runtime.py"
+      - "src/natureai_next/server/operations_module_ownership.py"
+      - "src/natureai_next/server/operations_module_runtime.py"
       - "src/natureai_next/server/capacity_availability_module_web.py"
       - "src/natureai_next/server/capacity_module_web.py"
       - "src/natureai_next/server/project_capacity_integration_web.py"
@@ -38,6 +41,7 @@ on:
       - "tests/test_web_module_runtime.py"
       - "tests/test_web_module_contract_runtime.py"
       - "tests/test_route_less_module_contract_runtime.py"
+      - "tests/test_operations_module_ownership.py"
       - "tests/test_web_module_optional_contracts.py"
       - "tests/test_modular_shell_web.py"
       - "tests/test_modular_shell_contract_manifest.py"
@@ -95,6 +99,9 @@ jobs:
           src/natureai_next/server/web_module_events.py
           src/natureai_next/server/web_module_runtime.py
           src/natureai_next/server/web_module_contract_runtime.py
+          src/natureai_next/server/facility_module_runtime.py
+          src/natureai_next/server/operations_module_ownership.py
+          src/natureai_next/server/operations_module_runtime.py
       - name: Ruff shell and feature adapters
         run: >-
           python -m ruff check
@@ -130,6 +137,7 @@ jobs:
           tests/test_web_module_runtime.py
           tests/test_web_module_contract_runtime.py
           tests/test_route_less_module_contract_runtime.py
+          tests/test_operations_module_ownership.py
           tests/test_web_module_optional_contracts.py
           tests/test_modular_shell_web.py
           tests/test_modular_shell_contract_manifest.py
@@ -162,6 +170,7 @@ jobs:
           tests/test_web_module_runtime.py
           tests/test_web_module_contract_runtime.py
           tests/test_route_less_module_contract_runtime.py
+          tests/test_operations_module_ownership.py
           tests/test_web_module_optional_contracts.py
           tests/test_modular_shell_web.py
           tests/test_modular_shell_contract_manifest.py

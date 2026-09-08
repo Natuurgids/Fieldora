@@ -38,7 +38,7 @@ from natureai_next.server.linked_storage_operator_web import (
     patch_linked_storage_operator_web_response,
 )
 from natureai_next.server.linked_storage_web import patch_linked_storage_web_response
-from natureai_next.server.modular_shell_web import finalize_modular_shell_response
+from natureai_next.server.modular_shell_composition import finalize_modular_shell_response
 from natureai_next.server.navigation_web_compatibility import patch_navigation_web_response
 from natureai_next.server.offline_maps_web import patch_offline_maps_web_response
 from natureai_next.server.offline_models_web import patch_offline_models_web_response
@@ -68,6 +68,7 @@ from natureai_next.server.web_compatibility import (
     rewrite_public_target,
 )
 from natureai_next.server.web_module_contract_runtime import patch_runtime_contracts_response
+from natureai_next.server.web_module_contracts import WebModuleRegistry
 from natureai_next.server.workspace_language_web import patch_workspace_language_web_response
 
 
@@ -127,7 +128,12 @@ class ReloadingTLSServer(ThreadingHTTPServer):
         return wrapped, address
 
 
-def patch_managed_web_response(target: str, response):
+def patch_managed_web_response(
+    target: str,
+    response,
+    *,
+    registry: WebModuleRegistry | None = None,
+):
     """Apply every certified managed-browser patch in production order."""
     for patch in (
         patch_browser_functionality_response,
@@ -149,10 +155,15 @@ def patch_managed_web_response(target: str, response):
         patch_offline_maps_web_response,
         patch_zero_trust_web_response,
         patch_aiadmin_zero_trust_response,
-        # Finalizer is inert for non-modular applications.  When the API mixin
-        # already installed the shell, it removes migrated compatibility code
-        # after all append-only patches and moves initial mount to the very end.
-        finalize_modular_shell_response,
+    ):
+        response = patch(target, response)
+
+    # The finalizer is inert for non-modular applications. When the API mixin
+    # already installed the shell, recompose it from the explicit production
+    # registry after all append-only patches and move initial mount to the end.
+    response = finalize_modular_shell_response(target, response, registry=registry)
+
+    for patch in (
         # Runtime contract declarations must execute after the finalized shell so
         # consumers can discover providers without depending on implementation IDs.
         patch_runtime_contracts_response,
@@ -170,7 +181,10 @@ def patch_managed_web_response(target: str, response):
 
 
 def handler_for(
-    application: FieldoraApi, *, tls_enabled: bool = False
+    application: FieldoraApi,
+    *,
+    tls_enabled: bool = False,
+    web_module_registry: WebModuleRegistry | None = None,
 ) -> type[BaseHTTPRequestHandler]:
     class Handler(BaseHTTPRequestHandler):
         server_version = "Fieldora"
@@ -207,7 +221,11 @@ def handler_for(
                 if administration is not None:
                     response = administration
             response = project_help_response(application, target, headers, response)
-            response = patch_managed_web_response(target, response)
+            response = patch_managed_web_response(
+                target,
+                response,
+                registry=web_module_registry,
+            )
             self._write(response)
 
         def _write(self, response) -> None:
@@ -235,6 +253,7 @@ def serve(
     private_key: Path | None = None,
     on_shutdown: Callable[[], None] | None = None,
     shutdown_grace_seconds: float = 30.0,
+    web_module_registry: WebModuleRegistry | None = None,
 ) -> None:
     """Serve Fieldora with reloadable TLS and coordinated signal-driven draining."""
     if (certificate is None) != (private_key is None):
@@ -242,7 +261,11 @@ def serve(
     if not 0 <= shutdown_grace_seconds <= 300:
         raise ValueError("shutdown grace period must be between 0 and 300 seconds")
 
-    handler = handler_for(application, tls_enabled=certificate is not None)
+    handler = handler_for(
+        application,
+        tls_enabled=certificate is not None,
+        web_module_registry=web_module_registry,
+    )
     if certificate is not None and private_key is not None:
         server: ThreadingHTTPServer = ReloadingTLSServer(
             (host, port), handler, certificate, private_key

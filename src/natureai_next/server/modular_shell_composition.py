@@ -123,3 +123,21 @@ def patch_modular_shell_response(
     if body == response.body:
         return response
     return ApiResponse(response.status, body, response.content_type, response.headers)
+
+
+def finalize_modular_shell_response(
+    target: str,
+    response: ApiResponse,
+    *,
+    registry: WebModuleRegistry | None = None,
+) -> ApiResponse:
+    """Finalize an installed shell with the production composition registry."""
+
+    if (
+        urlsplit(target).path != "/app.js"
+        or response.status != 200
+        or modular_shell_web._MODULAR_SHELL_BOOTSTRAP not in response.body
+    ):
+        return response
+    selected_registry = foundation_composition_registry() if registry is None else registry
+    return patch_modular_shell_response(target, response, registry=selected_registry)

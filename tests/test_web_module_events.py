@@ -15,6 +15,7 @@ from natureai_next.server.project_list_provider_web import _PROJECT_LIST_PROVIDE
 from natureai_next.server.project_research_integration_web import (
     _PROJECT_RESEARCH_INTEGRATION_PATCH,
 )
+from natureai_next.server.science_workflow_web import _SCIENCE_WORKFLOW_PATCH
 from natureai_next.server.web_module_contracts import WebModuleRegistry, WebModuleSpec
 from natureai_next.server.web_module_events import (
     WebModuleEventError,
@@ -152,12 +153,12 @@ def test_foundation_project_create_request_matches_research_producer_and_project
     assert 'addEventListener("fieldora:projects-create-requested",handleCreateRequest)' in projects
 
 
-def test_foundation_project_list_event_matches_projects_producer_and_portfolio_consumer() -> None:
+def test_foundation_project_list_event_matches_projects_producer_and_consumers() -> None:
     event = foundation_event_registry().event("fieldora:project-list-changed")
 
     assert event is not None
     assert event.producer_module_id == "projects.core"
-    assert event.consumer_module_ids == ("portfolio",)
+    assert event.consumer_module_ids == ("portfolio", "observations.core")
 
     projects = _PROJECT_LIST_PROVIDER_PATCH.decode("utf-8")
     assert 'const moduleId="projects.core"' in projects
@@ -166,3 +167,7 @@ def test_foundation_project_list_event_matches_projects_producer_and_portfolio_c
     portfolio = _PORTFOLIO_MODULE_PATCH.decode("utf-8")
     assert 'const moduleId="portfolio"' in portfolio
     assert 'addEventListener("fieldora:project-list-changed"' in portfolio
+
+    observations = _SCIENCE_WORKFLOW_PATCH.decode("utf-8")
+    assert 'const observationsPage=q("page-observations")' in observations
+    assert 'addEventListener("fieldora:project-list-changed"' in observations

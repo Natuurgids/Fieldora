@@ -104,7 +104,7 @@ FOUNDATION_WEB_MODULE_EVENTS: tuple[WebModuleEventSpec, ...] = (
     WebModuleEventSpec(
         "fieldora:project-list-changed",
         "projects.core",
-        ("portfolio",),
+        ("portfolio", "observations.core"),
     ),
 )
 

@@ -187,6 +187,11 @@ def handler_for(
     tls_enabled: bool = False,
     web_module_registry: WebModuleRegistry | None = None,
 ) -> type[BaseHTTPRequestHandler]:
+    if web_module_registry is not None:
+        configure_registry = getattr(application, "configure_web_module_registry", None)
+        if callable(configure_registry):
+            configure_registry(web_module_registry)
+
     class Handler(BaseHTTPRequestHandler):
         server_version = "Fieldora"
 

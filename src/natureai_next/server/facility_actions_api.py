@@ -41,6 +41,8 @@ class FacilityActionsApiMixin:
         self, method: str, target: str, headers: dict[str, str], body: bytes
     ) -> ApiResponse:
         response = super().dispatch(method, target, headers, body)
+        if not getattr(self, "_facilities_composed", True):
+            return response
         path = urlsplit(target).path
         if (
             method == "GET"

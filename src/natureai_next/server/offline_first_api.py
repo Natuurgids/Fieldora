@@ -16,6 +16,9 @@ from natureai_next.server.capacity_legacy_retirement_web import (
 from natureai_next.server.capacity_module_web import CapacityModuleWebApiMixin
 from natureai_next.server.dossier_module_web import DossierModuleWebApiMixin
 from natureai_next.server.facility_actions_api import FacilityActionsApiMixin
+from natureai_next.server.facility_module_runtime import (
+    FacilityModuleCompositionApiMixin,
+)
 from natureai_next.server.filtering import FilteringApiMixin
 from natureai_next.server.knowledge_parity_api import KnowledgeParityApiMixin
 from natureai_next.server.library_collections_api import LibraryCollectionsApiMixin
@@ -66,6 +69,7 @@ from natureai_next.server.visible_control_audit_api import VisibleControlAuditAp
 
 class OfflineFirstFieldoraApi(
     ModularShellWebApiMixin,
+    FacilityModuleCompositionApiMixin,
     BoundedUploadWebApiMixin,
     ProjectResearchIntegrationWebApiMixin,
     ProjectCapacityIntegrationWebApiMixin,

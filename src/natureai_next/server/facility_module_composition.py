@@ -11,7 +11,7 @@ from natureai_next.server.offline_maps_web import _OFFLINE_MAPS_WEB_PATCH
 
 _FACILITY_WORKSPACE_START = b" /* ---- Facility / CMDB cockpit"
 _FACILITY_WORKSPACE_END = b"})();"
-_FACILITY_BASE_OMISSION_PATCH = br"""
+_FACILITY_BASE_OMISSION_PATCH = r"""
 
 /* WEB-FACILITIES-BASE-OMISSION: remove legacy Facilities controls. */
 (()=>{
@@ -37,7 +37,7 @@ _FACILITY_BASE_OMISSION_PATCH = br"""
   operationsDomain="assets";
  }
 })();
-"""
+""".encode("utf-8")
 
 
 def suppress_facilities_browser_response(target: str, response: ApiResponse) -> ApiResponse:

@@ -6,16 +6,17 @@ import json
 from urllib.parse import urlsplit
 
 from natureai_next.server.api import ApiResponse
-from natureai_next.server.web_module_contracts import WebModuleRegistry, foundation_registry
+from natureai_next.server.modular_shell_composition import foundation_composition_registry
+from natureai_next.server.web_module_contracts import WebModuleRegistry
 
 
 def runtime_contract_manifest(
     registry: WebModuleRegistry | None = None,
 ) -> tuple[dict[str, object], ...]:
-    """Return browser-safe provider/consumer declarations in registry order."""
+    """Return browser-safe provider/consumer declarations in composition order."""
 
     if registry is None:
-        registry = foundation_registry()
+        registry = foundation_composition_registry()
     application_declarations = tuple(
         {
             "module_id": provider.provider_id,
@@ -34,7 +35,22 @@ def runtime_contract_manifest(
         }
         for spec in registry.as_mapping().values()
     )
-    return application_declarations + module_declarations
+    extension_mapping = getattr(registry, "extension_mapping", None)
+    extension_declarations = (
+        tuple(
+            {
+                "module_id": spec.module_id,
+                "host_route": spec.host_route,
+                "provides_contracts": [],
+                "requires_contracts": [],
+                "optional_contracts": [],
+            }
+            for spec in extension_mapping().values()
+        )
+        if callable(extension_mapping)
+        else ()
+    )
+    return application_declarations + module_declarations + extension_declarations
 
 
 def _runtime_script(registry: WebModuleRegistry | None = None) -> bytes:

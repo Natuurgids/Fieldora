@@ -2,12 +2,17 @@ from __future__ import annotations
 
 from natureai_next.server.api import ApiResponse
 from natureai_next.server.http import patch_managed_web_response
+from natureai_next.server.modular_shell_composition import foundation_composition_registry
 from natureai_next.server.modular_shell_web import patch_modular_shell_response
 from natureai_next.server.web_module_contract_runtime import (
     patch_runtime_contracts_response,
     runtime_contract_manifest,
 )
-from natureai_next.server.web_module_contracts import WebModuleRegistry, WebModuleSpec
+from natureai_next.server.web_module_contracts import (
+    FOUNDATION_WEB_MODULES,
+    WebModuleRegistry,
+    WebModuleSpec,
+)
 
 
 def test_runtime_manifest_publishes_project_provider_and_portfolio_requirements() -> None:
@@ -23,6 +28,10 @@ def test_runtime_manifest_publishes_project_provider_and_portfolio_requirements(
         "notifications.publish"
     ]
     assert by_id["application.notifications"]["requires_contracts"] == []
+    assert by_id["application.operations-workspace"]["provides_contracts"] == [
+        "operations.workspace.host"
+    ]
+    assert by_id["application.operations-workspace"]["requires_contracts"] == []
     assert by_id["projects.core"]["provides_contracts"] == [
         "projects.list.read",
         "projects.context.select",
@@ -40,6 +49,16 @@ def test_runtime_manifest_publishes_project_provider_and_portfolio_requirements(
         "projects.context.select",
     ]
     assert by_id["portfolio"]["optional_contracts"] == []
+
+
+def test_operations_workspace_provider_is_omitted_without_extensions() -> None:
+    route_ids = tuple(spec.module_id for spec in FOUNDATION_WEB_MODULES)
+    registry = foundation_composition_registry(route_ids)
+    by_id = {
+        item["module_id"]: item for item in runtime_contract_manifest(registry)
+    }
+
+    assert "application.operations-workspace" not in by_id
 
 
 def test_runtime_registry_is_inert_without_modular_shell_and_idempotent_with_it() -> None:
@@ -75,6 +94,19 @@ def test_runtime_registry_is_inert_without_modular_shell_and_idempotent_with_it(
     assert "aria-live" in script
     assert "publish:publishNotification" in script
     assert "fieldora:module-error" in script
+    assert (
+        "provider('operations.workspace.host')==='application.operations-workspace'"
+        in script
+    )
+    assert "const baseOperationsLoad=loadOperations" in script
+    assert "const currentDomain=()=>" in script
+    assert "const selectDomain=async domain=>" in script
+    assert "const subscribe=listener=>" in script
+    assert (
+        "register('operations.workspace.host','application.operations-workspace'"
+        in script
+    )
+    assert "refresh:()=>loadOperations()" in script
     assert script.index("WEB-MODULAR-SHELL") < script.index("WEB-MODULE-CONTRACT-RUNTIME")
 
 
@@ -91,9 +123,14 @@ def test_custom_registry_without_auth_provider_does_not_declare_auth_contract() 
     assert '"module_id":"application.auth"' not in runtime
     assert '"module_id":"application.navigation"' not in runtime
     assert '"module_id":"application.notifications"' not in runtime
+    assert '"module_id":"application.operations-workspace"' not in runtime
     assert "if(provider('auth.current-user')==='application.auth')" in runtime
     assert "if(provider('navigation.navigate')==='application.navigation'" in runtime
     assert "if(provider('notifications.publish')==='application.notifications')" in runtime
+    assert (
+        "if(provider('operations.workspace.host')==='application.operations-workspace'"
+        in runtime
+    )
 
 
 def test_runtime_registry_rejects_wrong_or_duplicate_provider_in_script_contract() -> None:

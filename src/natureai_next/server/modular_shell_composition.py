@@ -17,6 +17,7 @@ from natureai_next.server.operations_module_composition import (
 from natureai_next.server.web_module_contracts import (
     FOUNDATION_APPLICATION_CONTRACT_PROVIDERS,
     FOUNDATION_WEB_MODULES,
+    WebApplicationContractProvider,
     WebModuleContractError,
     WebModuleRegistry,
 )
@@ -30,6 +31,10 @@ from natureai_next.server.web_module_extensions import (
 _MANIFEST_START = b" const specs="
 _MANIFEST_END = b";\n const byRoute="
 _DOSSIER_SENTINEL = b"WEB-DOSSIER-MODULE-COMPOSITION-SENTINEL"
+_OPERATIONS_WORKSPACE_PROVIDER = WebApplicationContractProvider(
+    "application.operations-workspace",
+    provides_contracts=("operations.workspace.host",),
+)
 
 
 class FoundationCompositionRegistry(WebModuleRegistry):
@@ -41,11 +46,20 @@ class FoundationCompositionRegistry(WebModuleRegistry):
         *,
         extensions: Iterable[WebModuleExtensionSpec] = (),
     ) -> None:
+        extension_specs = tuple(extensions)
+        operations_workspace_composed = any(
+            extension.host_route == "/operations" for extension in extension_specs
+        )
+        application_providers = FOUNDATION_APPLICATION_CONTRACT_PROVIDERS + (
+            (_OPERATIONS_WORKSPACE_PROVIDER,) if operations_workspace_composed else ()
+        )
         super().__init__(
             specs,
-            application_providers=FOUNDATION_APPLICATION_CONTRACT_PROVIDERS,
+            application_providers=application_providers,
         )
-        self._extensions = {extension.module_id: extension for extension in extensions}
+        self._extensions = {
+            extension.module_id: extension for extension in extension_specs
+        }
 
     def extension_mapping(self) -> Mapping[str, WebModuleExtensionSpec]:
         return dict(self._extensions)

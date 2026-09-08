@@ -5,6 +5,7 @@ on:
     paths:
       - "src/natureai_next/application/project_task_detail.py"
       - "src/natureai_next/server/web_module_contracts.py"
+      - "src/natureai_next/server/web_module_events.py"
       - "src/natureai_next/server/web_module_runtime.py"
       - "src/natureai_next/server/web_module_contract_runtime.py"
       - "src/natureai_next/server/modular_shell_web.py"
@@ -33,6 +34,7 @@ on:
       - "src/natureai_next/server/offline_first_api.py"
       - "src/natureai_next/server/http.py"
       - "tests/test_web_module_contracts.py"
+      - "tests/test_web_module_events.py"
       - "tests/test_web_module_runtime.py"
       - "tests/test_web_module_contract_runtime.py"
       - "tests/test_web_module_optional_contracts.py"
@@ -88,6 +90,7 @@ jobs:
         run: >-
           python -m ruff check
           src/natureai_next/server/web_module_contracts.py
+          src/natureai_next/server/web_module_events.py
           src/natureai_next/server/web_module_runtime.py
           src/natureai_next/server/web_module_contract_runtime.py
       - name: Ruff shell and feature adapters
@@ -121,6 +124,7 @@ jobs:
         run: >-
           python -m ruff check
           tests/test_web_module_contracts.py
+          tests/test_web_module_events.py
           tests/test_web_module_runtime.py
           tests/test_web_module_contract_runtime.py
           tests/test_web_module_optional_contracts.py
@@ -150,6 +154,7 @@ jobs:
         run: >-
           pytest -q
           tests/test_web_module_contracts.py
+          tests/test_web_module_events.py
           tests/test_web_module_runtime.py
           tests/test_web_module_contract_runtime.py
           tests/test_web_module_optional_contracts.py

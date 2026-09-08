@@ -5,25 +5,9 @@ from __future__ import annotations
 from urllib.parse import urlsplit
 
 from natureai_next.server.api import ApiResponse
+from natureai_next.server.operations_module_ownership import operations_api_owner
 from natureai_next.server.web_module_contracts import WebModuleRegistry
 from natureai_next.server.web_module_extensions import OPERATIONS_WEB_MODULE_ID
-
-_OPERATIONS_PREFIX = "/api/v1/operations/"
-_OPERATIONS_OWNED_DOMAINS = frozenset(
-    {
-        "assets",
-        "maintenance",
-        "calibrations",
-        "documents",
-    }
-)
-
-
-def _operations_owned_path(path: str) -> bool:
-    if not path.startswith(_OPERATIONS_PREFIX):
-        return False
-    domain = path[len(_OPERATIONS_PREFIX) :].split("/", 1)[0]
-    return domain in _OPERATIONS_OWNED_DOMAINS
 
 
 class OperationsModuleCompositionApiMixin:
@@ -46,6 +30,9 @@ class OperationsModuleCompositionApiMixin:
         self, method: str, target: str, headers: dict[str, str], body: bytes
     ) -> ApiResponse:
         path = urlsplit(target).path
-        if not self._operations_composed and _operations_owned_path(path):
+        if (
+            not self._operations_composed
+            and operations_api_owner(path) == OPERATIONS_WEB_MODULE_ID
+        ):
             return ApiResponse.json(404, {"error": "not_found"})
         return super().dispatch(method, target, headers, body)

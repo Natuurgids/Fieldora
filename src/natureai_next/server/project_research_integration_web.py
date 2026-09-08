@@ -22,6 +22,7 @@ _PROJECT_RESEARCH_INTEGRATION_PATCH = bytes(
  const projectToolbar=()=>window.FieldoraModuleContracts?.resolve?.("projects.toolbar.extend")||null;
  const navigation=()=>window.FieldoraModuleContracts?.resolve?.("navigation.navigate")||null;
  const notifications=()=>window.FieldoraModuleContracts?.resolve?.("notifications.publish")||null;
+ const researchProject=()=>window.FieldoraModuleContracts?.resolveAction?.(entryKey)||null;
  const legacyOpenProject=typeof openProject==="function"?openProject:null;
  function report(error,fallback){
   const text=error?.message||fallback;
@@ -35,9 +36,9 @@ _PROJECT_RESEARCH_INTEGRATION_PATCH = bytes(
  }
  async function applyResearchProject(){
   const pid=currentProject();if(!pid)return false;
-  const bridge=window.FieldoraResearchRecords;
-  if(!bridge?.openProject)throw new Error("Research workspace integration is unavailable.");
-  await bridge.openProject(pid);return true;
+  const action=researchProject();
+  if(!action?.openProject)throw new Error("Research workspace integration is unavailable.");
+  await action.openProject(pid);return true;
  }
  async function openSelectedProject(){
   const pid=currentProject();if(!pid){report(null,"Select a project before opening Research.");return}

@@ -21,6 +21,7 @@ _RESEARCH_RECORDS_PATCH = bytes(
 (()=>{
  if(window.__fieldoraResearchRecordsWired)return;
  window.__fieldoraResearchRecordsWired=true;
+ const moduleId="research.dossiers",projectOpenAction="research.project.open";
  const byId=id=>document.getElementById(id);
  const html=value=>String(value??"").replace(/[&<>"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
  const projectContext=()=>window.FieldoraModuleContracts?.resolve?.("projects.context.select")||null;
@@ -77,9 +78,20 @@ _RESEARCH_RECORDS_PATCH = bytes(
   const selector=byId("science-project");if(selector){selector.disabled=false;selector.value=project}
   detail.hidden=true;clearEditor();await loadResearchDomain();return true;
  }
+ const openProjectAction=Object.freeze({openProject});
+ function registerOpenProjectAction(){
+  const runtime=window.FieldoraModuleContracts;
+  if(!runtime||runtime.actionOwner?.(projectOpenAction)!==moduleId)return false;
+  const current=runtime.resolveAction?.(projectOpenAction);
+  if(current)return current===openProjectAction;
+  runtime.registerAction?.(projectOpenAction,moduleId,openProjectAction);
+  return true;
+ }
  save.onclick=saveRecord;
  byId("science-project")?.addEventListener("change",()=>{if(!editingResearchRecord){integrationProjectId=byId("science-project")?.value||"";loadResearchDomain()}});
  document.querySelectorAll("[data-research-domain]").forEach(button=>button.addEventListener("click",()=>{editingResearchRecord=null;if(byId("science-project"))byId("science-project").disabled=false;detail.hidden=true;clearEditor()}));
+ registerOpenProjectAction();
+ document.addEventListener("fieldora:contracts-ready",registerOpenProjectAction,{once:true});
  window.FieldoraResearchRecords=Object.freeze({openProject,refresh:()=>loadResearchDomain(),currentProject:()=>integrationProjectId||byId("science-project")?.value||""});
 })();
 """,

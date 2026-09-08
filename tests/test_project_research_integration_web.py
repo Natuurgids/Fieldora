@@ -44,6 +44,9 @@ def test_project_research_adapter_uses_replaceable_projects_contracts() -> None:
     assert 'resolve?.("projects.toolbar.extend")' in script
     assert 'resolve?.("navigation.navigate")' in script
     assert 'resolve?.("notifications.publish")' in script
+    assert 'resolveAction?.(entryKey)' in script
+    assert "const action=researchProject()" in script
+    assert "await action.openProject(pid)" in script
     assert 'notifications()?.publish?.(String(text),{level:"error",source_module:ownerModule})' in script
     assert 'new CustomEvent("fieldora:module-error"' not in script
     assert "projectContext()?.current?.()" in script
@@ -60,7 +63,7 @@ def test_project_research_adapter_uses_replaceable_projects_contracts() -> None:
     assert "project-desktop-cockpit" not in script
     assert "document.createElement" not in script
     assert "window.FieldoraProjects" not in script
-    assert "window.FieldoraResearchRecords" in script
+    assert "window.FieldoraResearchRecords" not in script
     assert "science-project" not in script
     assert "loadResearchDomain" not in script
 
@@ -192,6 +195,10 @@ def test_research_records_exposes_project_context_bridge() -> None:
     assert "projectContext()?.current?.()" in script
     assert "selectedProject" not in script
     assert "async function openProject(projectId)" in script
+    assert 'const openProjectAction=Object.freeze({openProject})' in script
+    assert 'runtime.actionOwner?.(projectOpenAction)!==moduleId' in script
+    assert 'runtime.resolveAction?.(projectOpenAction)' in script
+    assert 'runtime.registerAction?.(projectOpenAction,moduleId,openProjectAction)' in script
     assert "window.FieldoraResearchRecords=Object.freeze" in script
     assert "?project_id=${encodeURIComponent(project)}" in script
 

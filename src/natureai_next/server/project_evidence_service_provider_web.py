@@ -6,6 +6,15 @@ from urllib.parse import urlsplit
 
 from natureai_next.server.api import ApiResponse
 
+_PROJECT_EVIDENCE_LEGACY_CONSUMER = bytes(
+    r'''try{const result=await api("/api/v1/media?limit=500");projectEvidence=(result.items||[]).filter(m=>m.project_id===cockpitProjectId);renderProjectEvidence()}catch(_e){projectEvidence=[];renderProjectEvidence()}''',
+    "utf-8",
+)
+_PROJECT_EVIDENCE_CONTRACT_CONSUMER = bytes(
+    r'''try{const service=window.FieldoraModuleContracts?.resolve("projects.evidence.service");if(!service)throw new Error("Project evidence service is unavailable.");projectEvidence=await service.projectItems(cockpitProjectId);renderProjectEvidence()}catch(_e){projectEvidence=[];renderProjectEvidence()}''',
+    "utf-8",
+)
+
 _PROJECT_EVIDENCE_SERVICE_PROVIDER_PATCH = bytes(
     r"""
 
@@ -45,18 +54,26 @@ _PROJECT_EVIDENCE_SERVICE_PROVIDER_PATCH = bytes(
 def patch_project_evidence_service_provider_response(
     target: str, response: ApiResponse
 ) -> ApiResponse:
-    """Append the Project evidence provider after the contract runtime."""
+    """Install the Project evidence provider and migrate legacy consumers."""
 
     if (
         urlsplit(target).path != "/app.js"
         or response.status != 200
         or b"WEB-MODULE-CONTRACT-RUNTIME" not in response.body
-        or _PROJECT_EVIDENCE_SERVICE_PROVIDER_PATCH in response.body
     ):
+        return response
+
+    body = response.body.replace(
+        _PROJECT_EVIDENCE_LEGACY_CONSUMER,
+        _PROJECT_EVIDENCE_CONTRACT_CONSUMER,
+    )
+    if _PROJECT_EVIDENCE_SERVICE_PROVIDER_PATCH not in body:
+        body += _PROJECT_EVIDENCE_SERVICE_PROVIDER_PATCH
+    if body == response.body:
         return response
     return ApiResponse(
         response.status,
-        response.body + _PROJECT_EVIDENCE_SERVICE_PROVIDER_PATCH,
+        body,
         response.content_type,
         response.headers,
     )

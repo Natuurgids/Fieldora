@@ -6,6 +6,9 @@ from natureai_next.server.modular_shell_web import patch_modular_shell_response
 from natureai_next.server.project_evidence_service_provider_web import (
     patch_project_evidence_service_provider_response,
 )
+from natureai_next.server.project_facility_workspace_web import (
+    patch_project_facility_workspace_response,
+)
 from natureai_next.server.project_work_data_provider_web import (
     patch_project_work_data_provider_response,
 )
@@ -72,6 +75,21 @@ def test_evidence_provider_requires_runtime_and_owns_governed_transport() -> Non
     assert "freezeItems" in script
 
 
+def test_evidence_provider_migrates_project_cockpit_consumer_to_contract() -> None:
+    shell = patch_modular_shell_response(
+        "/app.js", ApiResponse(200, b"const base=true;", "text/javascript; charset=utf-8")
+    )
+    cockpit = patch_project_facility_workspace_response("/app.js", shell)
+    runtime = patch_runtime_contracts_response("/app.js", cockpit)
+
+    patched = patch_project_evidence_service_provider_response("/app.js", runtime)
+    script = patched.body.decode("utf-8")
+
+    assert 'resolve("projects.evidence.service")' in script
+    assert "service.projectItems(cockpitProjectId)" in script
+    assert 'api("/api/v1/media?limit=500")' not in script
+
+
 def test_production_orders_data_services_before_list_provider() -> None:
     shell = patch_modular_shell_response(
         "/app.js", ApiResponse(200, b"const base=true;", "text/javascript; charset=utf-8")
@@ -86,3 +104,5 @@ def test_production_orders_data_services_before_list_provider() -> None:
 
     assert -1 < runtime < work < projects
     assert -1 < runtime < evidence < projects
+    assert "service.projectItems(cockpitProjectId)" in script
+    assert 'api("/api/v1/media?limit=500")' not in script

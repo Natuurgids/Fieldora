@@ -42,19 +42,22 @@ _BROWSER_FUNCTIONALITY_PATCH = bytes(
 
  /* Replace icon-only gallery rendering with governed native media elements.
     The browser cookie authenticates these same-origin Range requests. */
+ let libraryMediaSnapshot=Object.freeze({items:Object.freeze([]),filter:"all"});
+ document.addEventListener("fieldora:library-media-state-changed",event=>{libraryMediaSnapshot=event.detail;});
  renderMedia=function(){
-  let shown=media.filter(m=>mediaFilter==="all"||String(m.mime_type||"").startsWith(mediaFilter+"/"));
+  const mediaView=libraryMediaSnapshot.filter||"all";
+  let shown=Array.from(libraryMediaSnapshot.items||[]);
   const text=(document.querySelector("#page-library .global-search")?.value||"").toLowerCase();
   shown=shown.filter(m=>JSON.stringify(m).toLowerCase().includes(text));
   const labels={all:"All media",image:"Photos",audio:"Sounds",video:"Videos",application:"Documents"};
   const target=byId("media-grid");
-  target.dataset.renderedView=mediaFilter;
-  cards("media-grid",shown,m=>`<article class="card" data-media="${html(m.media_id)}">${mediaPreview(m)}<p><strong>${html(m.mime_type)}</strong></p><p class="muted">${(Number(m.size_bytes||0)/1048576).toFixed(2)} MB · ${m.project_id?`project ${html(m.project_id)}`:"General Library"}</p></article>`,`No ${labels[mediaFilter]||"media"} in this view.`);
-  setIndicator("library-view-indicator",`${labels[mediaFilter]||"Media"} · ${shown.length} item${shown.length===1?"":"s"}`);
+  target.dataset.renderedView=mediaView;
+  cards("media-grid",shown,m=>`<article class="card" data-media="${html(m.media_id)}">${mediaPreview(m)}<p><strong>${html(m.mime_type)}</strong></p><p class="muted">${(Number(m.size_bytes||0)/1048576).toFixed(2)} MB · ${m.project_id?`project ${html(m.project_id)}`:"General Library"}</p></article>`,`No ${labels[mediaView]||"media"} in this view.`);
+  setIndicator("library-view-indicator",`${labels[mediaView]||"Media"} · ${shown.length} item${shown.length===1?"":"s"}`);
  };
  byId("media-grid").onclick=e=>{
   const card=e.target.closest("[data-media]");if(!card)return;
-  const m=media.find(x=>x.media_id===card.dataset.media);if(!m)return;
+  const m=(libraryMediaSnapshot.items||[]).find(item=>item.media_id===card.dataset.media);if(!m)return;
   byId("media-detail").innerHTML=`${mediaPreview(m,true)}<h3>${html(m.mime_type)}</h3><p>Media ID<br><code>${html(m.media_id)}</code></p><p>${m.project_id?`Project ${html(m.project_id)}`:"General Library"} · ${(Number(m.size_bytes||0)/1048576).toFixed(2)} MB</p><p>SHA-256<br><code>${html(m.sha256)}</code></p><button id="media-download">Download governed original</button>`;
   byId("media-download").onclick=()=>download(mediaSource(m),`fieldora-media-${m.media_id}`);
  };

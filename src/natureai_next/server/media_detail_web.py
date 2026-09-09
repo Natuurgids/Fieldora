@@ -19,10 +19,12 @@ _MEDIA_DETAIL_PATCH = bytes(
  const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
  const labels={project:"Project",collection:"Collection / dataset",dossier:"Dossier",submission:"Submission",review_case:"Review case"};
  const policies={managed:"Managed",referenced:"Referenced",hybrid:"Hybrid"};
+ let libraryMediaSnapshot=Object.freeze({items:Object.freeze([]),filter:"all"});
+ document.addEventListener("fieldora:library-media-state-changed",event=>{libraryMediaSnapshot=event.detail;});
  grid.onclick=async e=>{
   legacy?.call(grid,e);
   const card=e.target.closest("[data-media]");if(!card)return;
-  const selected=(typeof media!=="undefined"?media:[]).find(item=>item.media_id===card.dataset.media);if(!selected)return;
+  const selected=(libraryMediaSnapshot.items||[]).find(item=>item.media_id===card.dataset.media);if(!selected)return;
   detail.querySelector("#media-governed-detail")?.remove();
   const section=document.createElement("section");section.id="media-governed-detail";section.className="section";
   section.innerHTML='<p class="muted">Loading governed identity and provenance…</p>';detail.appendChild(section);

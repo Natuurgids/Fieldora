@@ -33,6 +33,9 @@ from natureai_next.server.facility_web_compatibility import patch_facility_web_r
 from natureai_next.server.library_collections_web import (
     patch_library_collections_web_response,
 )
+from natureai_next.server.library_media_state_provider_web import (
+    patch_library_media_state_provider_response,
+)
 from natureai_next.server.lifecycle import ShutdownCoordinator
 from natureai_next.server.linked_storage_operator_web import (
     patch_linked_storage_operator_web_response,
@@ -166,6 +169,12 @@ def patch_managed_web_response(
     # Runtime contract declarations must use the same production registry as the
     # finalized shell so omitted modules are not advertised to browser consumers.
     response = patch_runtime_contracts_response(target, response, registry=registry)
+
+    # Library state is appended after compatibility projections so pagination,
+    # filtering, gallery, and governed detail all observe one final state owner.
+    response = patch_library_media_state_provider_response(
+        target, response, registry=registry
+    )
 
     for contract, patch in (
         # Work/evidence services must exist before list registration can trigger

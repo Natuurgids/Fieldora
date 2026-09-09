@@ -30,11 +30,14 @@ _FACILITY_BASE_OMISSION_PATCH = r"""
  document.querySelectorAll('.nav[data-page="operations"]').forEach(button=>{
   button.innerHTML='<span class="nav-icon">⌂</span>Asset & Equipment Operations';
  });
- if(
-  typeof operationsDomain!=="undefined"&&
-  ["locations","drawings"].includes(operationsDomain)
- ){
-  operationsDomain="assets";
+ const recoverFacilitiesDomain=()=>{
+  const host=window.FieldoraModuleContracts?.resolve("operations.workspace.host");
+  if(!host)return false;
+  if(["locations","drawings"].includes(host.currentDomain()))void host.selectDomain("assets");
+  return true;
+ };
+ if(!recoverFacilitiesDomain()){
+  document.addEventListener("fieldora:contracts-ready",recoverFacilitiesDomain,{once:true});
  }
 })();
 """.encode("utf-8")

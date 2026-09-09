@@ -133,6 +133,8 @@ _PROJECT_FACILITY_WORKSPACE_PATCH = bytes(
  /* ---- Facility / CMDB cockpit ----------------------------------------- */
  const facilityPage=q("page-operations");
  let facilityView="assets";
+ let facilityWorkspaceHost=null;
+ function facilityHost(){return facilityWorkspaceHost||window.FieldoraModuleContracts?.resolve("operations.workspace.host")||null}
  function facilityFilter(items){
   if(facilityView==="buildings")return items.filter(x=>/building|site|campus/i.test(String(x.location_type||x.category||x.type||"")));
   if(facilityView==="rooms")return items.filter(x=>/room|lab|laboratory|floor|zone/i.test(String(x.location_type||x.category||x.type||"")));
@@ -150,9 +152,10 @@ _PROJECT_FACILITY_WORKSPACE_PATCH = bytes(
   renderFacilityTree();
  }
  async function setFacilityView(view){
-  facilityView=view;operationsDomain=({buildings:"locations",rooms:"locations",assets:"assets",materials:"assets",drawings:"drawings",maintenance:"maintenance",calibrations:"calibrations"})[view]||"assets";
+  facilityView=view;const domain=({buildings:"locations",rooms:"locations",assets:"assets",materials:"assets",drawings:"drawings",maintenance:"maintenance",calibrations:"calibrations"})[view]||"assets";
   document.querySelectorAll("[data-facility-view]").forEach(b=>b.classList.toggle("primary",b.dataset.facilityView===view));
-  await loadOperations();
+  const host=facilityHost();if(!host)throw new Error("Facilities requires operations.workspace.host");
+  await host.selectDomain(domain);
   const planning=q("facility-planning-web");if(planning)planning.hidden=view!=="drawings";
   const map=q("facility-inspector-map");if(map)map.innerHTML=view==="drawings"?'<div class="facility-map-stage"><h3>Building maps & floorplans</h3><p class="muted">Use versioned drawings, mapped room/location geometries, future layouts and relocation campaigns. Current placement remains authoritative until a governed relocation step completes.</p></div>':'<div class="facility-map-stage"><h3>Spatial context</h3><p class="muted">Choose Building maps & floorplans to manage versioned building drawings and location geometry.</p></div>';
  }
@@ -171,9 +174,13 @@ _PROJECT_FACILITY_WORKSPACE_PATCH = bytes(
   if(listCard)q("facility-workspace-records").appendChild(listCard);if(oldSplit)oldSplit.remove();
   const planning=q("facility-planning-web");if(planning){q("facility-workspace-planning").appendChild(planning);planning.hidden=true}
   q("facility-tree-filter").oninput=renderFacilityTree;document.querySelectorAll("[data-facility-view]").forEach(b=>b.onclick=()=>setFacilityView(b.dataset.facilityView));
-  const oldOperations=loadOperations;loadOperations=async function(){await oldOperations();renderFacilityCenter()};
+  const bindFacilityWorkspace=()=>{
+   const host=window.FieldoraModuleContracts?.resolve("operations.workspace.host");if(!host)return false;
+   if(facilityWorkspaceHost===host)return true;
+   facilityWorkspaceHost=host;host.subscribe(()=>renderFacilityCenter());void setFacilityView(facilityView);return true;
+  };
+  if(!bindFacilityWorkspace())document.addEventListener("fieldora:contracts-ready",bindFacilityWorkspace,{once:true});
   q("operations-list").addEventListener("click",e=>{const row=e.target.closest("[data-operations-id]");if(!row)return;const items=JSON.parse(q("operations-list").dataset.records||"[]"),record=items.find(x=>x.id===row.dataset.operationsId);q("facility-inspector-metadata").innerHTML=record?`<h3>${esc2(record.name||record.title||record.id)}</h3><pre>${esc2(JSON.stringify(record,null,2))}</pre>`:'<div class="empty">Record unavailable.</div>';selectInspector(right,"facility-inspector","properties")},true);
-  setFacilityView("assets");
  }
 })();
 """,

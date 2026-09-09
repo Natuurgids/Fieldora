@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import pytest
 
+from natureai_next.server.facility_module_composition import _FACILITY_BASE_OMISSION_PATCH
 from natureai_next.server.modular_shell_composition import foundation_composition_registry
+from natureai_next.server.project_facility_workspace_web import (
+    _PROJECT_FACILITY_WORKSPACE_PATCH,
+)
 from natureai_next.server.web_module_contract_runtime import runtime_contract_manifest
 from natureai_next.server.web_module_contracts import FOUNDATION_WEB_MODULES, WebModuleContractError
 from natureai_next.server.web_module_extensions import (
@@ -64,3 +68,21 @@ def test_route_less_extension_contract_metadata_rejects_invalid_overlap() -> Non
             provides_contracts=("example.contract",),
             requires_contracts=("example.contract",),
         )
+
+
+def test_facilities_browser_projections_use_workspace_contract() -> None:
+    cockpit = _PROJECT_FACILITY_WORKSPACE_PATCH.decode("utf-8")
+    omission = _FACILITY_BASE_OMISSION_PATCH.decode("utf-8")
+
+    assert "operations.workspace.host" in cockpit
+    assert "fieldora:contracts-ready" in cockpit
+    assert "host.selectDomain" in cockpit
+    assert "host.subscribe" in cockpit
+    assert "operationsDomain" not in cockpit
+    assert "loadOperations" not in cockpit
+
+    assert "operations.workspace.host" in omission
+    assert "fieldora:contracts-ready" in omission
+    assert "host.currentDomain" in omission
+    assert "host.selectDomain" in omission
+    assert "operationsDomain" not in omission

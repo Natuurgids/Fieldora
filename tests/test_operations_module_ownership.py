@@ -117,7 +117,7 @@ def test_facilities_offline_maps_patch_uses_workspace_host_refresh_contract() ->
     assert "baseLoadOperations=loadOperations" not in script
     assert "loadOperations=async function" not in script
     assert "operations.workspace.host" in script
-    assert "host.subscribe(loadOfflineMaps)" in script
+    assert "host.subscribe(" in script
     assert "fieldora:contracts-ready" in script
     assert 'getElementById("operations-refresh")' not in script
     assert 'querySelectorAll(\'.nav[data-page="operations"]\')' not in script

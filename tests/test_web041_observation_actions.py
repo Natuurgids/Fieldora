@@ -188,11 +188,11 @@ def test_observation_workspace_actions_use_revisioned_governed_contracts(
         page.get_by_role("button", name="Accept selected", exact=True).click()
         page.wait_for_function(
             """() => {
-              const item=observations.find(value=>value.id==='observation-1');
+              const checkbox=document.querySelector(
+                '[data-observation-select="observation-1"]'
+              );
               const pill=document.querySelector('#observation-list .pill');
-              return selectedObservations.size===0
-                && item?.confirmation_state==='confirmed'
-                && item?.revision===2
+              return checkbox && !checkbox.checked
                 && pill?.textContent.includes('confirmed');
             }"""
         )

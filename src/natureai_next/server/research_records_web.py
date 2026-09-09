@@ -25,6 +25,7 @@ _RESEARCH_RECORDS_PATCH = bytes(
  const byId=id=>document.getElementById(id);
  const html=value=>String(value??"").replace(/[&<>"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
  const projectContext=()=>window.FieldoraModuleContracts?.resolve?.("projects.context.select")||null;
+ let researchDomain=document.querySelector("[data-research-domain].primary")?.dataset.researchDomain||"specimens";
  let governedResearchRecords=[],editingResearchRecord=null,integrationProjectId="",researchLoadGeneration=0;
  const list=byId("research-domain-list"),save=byId("science-save"),recordsCard=list?.closest(".card");
  if(!list||!save||!recordsCard)return;
@@ -89,7 +90,7 @@ _RESEARCH_RECORDS_PATCH = bytes(
  }
  save.onclick=saveRecord;
  byId("science-project")?.addEventListener("change",()=>{if(!editingResearchRecord){integrationProjectId=byId("science-project")?.value||"";loadResearchDomain()}});
- document.querySelectorAll("[data-research-domain]").forEach(button=>button.addEventListener("click",()=>{editingResearchRecord=null;if(byId("science-project"))byId("science-project").disabled=false;detail.hidden=true;clearEditor()}));
+ document.querySelectorAll("[data-research-domain]").forEach(button=>{button.onclick=()=>{researchDomain=button.dataset.researchDomain||"specimens";document.querySelectorAll("[data-research-domain]").forEach(item=>item.classList.toggle("primary",item===button));editingResearchRecord=null;if(byId("science-project"))byId("science-project").disabled=false;detail.hidden=true;clearEditor();loadResearchDomain()}});
  registerOpenProjectAction();
  document.addEventListener("fieldora:contracts-ready",registerOpenProjectAction,{once:true});
  window.FieldoraResearchRecords=Object.freeze({openProject,refresh:()=>loadResearchDomain(),currentProject:()=>integrationProjectId||byId("science-project")?.value||""});

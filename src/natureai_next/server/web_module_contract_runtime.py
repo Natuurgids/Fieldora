@@ -6,7 +6,9 @@ import json
 from urllib.parse import urlsplit
 
 from natureai_next.server.api import ApiResponse
-from natureai_next.server.modular_shell_composition import foundation_composition_registry
+from natureai_next.server.modular_shell_composition import (
+    foundation_composition_registry,
+)
 from natureai_next.server.web_module_contracts import WebModuleRegistry
 
 

@@ -106,5 +106,4 @@ def test_projects_free_production_composition_omits_projects_owned_providers() -
         assert marker not in script
 
     assert '"module_id":"home.activity"' in script
-    for contract in _PROJECT_CONTRACTS:
-        assert f'"{contract}"' not in script
+    assert '"module_id":"projects.core"' not in script

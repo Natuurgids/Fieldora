@@ -292,6 +292,7 @@ _SCIENCE_WORKFLOW_PATCH = bytes(
    button.onclick=()=>{
     setObservationFilter(button.dataset.observationFilter);
     document.querySelectorAll("[data-observation-filter]").forEach(item=>item.classList.toggle("primary",item===button));
+    renderObservations();
     return loadObservations();
    };
   });

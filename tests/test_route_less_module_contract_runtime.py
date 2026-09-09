@@ -4,6 +4,7 @@ import pytest
 
 from natureai_next.server.facility_actions_web import _FACILITY_ACTIONS_PATCH
 from natureai_next.server.facility_module_composition import _FACILITY_BASE_OMISSION_PATCH
+from natureai_next.server.facility_web_compatibility import _FACILITY_WEB_PATCH
 from natureai_next.server.modular_shell_composition import foundation_composition_registry
 from natureai_next.server.offline_maps_web import _OFFLINE_MAPS_WEB_PATCH
 from natureai_next.server.operations_module_composition import (
@@ -99,9 +100,10 @@ def test_facilities_browser_projections_use_workspace_contract() -> None:
 
 def test_facilities_auxiliary_projections_subscribe_to_workspace_contract() -> None:
     actions = _FACILITY_ACTIONS_PATCH.decode("utf-8")
+    planning = _FACILITY_WEB_PATCH.decode("utf-8")
     offline_maps = _OFFLINE_MAPS_WEB_PATCH.decode("utf-8")
 
-    for script in (actions, offline_maps):
+    for script in (actions, planning, offline_maps):
         assert "operations.workspace.host" in script
         assert "fieldora:contracts-ready" in script
         assert "host.subscribe" in script

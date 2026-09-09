@@ -19,7 +19,9 @@ _FACILITY_WEB_PATCH = br"""
  q("facility-plan-create").onclick=async()=>{try{const x=await api("/api/v1/facility-planning/plans",{method:"POST",purpose:"operations",body:JSON.stringify({name:q("facility-plan-name").value,drawing_id:q("facility-plan-drawing").value,version:q("facility-plan-version").value})});q("facility-placement-plan").value=x.plan.id;q("facility-campaign-plan").value=x.plan.id;loadAll()}catch(e){q("facility-planning-status").textContent=e.message}};
  q("facility-placement-create").onclick=async()=>{try{const id=q("facility-placement-plan").value.trim();await api(`/api/v1/facility-planning/plans/${encodeURIComponent(id)}/placements`,{method:"POST",purpose:"operations",body:JSON.stringify({asset_id:q("facility-placement-asset").value.trim(),target_location_id:q("facility-placement-location").value.trim(),target_geometry_id:q("facility-placement-geometry").value.trim()})});q("facility-planning-status").textContent="Future placement saved; current location unchanged.";loadAll()}catch(e){q("facility-planning-status").textContent=e.message}};
  q("facility-campaign-create").onclick=async()=>{try{const x=await api("/api/v1/facility-planning/campaigns",{method:"POST",purpose:"operations",body:JSON.stringify({name:q("facility-campaign-name").value,plan_id:q("facility-campaign-plan").value})});q("facility-campaign-id").value=x.campaign.id;loadAll();openCampaign(x.campaign.id)}catch(e){q("facility-planning-status").textContent=e.message}};
- q("facility-campaign-open").onclick=()=>openCampaign(q("facility-campaign-id").value.trim());document.querySelectorAll('.nav[data-page="operations"]').forEach(b=>b.addEventListener("click",loadAll));
+ q("facility-campaign-open").onclick=()=>openCampaign(q("facility-campaign-id").value.trim());
+ function bindWorkspaceRefresh(){const host=window.FieldoraModuleContracts?.resolve("operations.workspace.host");if(!host)return false;host.subscribe(()=>void loadAll());return true}
+ if(!bindWorkspaceRefresh())document.addEventListener("fieldora:contracts-ready",bindWorkspaceRefresh,{once:true});
 })();
 """
 

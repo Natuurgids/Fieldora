@@ -110,15 +110,14 @@ def test_operations_browser_omission_patches_do_not_claim_administration_dom() -
         assert "administration-nav-group-label" not in script
 
 
-def test_facilities_offline_maps_patch_does_not_wrap_operations_loader() -> None:
+def test_facilities_offline_maps_patch_uses_workspace_host_refresh_contract() -> None:
     from natureai_next.server.offline_maps_web import _OFFLINE_MAPS_WEB_PATCH
 
     script = _OFFLINE_MAPS_WEB_PATCH.decode("utf-8")
     assert "baseLoadOperations=loadOperations" not in script
     assert "loadOperations=async function" not in script
-    assert (
-        'getElementById("operations-refresh")?.addEventListener("click",loadOfflineMaps)'
-        in script
-    )
-    assert 'querySelectorAll(\'.nav[data-page="operations"]\')' in script
-    assert 'addEventListener("click",loadOfflineMaps)' in script
+    assert "operations.workspace.host" in script
+    assert "host.subscribe(loadOfflineMaps)" in script
+    assert "fieldora:contracts-ready" in script
+    assert 'getElementById("operations-refresh")' not in script
+    assert 'querySelectorAll(\'.nav[data-page="operations"]\')' not in script

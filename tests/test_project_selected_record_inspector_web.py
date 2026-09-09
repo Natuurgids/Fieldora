@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import natureai_next.server.http as http
 from playwright.sync_api import sync_playwright
 
 from natureai_next.server.api import ApiResponse
+from natureai_next.server.modular_shell_web import patch_modular_shell_response
 from natureai_next.server.project_context_provider_web import (
     patch_project_context_provider_response,
 )
@@ -12,6 +14,7 @@ from natureai_next.server.project_selected_record_provider_web import (
     _SELECTED_RECORD_PROVIDER_PATCH,
 )
 from natureai_next.server.web_module_contract_runtime import _runtime_script
+from natureai_next.server.web_module_contracts import foundation_registry
 
 
 def _install_script(page, script: bytes) -> None:
@@ -30,6 +33,27 @@ def test_context_composition_orders_selected_record_before_context_and_inspector
     context = script.index("WEB-PROJECT-CONTEXT-PROVIDER")
     inspector = script.index("WEB-PROJECT-INSPECTOR-MODULE")
     assert selected < context < inspector
+
+
+def test_production_composes_selected_record_independently_of_context_provider(
+    monkeypatch,
+) -> None:
+    shell = patch_modular_shell_response(
+        "/app.js",
+        ApiResponse(200, b"const base=true;", "text/javascript; charset=utf-8"),
+    )
+    monkeypatch.setattr(
+        http,
+        "patch_project_context_provider_response",
+        lambda target, response: response,
+    )
+
+    script = http.patch_managed_web_response(
+        "/app.js", shell, registry=foundation_registry()
+    ).body.decode("utf-8")
+
+    assert script.count("WEB-PROJECT-SELECTED-RECORD-PROVIDER") == 1
+    assert "WEB-PROJECT-CONTEXT-PROVIDER" not in script
 
 
 def test_project_core_publishes_selection_without_owning_inspector_dom() -> None:

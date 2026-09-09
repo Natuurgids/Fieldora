@@ -57,6 +57,9 @@ from natureai_next.server.project_facility_workspace_web import (
 from natureai_next.server.project_list_provider_web import (
     patch_project_list_provider_response,
 )
+from natureai_next.server.project_selected_record_provider_web import (
+    patch_project_selected_record_provider_response,
+)
 from natureai_next.server.project_work_data_provider_web import (
     patch_project_work_data_provider_response,
 )
@@ -183,6 +186,12 @@ def patch_managed_web_response(
         ("projects.evidence.service", patch_project_evidence_service_provider_response),
         # Projects owns the accessible-list snapshot behind the declared read contract.
         ("projects.list.read", patch_project_list_provider_response),
+        # Selected-record state is an independently declared Projects contract;
+        # compose it explicitly before context can publish the initial selection.
+        (
+            "projects.selected-record.select",
+            patch_project_selected_record_provider_response,
+        ),
         # Projects exposes context selection through a replaceable public contract.
         ("projects.context.select", patch_project_context_provider_response),
     ):

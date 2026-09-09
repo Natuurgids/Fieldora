@@ -74,3 +74,23 @@ def test_observation_browser_supports_revisioned_many_to_many_evidence_links() -
     assert 'method:"DELETE"' in script
     assert '"If-Match":String(editingObservation.revision||1)' in script
     assert "without changing or copying the primary evidence" in script
+
+
+def test_observation_workspace_state_is_owned_inside_science_module() -> None:
+    script = patch_science_workflow_web_response(
+        "/app.js",
+        ApiResponse(200, b"", "text/javascript; charset=utf-8"),
+    ).body.decode("utf-8")
+
+    assert 'let observationItems=Object.freeze([]),observationFilterState="all"' in script
+    assert "const selectedObservationIds=new Set()" in script
+    assert "fieldora:observation-state-changed" in script
+    assert "items:observationItems" in script
+    assert "selected:Object.freeze([...selectedObservationIds])" in script
+    assert "replaceObservationItems((await api(\"/api/v1/observations\")).items)" in script
+    assert "toggleObservationSelection(id,event.target.checked)" in script
+    assert "setObservationFilter(button.dataset.observationFilter)" in script
+    assert "observations.find(" not in script
+    assert "selectedObservations" not in script
+    assert "observationFilter==" not in script
+    assert "observations=(await" not in script

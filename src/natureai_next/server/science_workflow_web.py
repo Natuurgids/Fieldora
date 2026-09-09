@@ -43,10 +43,49 @@ _SCIENCE_WORKFLOW_PATCH = bytes(
   if(review)review.id="observation-review-panel";
   let observationView="review",editingObservation=null;
   let observationNav=null;
+  let observationItems=Object.freeze([]),observationFilterState="all";
+  const selectedObservationIds=new Set();
   const projectContext=()=>window.FieldoraModuleContracts?.resolve?.("projects.context.select")||null;
   const projectList=()=>window.FieldoraModuleContracts?.resolve?.("projects.list.read")||null;
   const projectItems=()=>{const items=projectList()?.items?.();return Array.isArray(items)?items:[]};
   const intro=document.createElement("p");intro.id="observation-workspace-intro";intro.className="library-workspace-intro";
+  const freezeObservationItems=items=>Object.freeze(
+   (Array.isArray(items)?items:[]).map(item=>
+    item&&typeof item==="object"?Object.freeze({...item}):item
+   )
+  );
+  function publishObservationState(){
+   const detail=Object.freeze({
+    items:observationItems,
+    filter:observationFilterState,
+    selected:Object.freeze([...selectedObservationIds]),
+   });
+   document.dispatchEvent(new CustomEvent("fieldora:observation-state-changed",{detail}));
+   return detail;
+  }
+  function replaceObservationItems(items){
+   observationItems=freezeObservationItems(items);
+   const available=new Set(observationItems.map(item=>String(item?.id||"")));
+   [...selectedObservationIds].forEach(id=>{if(!available.has(id))selectedObservationIds.delete(id)});
+   return publishObservationState();
+  }
+  function setObservationFilter(value){
+   observationFilterState=String(value||"all");
+   publishObservationState();
+   return observationFilterState;
+  }
+  function toggleObservationSelection(id,selected){
+   const key=String(id||"");if(!key)return;
+   selected?selectedObservationIds.add(key):selectedObservationIds.delete(key);
+   publishObservationState();
+  }
+  function clearObservationSelection(){
+   document.querySelectorAll('#observation-list [data-observation-select]:checked').forEach(input=>{
+    input.checked=false;input.dispatchEvent(new Event("change",{bubbles:true}));
+   });
+   selectedObservationIds.clear();
+   publishObservationState();
+  }
 
   function renderObservationProjectOptions(preferred=""){
    const select=q("obs-project");if(!select)return;
@@ -151,7 +190,7 @@ _SCIENCE_WORKFLOW_PATCH = bytes(
   }
 
   async function beginObservationEdit(id){
-   const item=observations.find(value=>value.id===id);if(!item)return;
+   const item=observationItems.find(value=>value.id===id);if(!item)return;
    editingObservation=item;
    if(q("observation-editor-title"))q("observation-editor-title").textContent="Edit observation";
    renderObservationProjectOptions(item.project_id||"");
@@ -246,42 +285,52 @@ _SCIENCE_WORKFLOW_PATCH = bytes(
    if(event.target.closest("input[type=checkbox]"))return;
    const row=event.target.closest("[data-observation]");if(row)beginObservationEdit(row.dataset.observation);
   });
+  q("observation-list")?.addEventListener("change",event=>{
+   const id=event.target.dataset.observationSelect;if(id)toggleObservationSelection(id,event.target.checked);
+  });
+  document.querySelectorAll("[data-observation-filter]").forEach(button=>{
+   button.onclick=()=>{
+    setObservationFilter(button.dataset.observationFilter);
+    document.querySelectorAll("[data-observation-filter]").forEach(item=>item.classList.toggle("primary",item===button));
+    return loadObservations();
+   };
+  });
   document.addEventListener("fieldora:contract-registered",event=>{
    const name=event.detail?.contract;if(name==="projects.list.read"&&!editingObservation)renderObservationProjectOptions(q("obs-project")?.value||"");
   });
   document.addEventListener("fieldora:project-list-changed",()=>{if(!editingObservation)renderObservationProjectOptions(q("obs-project")?.value||"")});
 
   loadObservations=async function(){
-   try{observations=(await api("/api/v1/observations")).items;renderObservations()}
+   try{replaceObservationItems((await api("/api/v1/observations")).items);renderObservations()}
    catch(e){cards("observation-list",[],x=>x,e.message)}
   };
   renderObservations=function(){
    const query=(document.querySelector("#page-observations .global-search")?.value||"").toLowerCase();
-   const shown=observations.filter(o=>{
-    const state=o.confirmation_state||"unconfirmed";
-    const filterOk=observationFilter==="all"||state===observationFilter||(observationFilter==="review"&&state==="unconfirmed");
-    return filterOk&&JSON.stringify(o).toLowerCase().includes(query);
+   const shown=observationItems.filter(item=>{
+    const state=item.confirmation_state||"unconfirmed";
+    const filterOk=observationFilterState==="all"||state===observationFilterState||(observationFilterState==="review"&&state==="unconfirmed");
+    return filterOk&&JSON.stringify(item).toLowerCase().includes(query);
    });
-   cards("observation-list",shown,o=>`<div class="row" data-observation="${esc(o.id)}"><input type="checkbox" data-observation-select="${esc(o.id)}" ${selectedObservations.has(o.id)?"checked":""}><strong>${esc(o.observation_type||"unknown")}</strong><span>${esc(o.asset_id||"")}</span><span>${o.count==null?"":esc(o.count)}</span><span class="pill">${esc(o.confirmation_state||"unconfirmed")}</span></div>`);
+   cards("observation-list",shown,item=>`<div class="row" data-observation="${esc(item.id)}"><input type="checkbox" data-observation-select="${esc(item.id)}" ${selectedObservationIds.has(item.id)?"checked":""}><strong>${esc(item.observation_type||"unknown")}</strong><span>${esc(item.asset_id||"")}</span><span>${item.count==null?"":esc(item.count)}</span><span class="pill">${esc(item.confirmation_state||"unconfirmed")}</span></div>`);
   };
   reviewSelected=async function(statusValue){
-   const ids=[...selectedObservations];if(!ids.length)return;
+   const ids=[...selectedObservationIds];if(!ids.length)return;
    const confirmation=statusValue==="confirmed"?"confirmed":statusValue==="rejected"?"rejected":"unconfirmed";
-   for(const id of ids){const item=observations.find(value=>value.id===id);if(item)await reviewObservation(item,confirmation)}
-   selectedObservations.clear();await loadObservations();
+   for(const id of ids){const item=observationItems.find(value=>value.id===id);if(item)await reviewObservation(item,confirmation)}
+   clearObservationSelection();await loadObservations();
   };
   acceptOneRejectRest=async function(){
-   const ids=[...selectedObservations];if(ids.length!==1)return;
-   const chosen=observations.find(value=>value.id===ids[0]);if(!chosen)return;
-   const group=observations.filter(value=>value.asset_id===chosen.asset_id);
+   const ids=[...selectedObservationIds];if(ids.length!==1)return;
+   const chosen=observationItems.find(value=>value.id===ids[0]);if(!chosen)return;
+   const group=observationItems.filter(value=>value.asset_id===chosen.asset_id);
    for(const item of group)await reviewObservation(item,item.id===chosen.id?"confirmed":"rejected");
-   selectedObservations.clear();await loadObservations();
+   clearObservationSelection();await loadObservations();
   };
   rejectAllUnconfirmed=async function(){
-   const ids=[...selectedObservations];if(!ids.length)return;
-   const selected=observations.find(value=>value.id===ids[0]);if(!selected)return;
-   for(const item of observations.filter(value=>value.asset_id===selected.asset_id&&value.confirmation_state!=="confirmed"))await reviewObservation(item,"rejected");
-   selectedObservations.clear();await loadObservations();
+   const ids=[...selectedObservationIds];if(!ids.length)return;
+   const selected=observationItems.find(value=>value.id===ids[0]);if(!selected)return;
+   for(const item of observationItems.filter(value=>value.asset_id===selected.asset_id&&value.confirmation_state!=="confirmed"))await reviewObservation(item,"rejected");
+   clearObservationSelection();await loadObservations();
   };
 
   setObservationView("review");

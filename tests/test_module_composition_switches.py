@@ -17,6 +17,9 @@ from natureai_next.server.modular_shell_composition import (
 from natureai_next.server.modular_shell_web import (
     patch_modular_shell_response as install_modular_shell_response,
 )
+from natureai_next.server.operations_module_composition import (
+    _OPERATIONS_WITH_FACILITIES_PATCH,
+)
 from natureai_next.server.operations_module_ownership import (
     FACILITIES_SCIENCE_ROUTES,
     OPERATIONS_SCIENCE_ROUTES,
@@ -199,18 +202,19 @@ def test_operations_omission_preserves_facilities_host() -> None:
 
     final = patch_managed_web_response("/app.js", installed, registry=registry)
     script = final.body.decode("utf-8")
+    omission_patch = _OPERATIONS_WITH_FACILITIES_PATCH.decode("utf-8")
 
     assert not registry.is_composed(OPERATIONS_WEB_MODULE_ID)
     assert registry.is_composed(FACILITIES_WEB_MODULE_ID)
     assert "WEB-OPERATIONS-BASE-OMISSION:FACILITIES" in script
     assert '["assets","maintenance","calibrations"].forEach' in script
     assert 'button.textContent="Facilities"' in script
-    assert "operations.workspace.host" in script
-    assert "fieldora:contracts-ready" in script
-    assert "host.currentDomain" in script
-    assert "host.selectDomain" in script
-    assert "operationsDomain" not in script
-    assert "loadOperations" not in script
+    assert "operations.workspace.host" in omission_patch
+    assert "fieldora:contracts-ready" in omission_patch
+    assert "host.currentDomain" in omission_patch
+    assert "host.selectDomain" in omission_patch
+    assert "operationsDomain" not in omission_patch
+    assert "loadOperations" not in omission_patch
     assert "WEB-FACILITIES-BASE-OMISSION" not in script
 
 

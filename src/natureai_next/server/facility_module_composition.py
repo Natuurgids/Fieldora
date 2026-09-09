@@ -43,7 +43,7 @@ _FACILITY_BASE_OMISSION_PATCH = r"""
   document.addEventListener("fieldora:contracts-ready",recoverFacilitiesDomain,{once:true});
  }
 })();
-""".encode("utf-8")
+""".encode()
 
 
 def suppress_facilities_browser_response(target: str, response: ApiResponse) -> ApiResponse:

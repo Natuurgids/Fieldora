@@ -74,7 +74,8 @@ def test_projects_free_registry_generates_shell_and_contract_runtime() -> None:
     for route in {"/home", "/library", "/observations", "/knowledge", "/administration"}:
         assert f'"{route.lstrip("/")}"' not in surface_filter
 
-    for contract in _PROJECT_CONTRACTS:
+    assert '"optional_contracts":["projects.list.read"]' in contracts
+    for contract in _PROJECT_CONTRACTS - {"projects.list.read"}:
         assert contract not in contracts
 
     assert "window.FieldoraModules=Object.freeze" in shell

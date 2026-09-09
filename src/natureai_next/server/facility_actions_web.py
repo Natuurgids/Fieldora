@@ -14,6 +14,7 @@ _FACILITY_ACTIONS_PATCH = br"""
  window.__fieldoraFacilityActions=true;
  const q=id=>document.getElementById(id);
  function status(message){const host=q("facility-planning-status");if(host)host.textContent=message}
+ function planningService(){return window.FieldoraModuleContracts?.resolve("facilities.planning.service")||null}
  async function governRow(row){
   const buttons=[...row.querySelectorAll("button[data-step][data-state]")];
   if(!buttons.length||row.dataset.facilityActionsLoading==="1")return;
@@ -21,7 +22,8 @@ _FACILITY_ACTIONS_PATCH = br"""
   buttons.forEach(button=>{button.disabled=true;button.hidden=true});
   const stepId=buttons[0].dataset.step;
   try{
-   const result=await api(`/api/v1/facility-planning/steps/${encodeURIComponent(stepId)}`,{purpose:"operations"});
+   const service=planningService();if(!service)throw new Error("Facilities planning service is unavailable.");
+   const result=await service.step(stepId);
    const step=result.step||{},allowed=new Set(step.next_actions||[]);
    buttons.forEach(button=>{
     const permitted=allowed.has(button.dataset.state);
@@ -54,7 +56,7 @@ _FACILITY_ACTIONS_PATCH = br"""
  const observer=new MutationObserver(governCampaign);
  function attach(){const host=q("facility-campaign-detail");if(!host)return;observer.observe(host,{childList:true,subtree:true});governCampaign()}
  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",attach,{once:true});else attach();
- function bindWorkspaceRefresh(){const host=window.FieldoraModuleContracts?.resolve("operations.workspace.host");if(!host)return false;host.subscribe(()=>queueMicrotask(attach));return true}
+ function bindWorkspaceRefresh(){const host=window.FieldoraModuleContracts?.resolve("operations.workspace.host");if(!host||!planningService())return false;host.subscribe(()=>queueMicrotask(attach));return true}
  if(!bindWorkspaceRefresh())document.addEventListener("fieldora:contracts-ready",bindWorkspaceRefresh,{once:true});
 })();
 """

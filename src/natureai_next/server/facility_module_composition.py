@@ -6,7 +6,10 @@ from urllib.parse import urlsplit
 
 from natureai_next.server.api import ApiResponse
 from natureai_next.server.facility_actions_web import _FACILITY_ACTIONS_PATCH
-from natureai_next.server.facility_web_compatibility import _FACILITY_WEB_PATCH
+from natureai_next.server.facility_web_compatibility import (
+    _FACILITY_PLANNING_SERVICE_PROVIDER_PATCH,
+    _FACILITY_WEB_PATCH,
+)
 from natureai_next.server.offline_maps_web import (
     _OFFLINE_MAPS_SERVICE_PROVIDER_PATCH,
     _OFFLINE_MAPS_WEB_PATCH,
@@ -54,6 +57,7 @@ def suppress_facilities_browser_response(target: str, response: ApiResponse) -> 
 
     body = (
         response.body.replace(_FACILITY_ACTIONS_PATCH, b"")
+        .replace(_FACILITY_PLANNING_SERVICE_PROVIDER_PATCH, b"")
         .replace(_FACILITY_WEB_PATCH, b"")
         .replace(_OFFLINE_MAPS_SERVICE_PROVIDER_PATCH, b"")
         .replace(_OFFLINE_MAPS_WEB_PATCH, b"")

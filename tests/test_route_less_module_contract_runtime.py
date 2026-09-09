@@ -8,7 +8,10 @@ from natureai_next.server.facility_module_composition import (
     _FACILITY_BASE_OMISSION_PATCH,
     suppress_facilities_browser_response,
 )
-from natureai_next.server.facility_web_compatibility import _FACILITY_WEB_PATCH
+from natureai_next.server.facility_web_compatibility import (
+    _FACILITY_PLANNING_SERVICE_PROVIDER_PATCH,
+    _FACILITY_WEB_PATCH,
+)
 from natureai_next.server.modular_shell_composition import (
     FoundationCompositionRegistry,
     foundation_composition_registry,
@@ -48,7 +51,10 @@ def test_runtime_manifest_publishes_route_less_composition_identities() -> None:
 
     facilities = by_id[FACILITIES_WEB_MODULE_ID]
     assert facilities["host_route"] == "/operations"
-    assert facilities["provides_contracts"] == ["facilities.offline-maps.service"]
+    assert facilities["provides_contracts"] == [
+        "facilities.offline-maps.service",
+        "facilities.planning.service",
+    ]
     assert facilities["requires_contracts"] == ["operations.workspace.host"]
     assert facilities["optional_contracts"] == []
 
@@ -184,15 +190,52 @@ def test_offline_maps_projection_uses_facilities_service_contract() -> None:
     assert "api(" not in projection
 
 
-def test_facilities_omission_removes_offline_maps_provider_and_projection() -> None:
+def test_facilities_planning_projections_use_facilities_service_contract() -> None:
+    provider = _FACILITY_PLANNING_SERVICE_PROVIDER_PATCH.decode("utf-8")
+    planning = _FACILITY_WEB_PATCH.decode("utf-8")
+    actions = _FACILITY_ACTIONS_PATCH.decode("utf-8")
+
+    assert 'contractName="facilities.planning.service"' in provider
+    assert 'moduleId="facilities"' in provider
+    assert 'prefix="/api/v1/facility-planning"' in provider
+    for operation in (
+        'drawings:()=>request("/drawings")',
+        'plans:()=>request("/plans")',
+        'campaigns:()=>request("/campaigns")',
+        "campaign:id=>request(`",
+        "step:id=>request(`",
+        "addGeometry:(drawingId,payload)=>post(`",
+        'createPlan:payload=>post("/plans",payload)',
+        "addPlacement:(planId,payload)=>post(`",
+        'createCampaign:payload=>post("/campaigns",payload)',
+        "transitionStep:(stepId,state)=>post(`",
+    ):
+        assert operation in provider
+
+    for projection in (planning, actions):
+        assert 'resolve("facilities.planning.service")' in projection
+        assert "/api/v1/facility-planning" not in projection
+        assert "api(" not in projection
+    assert "service.step(stepId)" in actions
+    assert "service.transitionStep(b.dataset.step,b.dataset.state)" in planning
+
+
+def test_facilities_omission_removes_service_providers_and_projections() -> None:
     response = ApiResponse(
         200,
-        _OFFLINE_MAPS_SERVICE_PROVIDER_PATCH + _OFFLINE_MAPS_WEB_PATCH,
+        _FACILITY_PLANNING_SERVICE_PROVIDER_PATCH
+        + _FACILITY_WEB_PATCH
+        + _FACILITY_ACTIONS_PATCH
+        + _OFFLINE_MAPS_SERVICE_PROVIDER_PATCH
+        + _OFFLINE_MAPS_WEB_PATCH,
         "text/javascript; charset=utf-8",
     )
 
     suppressed = suppress_facilities_browser_response("/app.js", response)
 
+    assert _FACILITY_PLANNING_SERVICE_PROVIDER_PATCH not in suppressed.body
+    assert _FACILITY_WEB_PATCH not in suppressed.body
+    assert _FACILITY_ACTIONS_PATCH not in suppressed.body
     assert _OFFLINE_MAPS_SERVICE_PROVIDER_PATCH not in suppressed.body
     assert _OFFLINE_MAPS_WEB_PATCH not in suppressed.body
     assert _FACILITY_BASE_OMISSION_PATCH in suppressed.body

@@ -105,6 +105,13 @@ def _web_fixture(tmp_path: Path):
       if(!response.ok)throw new Error(`HTTP ${response.status}`);
       return response.json();
     }
+    const facilityPlanningService=Object.freeze({
+      step:stepId=>api(`/api/v1/facility-planning/steps/${encodeURIComponent(stepId)}`,{purpose:"operations"})
+    });
+    const operationsWorkspaceHost=Object.freeze({subscribe:()=>()=>{}});
+    window.FieldoraModuleContracts=Object.freeze({
+      resolve:name=>name==="facilities.planning.service"?facilityPlanningService:name==="operations.workspace.host"?operationsWorkspaceHost:null
+    });
     """
     patched = patch_facility_actions_response(
         "/app.js", ApiResponse(200, base, "text/javascript; charset=utf-8")

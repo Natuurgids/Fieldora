@@ -76,7 +76,10 @@ FOUNDATION_WEB_MODULE_EXTENSIONS: tuple[WebModuleExtensionSpec, ...] = (
         FACILITIES_WEB_MODULE_ID,
         "Facilities",
         "/operations",
-        provides_contracts=("facilities.offline-maps.service",),
+        provides_contracts=(
+            "facilities.offline-maps.service",
+            "facilities.planning.service",
+        ),
         requires_contracts=("operations.workspace.host",),
     ),
 )

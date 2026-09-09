@@ -23,10 +23,13 @@ def test_project_and_facility_cockpit_is_appended_once_to_managed_app() -> None:
     assert "Rooms & Labs" in text
     assert "Materials / CMDB" in text
     assert "Maps & Floorplans" in text
-    assert 'operationsDomain=({buildings:"locations",rooms:"locations"' in text
+    assert 'operations.workspace.host' in text
+    assert 'host.selectDomain(domain)' in text
+    assert 'host.subscribe(()=>renderFacilityCenter())' in text
     assert 'api("/api/v1/media?limit=500")' in text
     assert "loadPortfolio=async function()" in text
-    assert "loadOperations=async function()" in text
+    assert "operationsDomain" not in text
+    assert "loadOperations=async function()" not in text
 
 
 def test_project_facility_cockpit_only_patches_successful_app_javascript() -> None:

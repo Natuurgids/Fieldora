@@ -68,6 +68,32 @@ class FoundationCompositionRegistry(WebModuleRegistry):
         normalized = module_id.strip()
         return normalized in self.as_mapping() or normalized in self._extensions
 
+    def validate_contracts(self) -> None:
+        """Validate route-owned and route-less extension contract requirements."""
+
+        providers = dict(self._contracts)
+        for extension in self._extensions.values():
+            for contract in extension.provides_contracts:
+                if contract in providers:
+                    owner = providers[contract]
+                    raise WebModuleContractError(
+                        f"contract {contract!r} is already provided by {owner!r}"
+                    )
+                providers[contract] = extension.module_id
+
+        missing: dict[str, list[str]] = {}
+        consumers = (*self.as_mapping().values(), *self._extensions.values())
+        for spec in consumers:
+            unknown = [
+                contract
+                for contract in spec.requires_contracts
+                if contract not in providers
+            ]
+            if unknown:
+                missing[spec.module_id] = unknown
+        if missing:
+            raise WebModuleContractError(f"missing contract providers: {missing!r}")
+
 
 def foundation_composition_registry(
     enabled_module_ids: Iterable[str] | None = None,

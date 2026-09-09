@@ -5,7 +5,10 @@ import pytest
 from natureai_next.server.facility_actions_web import _FACILITY_ACTIONS_PATCH
 from natureai_next.server.facility_module_composition import _FACILITY_BASE_OMISSION_PATCH
 from natureai_next.server.facility_web_compatibility import _FACILITY_WEB_PATCH
-from natureai_next.server.modular_shell_composition import foundation_composition_registry
+from natureai_next.server.modular_shell_composition import (
+    FoundationCompositionRegistry,
+    foundation_composition_registry,
+)
 from natureai_next.server.offline_maps_web import _OFFLINE_MAPS_WEB_PATCH
 from natureai_next.server.operations_module_composition import (
     _OPERATIONS_WITH_FACILITIES_PATCH,
@@ -78,6 +81,54 @@ def test_route_less_extension_contract_metadata_rejects_invalid_overlap() -> Non
             provides_contracts=("example.contract",),
             requires_contracts=("example.contract",),
         )
+
+
+def test_route_less_extension_contract_requirements_are_validated() -> None:
+    missing = FoundationCompositionRegistry(
+        extensions=(
+            WebModuleExtensionSpec(
+                "example.consumer",
+                "Example consumer",
+                "/example",
+                requires_contracts=("example.contract",),
+            ),
+        )
+    )
+    with pytest.raises(WebModuleContractError, match="missing contract providers"):
+        missing.validate_contracts()
+
+    valid = FoundationCompositionRegistry(
+        extensions=(
+            WebModuleExtensionSpec(
+                "example.provider",
+                "Example provider",
+                "/example",
+                provides_contracts=("example.contract",),
+            ),
+            WebModuleExtensionSpec(
+                "example.consumer",
+                "Example consumer",
+                "/example",
+                requires_contracts=("example.contract",),
+            ),
+        )
+    )
+    valid.validate_contracts()
+
+
+def test_route_less_extension_contract_provider_collisions_are_rejected() -> None:
+    registry = FoundationCompositionRegistry(
+        extensions=(
+            WebModuleExtensionSpec(
+                "example.identity",
+                "Example identity",
+                "/example",
+                provides_contracts=("auth.current-user",),
+            ),
+        )
+    )
+    with pytest.raises(WebModuleContractError, match="already provided"):
+        registry.validate_contracts()
 
 
 def test_facilities_browser_projections_use_workspace_contract() -> None:

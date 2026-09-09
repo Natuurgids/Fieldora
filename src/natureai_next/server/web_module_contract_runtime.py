@@ -10,6 +10,14 @@ from natureai_next.server.modular_shell_composition import foundation_compositio
 from natureai_next.server.web_module_contracts import WebModuleRegistry
 
 
+_OPERATIONS_LOAD_SUCCESS_SUFFIX = (
+    b',"No operational records.")}catch(e){cards("operations-list",[],x=>x,e.message)}}'
+)
+_OPERATIONS_LOAD_RETURN_SUFFIX = (
+    b',"No operational records.");return items}catch(e){cards("operations-list",[],x=>x,e.message);return []}}'
+)
+
+
 def runtime_contract_manifest(
     registry: WebModuleRegistry | None = None,
 ) -> tuple[dict[str, object], ...]:
@@ -113,11 +121,11 @@ def _runtime_script(registry: WebModuleRegistry | None = None) -> bytes:
         "  const operationsWorkspaceListeners=new Set();\n"
         "  let operationsWorkspaceDomain=typeof operationsDomain==='undefined'?null:String(operationsDomain);\n"
         "  const currentDomain=()=>operationsWorkspaceDomain;\n"
-        "  const captureRecords=()=>{const node=document.getElementById('operations-list');let parsed=[];try{parsed=JSON.parse(node?.dataset.records||'[]')}catch(_error){}return Object.freeze((Array.isArray(parsed)?parsed:[]).map(record=>record&&typeof record==='object'?Object.freeze({...record}):record));};\n"
-        "  let operationsWorkspaceRecords=captureRecords();\n"
+        "  const freezeRecords=records=>Object.freeze((Array.isArray(records)?records:[]).map(record=>record&&typeof record==='object'?Object.freeze({...record}):record));\n"
+        "  let operationsWorkspaceRecords=Object.freeze([]);\n"
         "  const currentRecords=()=>operationsWorkspaceRecords;\n"
         "  const baseOperationsLoad=loadOperations;\n"
-        "  loadOperations=async function(){if(typeof operationsDomain!=='undefined')operationsDomain=operationsWorkspaceDomain;const result=await baseOperationsLoad();operationsWorkspaceRecords=captureRecords();const snapshot=Object.freeze({domain:currentDomain(),records:operationsWorkspaceRecords});operationsWorkspaceListeners.forEach(listener=>{try{listener(snapshot)}catch(error){console.error('Operations workspace subscriber failed',error)}});return result;};\n"
+        "  loadOperations=async function(){if(typeof operationsDomain!=='undefined')operationsDomain=operationsWorkspaceDomain;const result=await baseOperationsLoad();operationsWorkspaceRecords=freezeRecords(result);const snapshot=Object.freeze({domain:currentDomain(),records:operationsWorkspaceRecords});operationsWorkspaceListeners.forEach(listener=>{try{listener(snapshot)}catch(error){console.error('Operations workspace subscriber failed',error)}});return result;};\n"
         "  const selectDomain=async domain=>{const next=token(domain);if(!next)throw new Error('Operations workspace domain is required');operationsWorkspaceDomain=next;return loadOperations();};\n"
         "  const subscribe=listener=>{if(typeof listener!=='function')throw new Error('Operations workspace subscriber must be a function');operationsWorkspaceListeners.add(listener);return ()=>operationsWorkspaceListeners.delete(listener);};\n"
         "  const implementation=Object.freeze({currentDomain,records:currentRecords,selectDomain,refresh:()=>loadOperations(),subscribe});\n"
@@ -149,9 +157,13 @@ def patch_runtime_contracts_response(
         or patch in response.body
     ):
         return response
+    body = response.body.replace(
+        _OPERATIONS_LOAD_SUCCESS_SUFFIX,
+        _OPERATIONS_LOAD_RETURN_SUFFIX,
+    )
     return ApiResponse(
         response.status,
-        response.body + patch,
+        body + patch,
         response.content_type,
         response.headers,
     )

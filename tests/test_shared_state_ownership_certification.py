@@ -80,11 +80,12 @@ def test_a06_shared_state_owner_inventory() -> None:
     assert "let operationsWorkspaceDomain=typeof operationsDomain==='undefined'?null:String(operationsDomain)" in runtime
     assert "const currentDomain=()=>operationsWorkspaceDomain" in runtime
     assert "operationsWorkspaceDomain=next;return loadOperations()" in runtime
-    assert "let operationsWorkspaceRecords=captureRecords()" in runtime
+    assert "let operationsWorkspaceRecords=Object.freeze([])" in runtime
+    assert "operationsWorkspaceRecords=freezeRecords(result)" in runtime
     assert "const currentRecords=()=>operationsWorkspaceRecords" in runtime
     assert "records:currentRecords" in runtime
 
-    # The Operations DOM dataset remains only a legacy capture adapter. Canonical
-    # state exposed to consumers is the private frozen snapshot above; DOM-root
-    # ownership of that adapter is tracked separately by A07.
-    assert "JSON.parse(node?.dataset.records||'[]')" in runtime
+    # A07 owns DOM boundaries: the application workspace host no longer reaches into
+    # Operations' private list DOM to reconstruct its public records snapshot.
+    assert "document.getElementById('operations-list')" not in runtime
+    assert "dataset.records" not in runtime

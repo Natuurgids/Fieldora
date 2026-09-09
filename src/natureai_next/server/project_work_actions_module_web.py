@@ -29,6 +29,7 @@ _PROJECT_WORK_ACTIONS_MODULE_PATCH = bytes(
   notifications()?.publish?.(String(message),{level:"error",source_module:moduleId});
  }
  function ensureSurface(){
+  const legacyEditor=q("work-save")?.closest(".card.section");if(legacyEditor)legacyEditor.remove();
   const cockpit=q("project-desktop-cockpit"),toolbar=cockpit?.querySelector(".cockpit-center .cockpit-toolbar");if(!cockpit||!toolbar)return false;
   let actions=q("project-core-work-actions");
   if(!actions){

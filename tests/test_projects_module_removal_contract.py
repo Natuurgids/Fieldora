@@ -51,6 +51,10 @@ def test_projects_removal_preserves_unrelated_module_registry() -> None:
     assert registry.resolve("/observations").module_id == "observations.core"
     assert registry.resolve("/knowledge").module_id == "knowledge.center"
     assert registry.resolve("/administration").module_id == "admin.shell"
+    assert registry.module("home.activity").optional_contracts == (
+        "projects.list.read",
+    )
+    assert registry.contract_provider("projects.list.read") is None
 
 
 def test_unrelated_modules_have_no_hidden_projects_contract_requirement() -> None:
@@ -67,3 +71,6 @@ def test_unrelated_modules_have_no_hidden_projects_contract_requirement() -> Non
             continue
         assert not _PROJECT_CONTRACTS.intersection(spec.requires_contracts)
         assert "projects.core" not in spec.dependencies
+
+    home = next(spec for spec in FOUNDATION_WEB_MODULES if spec.module_id == "home.activity")
+    assert home.optional_contracts == ("projects.list.read",)

@@ -28,6 +28,28 @@ _LEGACY_PROJECT_CONTEXT_READ = b"window.FieldoraProjects?.currentProject?.()"
 _MANAGED_PROJECT_CONTEXT_READ = (
     b'window.FieldoraModuleContracts?.resolve?.("projects.context.select")?.current?.()'
 )
+_LEGACY_COCKPIT_PROJECT_CONTEXT_WRITE = (
+    b'cockpitProjectId=id||"";selectedProject=cockpitProjectId;'
+)
+_MANAGED_COCKPIT_PROJECT_CONTEXT_WRITE = (
+    b'cockpitProjectId=id||"";const context=window.FieldoraModuleContracts?.resolve?.('
+    b'"projects.context.select");if(!context?.select?.(cockpitProjectId))return;'
+)
+_MANAGED_PROJECT_CONTEXT_CURRENT = (
+    b'window.FieldoraModuleContracts?.resolve?.("projects.context.select")?.current?.()||""'
+)
+_LEGACY_PROJECT_RUNTIME_CONTEXT_READS = (
+    (b'const id=selectedProject||"";', b'const id=' + _MANAGED_PROJECT_CONTEXT_CURRENT + b';'),
+    (b',id=selectedProject||"";', b',id=' + _MANAGED_PROJECT_CONTEXT_CURRENT + b';'),
+    (
+        b'const projectId=selectedProject||"",title=',
+        b'const projectId=' + _MANAGED_PROJECT_CONTEXT_CURRENT + b',title=',
+    ),
+    (
+        b'const projectId=selectedProject||"",mediaId=',
+        b'const projectId=' + _MANAGED_PROJECT_CONTEXT_CURRENT + b',mediaId=',
+    ),
+)
 _LEGACY_PROJECT_OPTIONS_SOURCE = (
     'function projectOptions(){const options=\'<option value="">Select project…</option>\'+'
     'projects.map(p=>'
@@ -72,6 +94,19 @@ def _patch_projects_owned_context_reads(body: bytes) -> bytes:
     """Route composed Projects adapters through the canonical context contract."""
 
     return body.replace(_LEGACY_PROJECT_CONTEXT_READ, _MANAGED_PROJECT_CONTEXT_READ)
+
+
+def _patch_private_project_context_consumers(body: bytes) -> bytes:
+    """Remove cross-module reads and writes of the shell-private selectedProject state."""
+
+    body = body.replace(
+        _LEGACY_COCKPIT_PROJECT_CONTEXT_WRITE,
+        _MANAGED_COCKPIT_PROJECT_CONTEXT_WRITE,
+        1,
+    )
+    for legacy, managed in _LEGACY_PROJECT_RUNTIME_CONTEXT_READS:
+        body = body.replace(legacy, managed, 1)
+    return body
 
 
 def _patch_legacy_project_selector_source(body: bytes) -> bytes:
@@ -191,6 +226,7 @@ def patch_project_context_provider_response(target: str, response: ApiResponse) 
     body = _patch_legacy_work_project_context(selected.body)
     body = _patch_legacy_project_presentation_list(body)
     body = _patch_projects_owned_context_reads(body)
+    body = _patch_private_project_context_consumers(body)
     body = _patch_legacy_project_selector_source(body)
     body = _retire_legacy_work_editor(body)
     body = _retire_projects_compatibility_facade(body)

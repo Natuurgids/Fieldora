@@ -19,7 +19,7 @@ Status legend: `[ ]` missing, `[~]` partial/evidence or migration in progress, `
 | A03 | [~] | Shared application contracts | A01 | Auth, project context, navigation, inspector and notifications are consumed through public contracts. |
 | A04 | [~] | Event/message boundary | A03 | Cross-module runtime changes use declared actions/events; producer and consumer ownership are known. |
 | A05 | [~] | Service/API adapters | A03 | Presentation modules receive service/API adapters through stable interfaces; transport details are not feature globals. |
-| A06 | [~] | State ownership | A03,A04 | Every shared state field has one owner; consumers use snapshots/read contracts/events and cannot mutate owner state directly. |
+| A06 | [x] | State ownership | A03,A04 | Every shared state field has one owner; consumers use snapshots/read contracts/events and cannot mutate owner state directly. |
 | A07 | [~] | DOM ownership | A01 | Each module owns a bounded render root and does not reach into another module's private DOM. |
 | A08 | [~] | Shell decomposition | A01-A07 | Shell performs composition, capability gating, route/history and lifecycle only; feature business behavior is outside the shell. |
 
@@ -27,6 +27,7 @@ Status legend: `[ ]` missing, `[~]` partial/evidence or migration in progress, `
 
 - A01 is certified at `98d2766f7a87b4e16930ccc342c1cbad2ee86651`. `WebModuleSpec` explicitly defines module identity, route, label, capability, owned actions, concrete dependencies, and provided/required/optional public contracts, with normalization and duplicate/overlap validation. `WebModuleAdapter` defines the shared `mount(spec)` / `unmount(spec)` lifecycle contract, `WebModuleRuntime` owns lifecycle states, ordering and failure isolation, and the production browser shell emits `fieldora:module-unmount` before `fieldora:module-mount` while carrying the public module spec in each lifecycle event. Exact-head modular-shell run #390 is green and exercises the module-contract/runtime test suites.
 - A02 is certified against the same implementation head. `foundation_registry()` validates concrete dependencies and required contract providers before the shell consumes the registry. Registry registration rejects duplicate module IDs, routes, owned actions and contract providers; validation rejects unknown dependencies and unresolved required contracts. Browser-manifest tests prove the shell module set and provided/required/optional contract metadata match the typed registry, and a custom registry produces a custom bootstrap rather than relying on a hard-coded module list.
+- A06 is certified at exact head `d0ddb28d5722bfc93a646bb1fecc93f4820e6fa5`. The shared-state ownership inventory mechanically verifies one canonical owner/read boundary for Projects list/context, Observation items/filter/selection, Library media/filter snapshots, Knowledge review state, Research domain, Portfolio view, application auth identity and Operations workspace state. The remaining Operations `dataset.records` capture is explicitly bounded as a legacy DOM adapter tracked by A07 rather than a competing mutable state owner. Modular-shell run #503, server-web run #1466, WEB-056 run #685, Knowledge, Observation, Library, Project, zero-trust and the complete visible exact-head workflow wave are green.
 
 ## Projects slice — Project list and project context
 

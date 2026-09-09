@@ -26,17 +26,19 @@ _OPERATIONS_WITH_FACILITIES_PATCH = bytes(
  document.querySelectorAll('.nav[data-page="operations"]').forEach(button=>{
   button.innerHTML='<span class="nav-icon">⌂</span>Facilities';
  });
- let switched=false;
- if(
-  typeof operationsDomain!=="undefined"&&
-  ["assets","maintenance","calibrations","documents"].includes(operationsDomain)
- ){
-  operationsDomain="locations";
-  switched=true;
+ const recoverOperationsDomain=()=>{
+  const host=window.FieldoraModuleContracts?.resolve("operations.workspace.host");
+  if(!host)return false;
+  if(["assets","maintenance","calibrations","documents"].includes(host.currentDomain())){
+   void host.selectDomain("locations");
+  }
+  return true;
+ };
+ if(!recoverOperationsDomain()){
+  document.addEventListener("fieldora:contracts-ready",recoverOperationsDomain,{once:true});
  }
  const indicator=document.getElementById("operations-view-indicator");
  if(indicator)indicator.textContent="Locations view";
- if(switched&&!page.hidden&&typeof loadOperations==="function")loadOperations();
 })();
 """,
     "utf-8",

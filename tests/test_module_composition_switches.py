@@ -205,7 +205,12 @@ def test_operations_omission_preserves_facilities_host() -> None:
     assert "WEB-OPERATIONS-BASE-OMISSION:FACILITIES" in script
     assert '["assets","maintenance","calibrations"].forEach' in script
     assert 'button.textContent="Facilities"' in script
-    assert 'operationsDomain="locations"' in script
+    assert "operations.workspace.host" in script
+    assert "fieldora:contracts-ready" in script
+    assert "host.currentDomain" in script
+    assert "host.selectDomain" in script
+    assert "operationsDomain" not in script
+    assert "loadOperations" not in script
     assert "WEB-FACILITIES-BASE-OMISSION" not in script
 
 

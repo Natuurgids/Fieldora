@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from natureai_next.server import modular_shell_composition, web_module_contract_runtime
+from natureai_next.server.api import ApiResponse
+from natureai_next.server.http import patch_managed_web_response
+from natureai_next.server.modular_shell_web import patch_modular_shell_response
 from natureai_next.server.web_module_contracts import (
     FOUNDATION_WEB_MODULES,
     WebModuleRegistry,
@@ -81,3 +84,27 @@ def test_projects_free_registry_generates_shell_and_contract_runtime() -> None:
     assert '"route":"/observations"' in shell
     assert '"route":"/knowledge"' in shell
     assert '"route":"/administration"' in shell
+
+
+def test_projects_free_production_composition_omits_projects_owned_providers() -> None:
+    registry = _projects_free_registry()
+    shell = patch_modular_shell_response(
+        "/app.js",
+        ApiResponse(200, b"const base=true;", "text/javascript; charset=utf-8"),
+    )
+
+    script = patch_managed_web_response(
+        "/app.js", shell, registry=registry
+    ).body.decode("utf-8")
+
+    for marker in (
+        "WEB-PROJECT-WORK-DATA-PROVIDER",
+        "WEB-PROJECT-EVIDENCE-SERVICE-PROVIDER",
+        "WEB-PROJECT-LIST-PROVIDER",
+        "WEB-PROJECT-CONTEXT-PROVIDER",
+    ):
+        assert marker not in script
+
+    assert '"module_id":"home.activity"' in script
+    for contract in _PROJECT_CONTRACTS:
+        assert f'"{contract}"' not in script

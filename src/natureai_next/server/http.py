@@ -167,16 +167,20 @@ def patch_managed_web_response(
     # finalized shell so omitted modules are not advertised to browser consumers.
     response = patch_runtime_contracts_response(target, response, registry=registry)
 
-    for patch in (
+    for contract, patch in (
         # Work/evidence services must exist before list registration can trigger
         # Project Core's initial selected-project load.
-        patch_project_work_data_provider_response,
-        patch_project_evidence_service_provider_response,
+        ("projects.work-data.service", patch_project_work_data_provider_response),
+        ("projects.evidence.service", patch_project_evidence_service_provider_response),
         # Projects owns the accessible-list snapshot behind the declared read contract.
-        patch_project_list_provider_response,
+        ("projects.list.read", patch_project_list_provider_response),
         # Projects exposes context selection through a replaceable public contract.
-        patch_project_context_provider_response,
+        ("projects.context.select", patch_project_context_provider_response),
     ):
+        if registry is not None:
+            provider = registry.contract_provider(contract)
+            if getattr(provider, "module_id", None) != "projects.core":
+                continue
         response = patch(target, response)
     return response
 

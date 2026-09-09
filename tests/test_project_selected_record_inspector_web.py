@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import natureai_next.server.http as http
 from playwright.sync_api import sync_playwright
 
+import natureai_next.server.http as http
 from natureai_next.server.api import ApiResponse
 from natureai_next.server.modular_shell_web import patch_modular_shell_response
 from natureai_next.server.project_context_provider_web import (

@@ -70,6 +70,7 @@ FOUNDATION_WEB_MODULE_EXTENSIONS: tuple[WebModuleExtensionSpec, ...] = (
         OPERATIONS_WEB_MODULE_ID,
         "Operations",
         "/operations",
+        requires_contracts=("operations.workspace.host",),
     ),
     WebModuleExtensionSpec(
         FACILITIES_WEB_MODULE_ID,

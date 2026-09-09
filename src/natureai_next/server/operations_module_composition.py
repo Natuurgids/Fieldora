@@ -55,11 +55,23 @@ _OPERATIONS_WITHOUT_FACILITIES_PATCH = bytes(
  document.querySelectorAll('[data-workspace-target="operations"]').forEach(
   node=>node.remove()
  );
- if(
-  location.hash==="#operations"&&
-  document.getElementById("page-administration")&&
-  typeof showPage==="function"
- )showPage("administration");
+ const redirectFromRemovedOperations=()=>{
+  if(
+   location.hash!=="#operations"||
+   !document.getElementById("page-administration")
+  )return true;
+  const navigation=window.FieldoraModuleContracts?.resolve("navigation.navigate");
+  if(!navigation)return false;
+  navigation.navigate("/administration","operations","replace");
+  return true;
+ };
+ if(!redirectFromRemovedOperations()){
+  document.addEventListener(
+   "fieldora:contracts-ready",
+   redirectFromRemovedOperations,
+   {once:true}
+  );
+ }
 })();
 """,
     "utf-8",

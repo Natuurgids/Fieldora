@@ -4,6 +4,10 @@ import pytest
 
 from natureai_next.server.facility_module_composition import _FACILITY_BASE_OMISSION_PATCH
 from natureai_next.server.modular_shell_composition import foundation_composition_registry
+from natureai_next.server.operations_module_composition import (
+    _OPERATIONS_WITH_FACILITIES_PATCH,
+    _OPERATIONS_WITHOUT_FACILITIES_PATCH,
+)
 from natureai_next.server.project_facility_workspace_web import (
     _PROJECT_FACILITY_WORKSPACE_PATCH,
 )
@@ -26,7 +30,7 @@ def test_runtime_manifest_publishes_route_less_composition_identities() -> None:
     operations = by_id[OPERATIONS_WEB_MODULE_ID]
     assert operations["host_route"] == "/operations"
     assert operations["provides_contracts"] == []
-    assert operations["requires_contracts"] == []
+    assert operations["requires_contracts"] == ["operations.workspace.host"]
     assert operations["optional_contracts"] == []
 
     facilities = by_id[FACILITIES_WEB_MODULE_ID]
@@ -57,6 +61,9 @@ def test_runtime_manifest_omits_uncomposed_route_less_modules() -> None:
     }
     assert OPERATIONS_WEB_MODULE_ID in operations_by_id
     assert FACILITIES_WEB_MODULE_ID not in operations_by_id
+    assert operations_by_id[OPERATIONS_WEB_MODULE_ID]["requires_contracts"] == [
+        "operations.workspace.host"
+    ]
 
 
 def test_route_less_extension_contract_metadata_rejects_invalid_overlap() -> None:
@@ -86,3 +93,20 @@ def test_facilities_browser_projections_use_workspace_contract() -> None:
     assert "host.currentDomain" in omission
     assert "host.selectDomain" in omission
     assert "operationsDomain" not in omission
+
+
+def test_operations_browser_omission_uses_public_contracts() -> None:
+    facilities_host = _OPERATIONS_WITH_FACILITIES_PATCH.decode("utf-8")
+    empty_host = _OPERATIONS_WITHOUT_FACILITIES_PATCH.decode("utf-8")
+
+    assert "operations.workspace.host" in facilities_host
+    assert "fieldora:contracts-ready" in facilities_host
+    assert "host.currentDomain" in facilities_host
+    assert "host.selectDomain" in facilities_host
+    assert "operationsDomain" not in facilities_host
+    assert "loadOperations" not in facilities_host
+
+    assert 'resolve("navigation.navigate")' in empty_host
+    assert 'navigation.navigate("/administration","operations","replace")' in empty_host
+    assert "fieldora:contracts-ready" in empty_host
+    assert "showPage" not in empty_host

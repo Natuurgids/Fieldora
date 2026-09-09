@@ -52,6 +52,10 @@ _LEGACY_PORTFOLIO_END = b" /* Knowledge tabs previously had no state or handlers
 _LEGACY_PORTFOLIO_REFRESH_WIRING = b'q("portfolio-refresh").onclick=loadPortfolio;'
 _LEGACY_PORTFOLIO_SCOPE_WIRING = b'q("portfolio-scope").onchange=loadPortfolio;'
 _LEGACY_PORTFOLIO_VIEW_WIRING = b'document.querySelectorAll("[data-portfolio-view]").forEach(b=>b.onclick=()=>{portfolioView=b.dataset.portfolioView;document.querySelectorAll("[data-portfolio-view]").forEach(x=>x.classList.toggle("primary",x===b));loadPortfolio()});'
+_LEGACY_PORTFOLIO_CROSS_SCREEN_START = (
+    b' const portfolio=q("portfolio-list");\n if(portfolio){\n  const oldPortfolioClick=portfolio.onclick;'
+)
+_LEGACY_PORTFOLIO_CROSS_SCREEN_END = b'\n const operations=q("operations-list");'
 _LEGACY_PROJECTS_SHOWPAGE_LOAD = b'if(name==="projects")loadPortfolio();'
 _LEGACY_WORK_SAVE_REFRESH = b'if(await saveGeneric(path,item,"work-status",`${type} saved.`))loadPortfolio()'
 _PROJECT_EVENT_WORK_SAVE_REFRESH = b'if(await saveGeneric(path,item,"work-status",`${type} saved.`))document.dispatchEvent(new CustomEvent("fieldora:project-work-changed",{detail:{module_id:"legacy.work-editor",project_id:project,kind:type,item:null}}))'
@@ -194,6 +198,11 @@ def _rewrite_owned_browser_response(body: bytes) -> bytes:
         body = body.replace(_LEGACY_PORTFOLIO_REFRESH_WIRING, b"", 1)
         body = body.replace(_LEGACY_PORTFOLIO_SCOPE_WIRING, b"", 1)
         body = body.replace(_LEGACY_PORTFOLIO_VIEW_WIRING, b"", 1)
+        body = _strip_legacy_range(
+            body,
+            _LEGACY_PORTFOLIO_CROSS_SCREEN_START,
+            _LEGACY_PORTFOLIO_CROSS_SCREEN_END,
+        )
     if _PROJECT_OWNER_MARKER in body:
         # Managed Project APIs remain authoritative; only browser competitors are
         # retired after their Projects/Core replacements are present. Strip the

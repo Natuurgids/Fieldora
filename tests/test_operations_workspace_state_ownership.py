@@ -46,3 +46,26 @@ def test_operations_workspace_state_owner_keeps_snapshot_publication_inside_host
     assert "const snapshot=Object.freeze({domain:currentDomain(),records:operationsWorkspaceRecords})" in runtime
     assert "records:currentRecords" in runtime
     assert "const selectDomain=async domain=>" in runtime
+
+
+def test_operations_workspace_domain_is_private_owner_state() -> None:
+    legacy = ApiResponse(
+        200,
+        b'let operationsDomain="assets";async function loadOperations(){}',
+        "text/javascript; charset=utf-8",
+    )
+    shell = patch_modular_shell_response("/app.js", legacy)
+    runtime = patch_runtime_contracts_response("/app.js", shell).body.decode("utf-8")
+
+    assert (
+        "let operationsWorkspaceDomain=typeof operationsDomain==='undefined'?null:String(operationsDomain)"
+        in runtime
+    )
+    assert "const currentDomain=()=>operationsWorkspaceDomain" in runtime
+    assert (
+        "operationsDomain=operationsWorkspaceDomain;const result=await baseOperationsLoad()"
+        in runtime
+    )
+    assert "operationsWorkspaceDomain=next;return loadOperations()" in runtime
+    assert "currentDomain=()=>typeof operationsDomain" not in runtime
+    assert "operationsDomain=next" not in runtime

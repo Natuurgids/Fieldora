@@ -140,6 +140,7 @@ jobs:
           name: bandit-full-audit
           path: bandit-full-audit.json
           if-no-files-found: error
+          retention-days: 2
 
       - name: Bandit high-severity repository gate
         run: python -m bandit -r src/natureai_next -c pyproject.toml -lll -i
@@ -186,6 +187,7 @@ jobs:
           name: semgrep-owasp-audit
           path: semgrep-owasp-audit.json
           if-no-files-found: warn
+          retention-days: 2
 
       - name: Semgrep OWASP governed platform gate
         run: >-

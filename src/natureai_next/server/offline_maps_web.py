@@ -4,6 +4,31 @@ from urllib.parse import urlsplit
 
 from natureai_next.server.api import ApiResponse
 
+_OFFLINE_MAPS_SERVICE_PROVIDER_PATCH = bytes(
+    r"""
+
+/* WEB-FACILITIES-OFFLINE-MAPS-SERVICE: Facilities-owned offline map transport. */
+(()=>{
+ if(window.__fieldoraOfflineMapsServiceProviderWired)return;window.__fieldoraOfflineMapsServiceProviderWired=true;
+ const moduleId="facilities",contractName="facilities.offline-maps.service";
+ const freezeItems=items=>Object.freeze((Array.isArray(items)?items:[]).map(item=>item&&typeof item==="object"?Object.freeze({...item}):item));
+ async function installed(){
+  const result=await api("/api/v1/maps/installed",{purpose:"administration"});
+  return freezeItems(result?.items);
+ }
+ const implementation=Object.freeze({installed});
+ function register(){
+  const contracts=window.FieldoraModuleContracts;if(!contracts)return false;
+  if(contracts.provider(contractName)!==moduleId)return false;
+  const current=contracts.resolve(contractName);if(current)return current===implementation;
+  contracts.register(contractName,moduleId,implementation);return true;
+ }
+ register();document.addEventListener("fieldora:contracts-ready",register,{once:true});
+})();
+""",
+    "utf-8",
+)
+
 _OFFLINE_MAPS_WEB_PATCH = bytes(
     r"""
 
@@ -15,8 +40,9 @@ _OFFLINE_MAPS_WEB_PATCH = bytes(
  const section=document.createElement("section");section.id="offline-map-packages";section.className="card section";
  section.innerHTML=`<h2>Installed offline map packages</h2><p class="muted">Verified Bastion/air-gap map packages available to Facilities. Only bounded trust metadata is shown; server and Bastion filesystem paths remain private.</p><div id="offline-map-list" class="list"></div><p id="offline-map-status" class="status"></p>`;
  const planning=document.getElementById("facility-planning-web");if(planning)planning.insertAdjacentElement("beforebegin",section);else page.appendChild(section);
- async function loadOfflineMaps(){const list=document.getElementById("offline-map-list"),state=document.getElementById("offline-map-status");if(!list)return;try{const result=await api("/api/v1/maps/installed",{purpose:"administration"});const items=result.items||[];list.innerHTML=items.map(item=>{const size=(Number(item.artifact_total_bytes||0)/1073741824).toFixed(2),trust=item.manifest_signature==="ed25519"?(item.malware_scan?.result==="clean"?"Signed + clean scanned":"Signed manifest"):"Unsigned local bundle";return `<div class="row"><div><strong>${escMap(item.name||item.map_id)}</strong><br><span class="muted">${escMap(item.version)} · ${escMap((item.formats||[]).join(", "))}</span></div><span>${size} GiB</span><span>${escMap(item.license_id||"unspecified")}</span><span class="pill">${escMap(trust)}</span></div>`}).join("")||'<div class="empty">No verified offline map packages are installed.</div>';if(state)state.textContent=""}catch(error){const message=String(error?.message||error);list.innerHTML=message.includes("offline_map_store_unavailable")?'<div class="empty">Offline map storage is not configured on this server.</div>':'<div class="empty">Installed map discovery is unavailable.</div>';if(state)state.textContent=message.includes("offline_map_store_unavailable")?"":message}}
- function bindWorkspaceRefresh(){const host=window.FieldoraModuleContracts?.resolve("operations.workspace.host");if(!host)return false;host.subscribe(()=>void loadOfflineMaps());return true}
+ function offlineMapsService(){return window.FieldoraModuleContracts?.resolve("facilities.offline-maps.service")||null}
+ async function loadOfflineMaps(){const list=document.getElementById("offline-map-list"),state=document.getElementById("offline-map-status");if(!list)return;try{const service=offlineMapsService();if(!service)throw new Error("Facilities offline maps service is unavailable.");const items=await service.installed();list.innerHTML=items.map(item=>{const size=(Number(item.artifact_total_bytes||0)/1073741824).toFixed(2),trust=item.manifest_signature==="ed25519"?(item.malware_scan?.result==="clean"?"Signed + clean scanned":"Signed manifest"):"Unsigned local bundle";return `<div class="row"><div><strong>${escMap(item.name||item.map_id)}</strong><br><span class="muted">${escMap(item.version)} · ${escMap((item.formats||[]).join(", "))}</span></div><span>${size} GiB</span><span>${escMap(item.license_id||"unspecified")}</span><span class="pill">${escMap(trust)}</span></div>`}).join("")||'<div class="empty">No verified offline map packages are installed.</div>';if(state)state.textContent=""}catch(error){const message=String(error?.message||error);list.innerHTML=message.includes("offline_map_store_unavailable")?'<div class="empty">Offline map storage is not configured on this server.</div>':'<div class="empty">Installed map discovery is unavailable.</div>';if(state)state.textContent=message.includes("offline_map_store_unavailable")?"":message}}
+ function bindWorkspaceRefresh(){const host=window.FieldoraModuleContracts?.resolve("operations.workspace.host");if(!host||!offlineMapsService())return false;host.subscribe(()=>void loadOfflineMaps());return true}
  if(!bindWorkspaceRefresh())document.addEventListener("fieldora:contracts-ready",bindWorkspaceRefresh,{once:true});
 })();
 """,
@@ -33,7 +59,7 @@ def patch_offline_maps_web_response(target: str, response: ApiResponse) -> ApiRe
         return response
     return ApiResponse(
         response.status,
-        response.body + _OFFLINE_MAPS_WEB_PATCH,
+        response.body + _OFFLINE_MAPS_SERVICE_PROVIDER_PATCH + _OFFLINE_MAPS_WEB_PATCH,
         response.content_type,
         response.headers,
     )

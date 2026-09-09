@@ -2,14 +2,21 @@ from __future__ import annotations
 
 import pytest
 
+from natureai_next.server.api import ApiResponse
 from natureai_next.server.facility_actions_web import _FACILITY_ACTIONS_PATCH
-from natureai_next.server.facility_module_composition import _FACILITY_BASE_OMISSION_PATCH
+from natureai_next.server.facility_module_composition import (
+    _FACILITY_BASE_OMISSION_PATCH,
+    suppress_facilities_browser_response,
+)
 from natureai_next.server.facility_web_compatibility import _FACILITY_WEB_PATCH
 from natureai_next.server.modular_shell_composition import (
     FoundationCompositionRegistry,
     foundation_composition_registry,
 )
-from natureai_next.server.offline_maps_web import _OFFLINE_MAPS_WEB_PATCH
+from natureai_next.server.offline_maps_web import (
+    _OFFLINE_MAPS_SERVICE_PROVIDER_PATCH,
+    _OFFLINE_MAPS_WEB_PATCH,
+)
 from natureai_next.server.operations_module_composition import (
     _OPERATIONS_WITH_FACILITIES_PATCH,
     _OPERATIONS_WITHOUT_FACILITIES_PATCH,
@@ -41,7 +48,7 @@ def test_runtime_manifest_publishes_route_less_composition_identities() -> None:
 
     facilities = by_id[FACILITIES_WEB_MODULE_ID]
     assert facilities["host_route"] == "/operations"
-    assert facilities["provides_contracts"] == []
+    assert facilities["provides_contracts"] == ["facilities.offline-maps.service"]
     assert facilities["requires_contracts"] == ["operations.workspace.host"]
     assert facilities["optional_contracts"] == []
 
@@ -162,6 +169,33 @@ def test_facilities_auxiliary_projections_subscribe_to_workspace_contract() -> N
         assert "host.subscribe" in script
         assert 'nav[data-page="operations"]' not in script
         assert "operations-refresh" not in script
+
+
+def test_offline_maps_projection_uses_facilities_service_contract() -> None:
+    provider = _OFFLINE_MAPS_SERVICE_PROVIDER_PATCH.decode("utf-8")
+    projection = _OFFLINE_MAPS_WEB_PATCH.decode("utf-8")
+
+    assert 'contractName="facilities.offline-maps.service"' in provider
+    assert 'moduleId="facilities"' in provider
+    assert 'api("/api/v1/maps/installed"' in provider
+    assert 'resolve("facilities.offline-maps.service")' in projection
+    assert "service.installed()" in projection
+    assert "/api/v1/maps/installed" not in projection
+    assert "api(" not in projection
+
+
+def test_facilities_omission_removes_offline_maps_provider_and_projection() -> None:
+    response = ApiResponse(
+        200,
+        _OFFLINE_MAPS_SERVICE_PROVIDER_PATCH + _OFFLINE_MAPS_WEB_PATCH,
+        "text/javascript; charset=utf-8",
+    )
+
+    suppressed = suppress_facilities_browser_response("/app.js", response)
+
+    assert _OFFLINE_MAPS_SERVICE_PROVIDER_PATCH not in suppressed.body
+    assert _OFFLINE_MAPS_WEB_PATCH not in suppressed.body
+    assert _FACILITY_BASE_OMISSION_PATCH in suppressed.body
 
 
 def test_operations_browser_omission_uses_public_contracts() -> None:

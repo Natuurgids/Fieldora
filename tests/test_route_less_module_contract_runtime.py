@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import pytest
 
+from natureai_next.server.facility_actions_web import _FACILITY_ACTIONS_PATCH
 from natureai_next.server.facility_module_composition import _FACILITY_BASE_OMISSION_PATCH
 from natureai_next.server.modular_shell_composition import foundation_composition_registry
+from natureai_next.server.offline_maps_web import _OFFLINE_MAPS_WEB_PATCH
 from natureai_next.server.operations_module_composition import (
     _OPERATIONS_WITH_FACILITIES_PATCH,
     _OPERATIONS_WITHOUT_FACILITIES_PATCH,
@@ -93,6 +95,18 @@ def test_facilities_browser_projections_use_workspace_contract() -> None:
     assert "host.currentDomain" in omission
     assert "host.selectDomain" in omission
     assert "operationsDomain" not in omission
+
+
+def test_facilities_auxiliary_projections_subscribe_to_workspace_contract() -> None:
+    actions = _FACILITY_ACTIONS_PATCH.decode("utf-8")
+    offline_maps = _OFFLINE_MAPS_WEB_PATCH.decode("utf-8")
+
+    for script in (actions, offline_maps):
+        assert "operations.workspace.host" in script
+        assert "fieldora:contracts-ready" in script
+        assert "host.subscribe" in script
+        assert 'nav[data-page="operations"]' not in script
+        assert "operations-refresh" not in script
 
 
 def test_operations_browser_omission_uses_public_contracts() -> None:

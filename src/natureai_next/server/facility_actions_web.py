@@ -54,7 +54,8 @@ _FACILITY_ACTIONS_PATCH = br"""
  const observer=new MutationObserver(governCampaign);
  function attach(){const host=q("facility-campaign-detail");if(!host)return;observer.observe(host,{childList:true,subtree:true});governCampaign()}
  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",attach,{once:true});else attach();
- document.querySelectorAll('.nav[data-page="operations"]').forEach(button=>button.addEventListener("click",()=>queueMicrotask(attach)));
+ function bindWorkspaceRefresh(){const host=window.FieldoraModuleContracts?.resolve("operations.workspace.host");if(!host)return false;host.subscribe(()=>queueMicrotask(attach));return true}
+ if(!bindWorkspaceRefresh())document.addEventListener("fieldora:contracts-ready",bindWorkspaceRefresh,{once:true});
 })();
 """
 

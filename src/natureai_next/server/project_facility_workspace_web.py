@@ -134,6 +134,7 @@ _PROJECT_FACILITY_WORKSPACE_PATCH = bytes(
  const facilityPage=q("page-operations");
  let facilityView="assets";
  let facilityWorkspaceHost=null;
+ let facilitySelectedRecordId="";
  function facilityHost(){return facilityWorkspaceHost||window.FieldoraModuleContracts?.resolve("operations.workspace.host")||null}
  function facilityRecords(){return facilityHost()?.records?.()||[]}
  function facilityFilter(items){
@@ -142,37 +143,46 @@ _PROJECT_FACILITY_WORKSPACE_PATCH = bytes(
   if(facilityView==="materials")return items.filter(x=>/material|consumable|stock|reagent|sample|equipment|instrument|asset/i.test(String(x.category||x.asset_type||x.type||"asset")));
   return items;
  }
- function renderFacilityTree(){
-  const host=q("facility-cockpit-tree"),list=q("operations-list");if(!host||!list)return;const all=facilityRecords(),items=facilityFilter(all),needle=(q("facility-tree-filter")?.value||"").toLowerCase();
-  host.innerHTML=`<div class="tree-group"><div class="tree-label">Current view</div>${items.filter(x=>JSON.stringify(x).toLowerCase().includes(needle)).map(x=>`<button type="button" class="tree-item" data-facility-record="${esc2(x.id)}"><span class="tree-icon">${facilityView==="drawings"?"⌑":facilityView==="assets"||facilityView==="materials"?"◆":"⌂"}</span><span>${esc2(x.name||x.title||x.asset_code||x.code||x.id)}</span></button>`).join("")||'<div class="empty">No records in this view.</div>'}</div>`;
-  host.querySelectorAll("[data-facility-record]").forEach(b=>b.onclick=()=>{const row=list.querySelector(`[data-operations-id="${CSS.escape(b.dataset.facilityRecord)}"]`);row?.click()});
+ function facilityRecord(id){return facilityRecords().find(item=>String(item.id)===String(id))||null}
+ function renderFacilityInspector(record){
+  const props=q("facility-inspector-properties"),metadata=q("facility-inspector-metadata");
+  if(!record){if(props)props.innerHTML='<div class="empty">Select a facility or CMDB record.</div>';if(metadata)metadata.innerHTML='<div class="empty">Select a facility or CMDB record.</div>';return}
+  if(props)props.innerHTML=`<h3>${esc2(record.name||record.title||record.asset_code||record.code||record.id)}</h3><p><strong>Type</strong> ${esc2(record.category||record.location_type||record.maintenance_type||record.type||"—")}</p><p><strong>Status</strong> ${esc2(record.status||"—")}</p><p class="muted">${esc2(record.description||record.notes||"No description recorded.")}</p>`;
+  if(metadata)metadata.innerHTML=`<h3>${esc2(record.name||record.title||record.id)}</h3><pre>${esc2(JSON.stringify(record,null,2))}</pre>`;
  }
- function renderFacilityCenter(){
-  const list=q("operations-list");if(!list)return;const all=facilityRecords(),items=facilityFilter(all);
-  list.innerHTML=`<div class="facility-record-grid">${items.map(r=>`<button class="row" data-operations-id="${esc2(r.id)}"><strong>${esc2(r.name||r.title||r.asset_code||r.code||r.id)}</strong><span>${esc2(r.category||r.location_type||r.maintenance_type||r.status||"")}</span><span>${esc2(r.description||r.notes||"")}</span></button>`).join("")||'<div class="empty">No records in this facility view.</div>'}</div>`;
-  renderFacilityTree();
+ function selectFacilityRecord(id){
+  facilitySelectedRecordId=String(id||"");
+  renderFacilityTree();renderFacilityCenter(false);renderFacilityInspector(facilityRecord(facilitySelectedRecordId));
+ }
+ function renderFacilityTree(){
+  const host=q("facility-cockpit-tree");if(!host)return;const all=facilityRecords(),items=facilityFilter(all),needle=(q("facility-tree-filter")?.value||"").toLowerCase();
+  host.innerHTML=`<div class="tree-group"><div class="tree-label">Current view</div>${items.filter(x=>JSON.stringify(x).toLowerCase().includes(needle)).map(x=>`<button type="button" class="tree-item" data-facility-record="${esc2(x.id)}" aria-selected="${String(x.id)===facilitySelectedRecordId}"><span class="tree-icon">${facilityView==="drawings"?"⌑":facilityView==="assets"||facilityView==="materials"?"◆":"⌂"}</span><span>${esc2(x.name||x.title||x.asset_code||x.code||x.id)}</span></button>`).join("")||'<div class="empty">No records in this view.</div>'}</div>`;
+  host.querySelectorAll("[data-facility-record]").forEach(b=>b.onclick=()=>selectFacilityRecord(b.dataset.facilityRecord));
+ }
+ function renderFacilityCenter(renderTree=true){
+  const list=q("facility-workspace-records");if(!list)return;const all=facilityRecords(),items=facilityFilter(all);
+  list.innerHTML=`<div class="facility-record-grid">${items.map(r=>`<button class="row" data-facility-record-row="${esc2(r.id)}" aria-selected="${String(r.id)===facilitySelectedRecordId}"><strong>${esc2(r.name||r.title||r.asset_code||r.code||r.id)}</strong><span>${esc2(r.category||r.location_type||r.maintenance_type||r.status||"")}</span><span>${esc2(r.description||r.notes||"")}</span></button>`).join("")||'<div class="empty">No records in this facility view.</div>'}</div>`;
+  list.querySelectorAll("[data-facility-record-row]").forEach(b=>b.onclick=()=>selectFacilityRecord(b.dataset.facilityRecordRow));
+  if(renderTree)renderFacilityTree();
  }
  async function setFacilityView(view){
-  facilityView=view;const domain=({buildings:"locations",rooms:"locations",assets:"assets",materials:"assets",drawings:"drawings",maintenance:"maintenance",calibrations:"calibrations"})[view]||"assets";
+  facilityView=view;facilitySelectedRecordId="";const domain=({buildings:"locations",rooms:"locations",assets:"assets",materials:"assets",drawings:"drawings",maintenance:"maintenance",calibrations:"calibrations"})[view]||"assets";
   document.querySelectorAll("[data-facility-view]").forEach(b=>b.classList.toggle("primary",b.dataset.facilityView===view));
   const host=facilityHost();if(!host)throw new Error("Facilities requires operations.workspace.host");
   await host.selectDomain(domain);
+  renderFacilityInspector(null);
   const planning=q("facility-planning-web");if(planning)planning.hidden=view!=="drawings";
   const map=q("facility-inspector-map");if(map)map.innerHTML=view==="drawings"?'<div class="facility-map-stage"><h3>Building maps & floorplans</h3><p class="muted">Use versioned drawings, mapped room/location geometries, future layouts and relocation campaigns. Current placement remains authoritative until a governed relocation step completes.</p></div>':'<div class="facility-map-stage"><h3>Spatial context</h3><p class="muted">Choose Building maps & floorplans to manage versioned building drawings and location geometry.</p></div>';
  }
  if(facilityPage&&!q("facility-desktop-cockpit")){
-  facilityPage.classList.add("cockpit-page");
-  const oldSplit=q("operations-list")?.closest(".split"),listCard=q("operations-list")?.closest(".card"),detailCard=q("operations-detail")?.closest(".card"),editor=q("operations-save")?.closest(".card.section"),legacyTabs=[...facilityPage.children].find(n=>n.classList?.contains("tabs"));
-  if(legacyTabs)legacyTabs.hidden=true;
   const shell=document.createElement("section");shell.id="facility-desktop-cockpit";shell.className="desktop-cockpit";
   const left=document.createElement("aside");left.className="cockpit-pane cockpit-left";left.innerHTML='<div class="cockpit-pane-head"><strong>Facilities</strong></div><div style="padding:7px"><input id="facility-tree-filter" placeholder="Filter facility / CMDB"></div><div class="cockpit-tree"><div class="tree-group"><div class="tree-label">Hierarchy</div><button class="tree-item" data-facility-view="buildings"><span class="tree-icon">▤</span>Buildings</button><button class="tree-item" data-facility-view="rooms"><span class="tree-icon">⌂</span>Floors, rooms & labs</button><button class="tree-item" data-facility-view="assets"><span class="tree-icon">◆</span>Equipment & assets</button><button class="tree-item" data-facility-view="materials"><span class="tree-icon">▦</span>Materials / CMDB</button><button class="tree-item" data-facility-view="drawings"><span class="tree-icon">⌑</span>Building maps & floorplans</button></div></div><div id="facility-cockpit-tree" class="cockpit-tree"></div>';
   const center=document.createElement("section");center.className="cockpit-pane cockpit-center";center.innerHTML='<div class="cockpit-pane-head"><strong>Facility management</strong><span class="muted" style="margin-left:auto">current state + planned layouts</span></div><div class="cockpit-toolbar facility-kinds"><button data-facility-view="buildings">Buildings</button><button data-facility-view="rooms">Rooms & Labs</button><button data-facility-view="assets" class="primary">Equipment</button><button data-facility-view="materials">Materials / CMDB</button><button data-facility-view="drawings">Maps & Floorplans</button><button data-facility-view="maintenance">Maintenance</button><button data-facility-view="calibrations">Calibration</button></div><div id="facility-workspace-records" class="cockpit-content"></div><div id="facility-workspace-planning" class="cockpit-content"></div>';
   const right=document.createElement("aside");right.className="cockpit-pane cockpit-right";
-  const props=document.createElement("div");if(detailCard)props.appendChild(detailCard);if(editor){const details=document.createElement("details");details.className="cockpit-editor section";details.open=false;details.innerHTML='<summary>Create / update facility or CMDB record</summary>';details.appendChild(editor);props.appendChild(details)}
+  const props=document.createElement("div");props.id="facility-inspector-properties";props.innerHTML='<div class="empty">Select a facility or CMDB record.</div>';
   const metadata=document.createElement("div");metadata.id="facility-inspector-metadata";metadata.className="muted";metadata.textContent="Select a facility or CMDB record.";const map=document.createElement("div");map.id="facility-inspector-map";const activity=document.createElement("div");activity.id="facility-inspector-activity";activity.innerHTML='<p class="muted">Maintenance, calibration and relocation state remain available as governed operational records.</p>';
   inspector(right,"facility-inspector",[["properties","Properties",props],["metadata","Metadata",metadata],["map","Map",map],["activity","Activity",activity]]);
   shell.append(left,center,right);const subnav=facilityPage.querySelector(".workspace-subnav");(subnav||facilityPage.querySelector(".top"))?.after(shell);
-  if(listCard)q("facility-workspace-records").appendChild(listCard);if(oldSplit)oldSplit.remove();
   const planning=q("facility-planning-web");if(planning){q("facility-workspace-planning").appendChild(planning);planning.hidden=true}
   q("facility-tree-filter").oninput=renderFacilityTree;document.querySelectorAll("[data-facility-view]").forEach(b=>b.onclick=()=>setFacilityView(b.dataset.facilityView));
   const bindFacilityWorkspace=()=>{
@@ -181,7 +191,6 @@ _PROJECT_FACILITY_WORKSPACE_PATCH = bytes(
    facilityWorkspaceHost=host;host.subscribe(()=>renderFacilityCenter());void setFacilityView(facilityView);return true;
   };
   if(!bindFacilityWorkspace())document.addEventListener("fieldora:contracts-ready",bindFacilityWorkspace,{once:true});
-  q("operations-list").addEventListener("click",e=>{const row=e.target.closest("[data-operations-id]");if(!row)return;const items=facilityRecords(),record=items.find(x=>x.id===row.dataset.operationsId);q("facility-inspector-metadata").innerHTML=record?`<h3>${esc2(record.name||record.title||record.id)}</h3><pre>${esc2(JSON.stringify(record,null,2))}</pre>`:'<div class="empty">Record unavailable.</div>';selectInspector(right,"facility-inspector","properties")},true);
  }
 })();
 """,

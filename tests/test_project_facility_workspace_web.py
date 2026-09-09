@@ -32,6 +32,27 @@ def test_project_and_facility_cockpit_is_appended_once_to_managed_app() -> None:
     assert "loadOperations=async function()" not in text
 
 
+def test_facilities_own_projection_dom_instead_of_operations_private_dom() -> None:
+    original = ApiResponse(200, b"const fieldora=true;", "text/javascript")
+    text = patch_project_facility_workspace_response("/app.js", original).body.decode(
+        "utf-8"
+    )
+
+    assert 'q("facility-workspace-records")' in text
+    assert "data-facility-record-row" in text
+    assert 'props.id="facility-inspector-properties"' in text
+    assert "facilitySelectedRecordId" in text
+    assert 'facilityHost()?.records?.()' in text
+    assert 'resolve("operations.workspace.host")' in text
+    for private_dom in (
+        'q("operations-list")',
+        'q("operations-detail")',
+        'q("operations-save")',
+        "data-operations-id",
+    ):
+        assert private_dom not in text
+
+
 def test_project_facility_cockpit_only_patches_successful_app_javascript() -> None:
     response = ApiResponse(200, b"index", "text/html")
     assert patch_project_facility_workspace_response("/", response) is response

@@ -50,7 +50,6 @@ _KNOWLEDGE_REVIEW_PATCH = bytes(
  loadKnowledge=async function(){
   try{
    governedKnowledge=(await api("/api/v1/knowledge")).items||[];
-   if(typeof knowledge!=="undefined")knowledge=governedKnowledge;
    renderGovernedKnowledge();
   }catch(error){
    const target=targetList();if(target)target.innerHTML=`<p class="muted">${html(error.message)}</p>`;

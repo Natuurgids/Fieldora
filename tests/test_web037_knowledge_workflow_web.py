@@ -54,3 +54,17 @@ def test_knowledge_browser_uses_explicit_revisioned_review_actions() -> None:
     assert 'method:"PUT"' not in script
     assert 'review_state:"accepted"' not in script
     assert "crypto.randomUUID()" not in script
+
+
+def test_knowledge_workspace_state_stays_private_to_governed_patch() -> None:
+    response = patch_knowledge_review_web_response(
+        "/app.js",
+        ApiResponse(200, b"", "text/javascript; charset=utf-8"),
+    )
+    script = response.body.decode("utf-8")
+
+    assert "let governedKnowledge=[];" in script
+    assert "governedKnowledge=(await api(\"/api/v1/knowledge\")).items||[];" in script
+    assert "governedKnowledge.findIndex" in script
+    assert "governedKnowledge.find" in script
+    assert 'if(typeof knowledge!=="undefined")knowledge=governedKnowledge;' not in script

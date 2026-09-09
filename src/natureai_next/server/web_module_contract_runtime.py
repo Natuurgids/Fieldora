@@ -11,7 +11,6 @@ from natureai_next.server.modular_shell_composition import (
 )
 from natureai_next.server.web_module_contracts import WebModuleRegistry
 
-
 _OPERATIONS_LOAD_SUCCESS_SUFFIX = (
     b',"No operational records.")}catch(e){cards("operations-list",[],x=>x,e.message)}}'
 )

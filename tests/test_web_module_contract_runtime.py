@@ -100,12 +100,17 @@ def test_runtime_registry_is_inert_without_modular_shell_and_idempotent_with_it(
     )
     assert "const baseOperationsLoad=loadOperations" in script
     assert "const currentDomain=()=>" in script
+    assert "const captureRecords=()=>" in script
+    assert "let operationsWorkspaceRecords=captureRecords()" in script
+    assert "const currentRecords=()=>operationsWorkspaceRecords" in script
+    assert "records:operationsWorkspaceRecords" in script
     assert "const selectDomain=async domain=>" in script
     assert "const subscribe=listener=>" in script
     assert (
         "register('operations.workspace.host','application.operations-workspace'"
         in script
     )
+    assert "records:currentRecords" in script
     assert "refresh:()=>loadOperations()" in script
     assert script.index("WEB-MODULAR-SHELL") < script.index("WEB-MODULE-CONTRACT-RUNTIME")
 

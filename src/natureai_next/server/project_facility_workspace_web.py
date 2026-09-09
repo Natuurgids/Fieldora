@@ -135,6 +135,7 @@ _PROJECT_FACILITY_WORKSPACE_PATCH = bytes(
  let facilityView="assets";
  let facilityWorkspaceHost=null;
  function facilityHost(){return facilityWorkspaceHost||window.FieldoraModuleContracts?.resolve("operations.workspace.host")||null}
+ function facilityRecords(){return facilityHost()?.records?.()||[]}
  function facilityFilter(items){
   if(facilityView==="buildings")return items.filter(x=>/building|site|campus/i.test(String(x.location_type||x.category||x.type||"")));
   if(facilityView==="rooms")return items.filter(x=>/room|lab|laboratory|floor|zone/i.test(String(x.location_type||x.category||x.type||"")));
@@ -142,12 +143,12 @@ _PROJECT_FACILITY_WORKSPACE_PATCH = bytes(
   return items;
  }
  function renderFacilityTree(){
-  const host=q("facility-cockpit-tree"),list=q("operations-list");if(!host||!list)return;const all=JSON.parse(list.dataset.records||"[]"),items=facilityFilter(all),needle=(q("facility-tree-filter")?.value||"").toLowerCase();
+  const host=q("facility-cockpit-tree"),list=q("operations-list");if(!host||!list)return;const all=facilityRecords(),items=facilityFilter(all),needle=(q("facility-tree-filter")?.value||"").toLowerCase();
   host.innerHTML=`<div class="tree-group"><div class="tree-label">Current view</div>${items.filter(x=>JSON.stringify(x).toLowerCase().includes(needle)).map(x=>`<button type="button" class="tree-item" data-facility-record="${esc2(x.id)}"><span class="tree-icon">${facilityView==="drawings"?"⌑":facilityView==="assets"||facilityView==="materials"?"◆":"⌂"}</span><span>${esc2(x.name||x.title||x.asset_code||x.code||x.id)}</span></button>`).join("")||'<div class="empty">No records in this view.</div>'}</div>`;
   host.querySelectorAll("[data-facility-record]").forEach(b=>b.onclick=()=>{const row=list.querySelector(`[data-operations-id="${CSS.escape(b.dataset.facilityRecord)}"]`);row?.click()});
  }
  function renderFacilityCenter(){
-  const list=q("operations-list");if(!list)return;const all=JSON.parse(list.dataset.records||"[]"),items=facilityFilter(all);
+  const list=q("operations-list");if(!list)return;const all=facilityRecords(),items=facilityFilter(all);
   list.innerHTML=`<div class="facility-record-grid">${items.map(r=>`<button class="row" data-operations-id="${esc2(r.id)}"><strong>${esc2(r.name||r.title||r.asset_code||r.code||r.id)}</strong><span>${esc2(r.category||r.location_type||r.maintenance_type||r.status||"")}</span><span>${esc2(r.description||r.notes||"")}</span></button>`).join("")||'<div class="empty">No records in this facility view.</div>'}</div>`;
   renderFacilityTree();
  }
@@ -180,7 +181,7 @@ _PROJECT_FACILITY_WORKSPACE_PATCH = bytes(
    facilityWorkspaceHost=host;host.subscribe(()=>renderFacilityCenter());void setFacilityView(facilityView);return true;
   };
   if(!bindFacilityWorkspace())document.addEventListener("fieldora:contracts-ready",bindFacilityWorkspace,{once:true});
-  q("operations-list").addEventListener("click",e=>{const row=e.target.closest("[data-operations-id]");if(!row)return;const items=JSON.parse(q("operations-list").dataset.records||"[]"),record=items.find(x=>x.id===row.dataset.operationsId);q("facility-inspector-metadata").innerHTML=record?`<h3>${esc2(record.name||record.title||record.id)}</h3><pre>${esc2(JSON.stringify(record,null,2))}</pre>`:'<div class="empty">Record unavailable.</div>';selectInspector(right,"facility-inspector","properties")},true);
+  q("operations-list").addEventListener("click",e=>{const row=e.target.closest("[data-operations-id]");if(!row)return;const items=facilityRecords(),record=items.find(x=>x.id===row.dataset.operationsId);q("facility-inspector-metadata").innerHTML=record?`<h3>${esc2(record.name||record.title||record.id)}</h3><pre>${esc2(JSON.stringify(record,null,2))}</pre>`:'<div class="empty">Record unavailable.</div>';selectInspector(right,"facility-inspector","properties")},true);
  }
 })();
 """,

@@ -88,6 +88,8 @@ def test_facilities_browser_projections_use_workspace_contract() -> None:
     assert "fieldora:contracts-ready" in cockpit
     assert "host.selectDomain" in cockpit
     assert "host.subscribe" in cockpit
+    assert "facilityHost()?.records?.()" in cockpit
+    assert "dataset.records" not in cockpit
     assert "operationsDomain" not in cockpit
     assert "loadOperations" not in cockpit
 

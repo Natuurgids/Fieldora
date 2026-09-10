@@ -46,8 +46,11 @@ def test_runtime_manifest_publishes_route_less_composition_identities() -> None:
     operations = by_id[OPERATIONS_WEB_MODULE_ID]
     assert operations["host_route"] == "/operations"
     assert operations["provides_contracts"] == []
-    assert operations["requires_contracts"] == ["operations.workspace.host"]
-    assert operations["optional_contracts"] == []
+    assert operations["requires_contracts"] == [
+        "operations.workspace.host",
+        "navigation.navigate",
+    ]
+    assert operations["optional_contracts"] == ["projects.context.select"]
 
     facilities = by_id[FACILITIES_WEB_MODULE_ID]
     assert facilities["host_route"] == "/operations"
@@ -81,7 +84,8 @@ def test_runtime_manifest_omits_uncomposed_route_less_modules() -> None:
     assert OPERATIONS_WEB_MODULE_ID in operations_by_id
     assert FACILITIES_WEB_MODULE_ID not in operations_by_id
     assert operations_by_id[OPERATIONS_WEB_MODULE_ID]["requires_contracts"] == [
-        "operations.workspace.host"
+        "operations.workspace.host",
+        "navigation.navigate",
     ]
 
 

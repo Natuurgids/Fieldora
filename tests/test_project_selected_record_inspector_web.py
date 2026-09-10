@@ -8,7 +8,10 @@ from natureai_next.server.modular_shell_web import patch_modular_shell_response
 from natureai_next.server.project_context_provider_web import (
     patch_project_context_provider_response,
 )
-from natureai_next.server.project_core_module_web import patch_project_core_module_response
+from natureai_next.server.project_core_module_web import (
+    _PROJECT_CORE_MODULE_PATCH,
+    patch_project_core_module_response,
+)
 from natureai_next.server.project_inspector_module_web import _PROJECT_INSPECTOR_MODULE_PATCH
 from natureai_next.server.project_selected_record_provider_web import (
     _SELECTED_RECORD_PROVIDER_PATCH,
@@ -70,6 +73,7 @@ def test_project_core_publishes_selection_without_owning_inspector_dom() -> None
     assert "function selectInspector" not in script
     assert 'querySelector(".cockpit-right")' not in script
     assert "project-inspector-metadata" not in script
+    assert 'right.id="project-inspector-host"' in script
 
 
 def test_selected_record_contract_supports_replacement_inspector_without_production_consumer() -> None:
@@ -114,29 +118,26 @@ def test_selected_record_contract_supports_replacement_inspector_without_product
         browser.close()
 
 
-def test_production_inspector_renders_selected_record_contract_snapshot() -> None:
+def test_production_inspector_builds_its_surface_inside_project_owned_host() -> None:
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(headless=True)
         page = browser.new_page()
         page.set_content(
-            """
-            <h1 id="project-cockpit-title"></h1>
-            <div id="project-desktop-cockpit"><aside class="cockpit-right">
-              <div class="inspector-tabs">
-                <button data-inspector="properties"></button>
-                <button data-inspector="map"></button>
-                <button data-inspector="activity"></button>
-              </div>
-              <section id="project-inspector-properties" class="inspector-panel"></section>
-              <section id="project-inspector-map" class="inspector-panel"></section>
-              <section id="project-inspector-activity" class="inspector-panel"></section>
-            </aside></div>
-            <div id="project-inspector-metadata"></div>
-            """
+            '<section id="page-projects"><div class="top"><h1>Projects</h1></div></section>'
         )
         _install_script(page, _runtime_script())
         _install_script(page, _SELECTED_RECORD_PROVIDER_PATCH)
+        _install_script(page, _PROJECT_CORE_MODULE_PATCH)
         _install_script(page, _PROJECT_INSPECTOR_MODULE_PATCH)
+
+        assert page.locator("#project-desktop-cockpit").get_attribute(
+            "data-project-owner"
+        ) == "projects.core"
+        assert page.locator("#project-inspector-host").count() == 1
+        assert page.locator("#project-inspector-properties").count() == 1
+        assert page.locator("#project-inspector-metadata").count() == 1
+        assert page.locator("#project-inspector-map").count() == 1
+        assert page.locator("#project-inspector-activity").count() == 1
 
         page.evaluate(
             """

@@ -1,10 +1,9 @@
 """Module-owned Projects browser adapter for the managed Fieldora web client.
 
-The desktop-density cockpit markup remains transitional while Projects/Core
-consumes canonical Project context and work-data services to render the Project
-hierarchy, center views and evidence surface. Inspector presentation consumes
-the public selected-record contract independently of hierarchy/context.
-Portfolio remains a separate module and no longer provides the Projects work surface.
+Projects/Core owns the bounded Project workspace scaffold plus Project hierarchy,
+center views and evidence rendering. Inspector presentation remains a separate
+consumer of the public selected-record contract, while Portfolio remains a separate
+module that Projects consumes only through public contracts.
 """
 
 from __future__ import annotations
@@ -31,6 +30,15 @@ _PROJECT_CORE_MODULE_PATCH = bytes(
  const evidenceData=()=>window.FieldoraModuleContracts?.resolve?.("projects.evidence.service")||null;
  const projectItems=()=>projectList()?.items?.()||[];
  const projectById=id=>projectItems().find(project=>project.id===id)||null;
+ function ensureProjectScaffold(){
+  const page=q("page-projects");if(!page)return null;
+  let shell=q("project-desktop-cockpit");if(shell)return shell;
+  shell=document.createElement("section");shell.id="project-desktop-cockpit";shell.className="desktop-cockpit";shell.dataset.projectOwner=moduleId;
+  const left=document.createElement("aside");left.className="cockpit-pane cockpit-left";left.innerHTML='<div class="cockpit-pane-head"><strong>Projects</strong></div><div style="padding:7px"><input id="project-tree-filter" placeholder="Filter projects"></div><div id="project-cockpit-tree" class="cockpit-tree"></div>';
+  const center=document.createElement("section");center.className="cockpit-pane cockpit-center";center.innerHTML='<div class="cockpit-pane-head"><strong id="project-cockpit-title">Project workspace</strong></div><div class="cockpit-toolbar"><div class="tabs"><button type="button" data-project-center="work" class="primary">Work</button><button type="button" data-project-center="evidence">Evidence</button></div></div><div id="project-workspace-work" class="cockpit-content"></div><div id="project-workspace-evidence" class="cockpit-content" hidden></div>';
+  const right=document.createElement("aside");right.id="project-inspector-host";right.className="cockpit-pane cockpit-right";right.dataset.projectInspectorHost="true";
+  shell.append(left,center,right);const subnav=page.querySelector(".workspace-subnav");(subnav||page.querySelector(".top"))?.after(shell);return shell;
+ }
  function status(message,error=false){
   const page=q("page-projects");if(!page)return;
   let node=q("project-core-module-status");
@@ -57,7 +65,7 @@ _PROJECT_CORE_MODULE_PATCH = bytes(
   host.innerHTML=`<div class="tree-group"><div class="tree-label">Projects</div>${visible.map(project=>`<button type="button" class="tree-item" data-project-tree="${escProject(project.id)}" aria-selected="${project.id===state.projectId}"><span class="tree-icon">▦</span><span>${escProject(project.name||project.title||project.id)}</span></button>`).join("")||'<div class="empty">No accessible projects.</div>'}</div><div class="tree-group"><div class="tree-label">Saved views</div><button type="button" class="tree-item" data-project-scope="mine" aria-selected="${state.scope==="mine"}"><span class="tree-icon">★</span>My work</button><button type="button" class="tree-item" data-project-scope="all" aria-selected="${state.scope==="all"}"><span class="tree-icon">≡</span>All accessible</button></div>`;
  }
  function ensureWorkSurface(){
-  const center=q("project-workspace-work");if(!center)return null;
+  ensureProjectScaffold();const center=q("project-workspace-work");if(!center)return null;
   let host=q("project-core-work-hierarchy");
   if(!host){host=document.createElement("section");host.id="project-core-work-hierarchy";host.className="card section";host.innerHTML='<div class="top"><div><h2>Project work</h2><p class="muted">Phases, tasks, milestones and subtasks for the selected project.</p></div></div><div id="project-core-work-list"></div>';center.prepend(host)}
   return host;
@@ -90,7 +98,7 @@ _PROJECT_CORE_MODULE_PATCH = bytes(
   }catch(error){renderWork();moduleError(error,"Project work could not be loaded.")}
  }
  function renderEvidence(){
-  const host=q("project-workspace-evidence");if(!host)return;
+  ensureProjectScaffold();const host=q("project-workspace-evidence");if(!host)return;
   host.innerHTML=state.evidence.length?`<div class="project-evidence-grid">${state.evidence.map(item=>`<article class="project-evidence" data-media="${escProject(item.media_id)}"><div class="thumb">${String(item.mime_type||"").startsWith("image/")?"▧":String(item.mime_type||"").startsWith("audio/")?"≋":String(item.mime_type||"").startsWith("video/")?"▷":"▤"}</div><strong>${escProject(item.filename||item.name||item.media_id)}</strong><small class="muted">${escProject(item.mime_type||"")}</small></article>`).join("")}</div>`:'<div class="empty">No evidence is linked to the selected project.</div>';
  }
  async function loadEvidence(){
@@ -124,7 +132,7 @@ _PROJECT_CORE_MODULE_PATCH = bytes(
   }catch(error){renderTree();moduleError(error,"Projects could not be loaded.");return false}
  }
  function setCenter(view){
-  state.centerView=view==="evidence"?"evidence":"work";const work=q("project-workspace-work"),evidence=q("project-workspace-evidence");
+  ensureProjectScaffold();state.centerView=view==="evidence"?"evidence":"work";const work=q("project-workspace-work"),evidence=q("project-workspace-evidence");
   if(work)work.hidden=state.centerView!=="work";if(evidence)evidence.hidden=state.centerView!=="evidence";
   document.querySelectorAll("[data-project-center]").forEach(button=>button.classList.toggle("primary",button.dataset.projectCenter===state.centerView));
   if(state.centerView==="evidence"&&!state.evidence.length&&state.projectId)loadEvidence();
@@ -138,7 +146,7 @@ _PROJECT_CORE_MODULE_PATCH = bytes(
   selection.select({kind,id:String(id),record});renderWork();return true;
  }
  function mount(){
-  if(state.mounted)return;state.mounted=true;state.controller=new AbortController();const signal=state.controller.signal;ensureWorkSurface();
+  if(state.mounted)return;ensureProjectScaffold();state.mounted=true;state.controller=new AbortController();const signal=state.controller.signal;ensureWorkSurface();
   const legacy=q("portfolio-list")?.closest(".card");if(legacy)legacy.dataset.projectCoreLegacyHidden=String(legacy.hidden),legacy.hidden=true;
   q("project-tree-filter")?.addEventListener("input",renderTree,{signal});
   q("project-cockpit-tree")?.addEventListener("click",event=>{const project=event.target.closest?.("[data-project-tree]"),scope=event.target.closest?.("[data-project-scope]");if(project)requestProject(project.dataset.projectTree);else if(scope){state.scope=scope.dataset.projectScope==="mine"?"mine":"all";renderTree()}},{signal});
@@ -155,6 +163,7 @@ _PROJECT_CORE_MODULE_PATCH = bytes(
  document.addEventListener("fieldora:project-work-changed",event=>{if(event.detail?.project_id===state.projectId)loadWork()});
  document.addEventListener("fieldora:project-evidence-changed",event=>{if(event.detail?.project_id===state.projectId)loadEvidence()});
  window.FieldoraProjects=Object.freeze({mount,unmount,selectProject:id=>projectContext()?.select?.(id)??false,setCenter,refreshWork:loadWork,refreshEvidence:loadEvidence,currentProject:()=>String(projectContext()?.current?.()||""),currentView:()=>state.centerView});
+ ensureProjectScaffold();
  if(window.FieldoraModules?.current?.()?.module_id===moduleId)mount();
 })();
 """,

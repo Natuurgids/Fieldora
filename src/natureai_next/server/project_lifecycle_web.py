@@ -23,6 +23,7 @@ _PROJECT_LIFECYCLE_WEB_PATCH = bytes(
  if(window.__fieldoraProjectLifecycleWired)return;window.__fieldoraProjectLifecycleWired=true;
  const q=id=>document.getElementById(id);
  const projectContext=()=>window.FieldoraModuleContracts?.resolve?.("projects.context.select")||null;
+ const projectList=()=>window.FieldoraModuleContracts?.resolve?.("projects.list.read")||null;
  const currentProjectId=()=>String(projectContext()?.current?.()||"");
  const page=q("page-projects");if(!page)return;
  const top=page.querySelector(".top");
@@ -33,7 +34,8 @@ _PROJECT_LIFECYCLE_WEB_PATCH = bytes(
  editor.innerHTML='<h2>Project lifecycle</h2><p id="portfolio-project-lifecycle-revision" class="muted"></p><div class="form-grid"><label>Name<input id="portfolio-project-lifecycle-name"></label><label>Status<select id="portfolio-project-lifecycle-status"><option value="active">active</option><option value="cancelled">cancelled</option><option value="archived">archived</option></select></label><label>Start date<input id="portfolio-project-lifecycle-start" type="date"></label><label>Due date<input id="portfolio-project-lifecycle-due" type="date"></label><label>Budget<input id="portfolio-project-lifecycle-budget" type="number" min="0" step="0.01"></label><label>Currency<input id="portfolio-project-lifecycle-currency" maxlength="8"></label></div><label class="section">Description<textarea id="portfolio-project-lifecycle-description"></textarea></label><div class="actions section"><button id="portfolio-project-lifecycle-save" class="primary" type="button">Save details</button><button id="portfolio-project-lifecycle-apply-status" type="button">Apply status</button><button id="portfolio-project-lifecycle-archive" type="button">Archive project</button><button id="portfolio-project-lifecycle-cancel" type="button">Close</button></div><p id="portfolio-project-lifecycle-message" class="status"></p>';
  const cockpit=q("project-desktop-cockpit");if(cockpit)cockpit.before(editor);else page.appendChild(editor);
  let editingId="";
- const projectById=id=>(projects||[]).find(project=>String(project.id)===String(id))||null;
+ const projectItems=()=>projectList()?.items?.()||projects||[];
+ const projectById=id=>Array.from(projectItems()).find(project=>String(project.id)===String(id))||null;
  const message=(text,error=false)=>{const node=q("portfolio-project-lifecycle-message");node.textContent=text;node.classList.toggle("error",error)};
  function fill(project){
   if(!project)return;
@@ -45,7 +47,9 @@ _PROJECT_LIFECYCLE_WEB_PATCH = bytes(
   try{const caps=await api(`/api/v1/projects/${encodeURIComponent(id)}/capabilities`,{purpose:"research"});editButton.dataset.fieldoraAuthorizationHidden=caps?.actions?.edit===true?"false":"true"}catch(_error){editButton.dataset.fieldoraAuthorizationHidden="true"}
  }
  async function reloadProjects(){
-  projects=(await api("/api/v1/projects",{purpose:"research"})).items||[];if(typeof projectOptions==="function")projectOptions();await loadPortfolio();return projectById(editingId||currentProjectId())
+  const list=projectList();
+  if(list?.refresh){await list.refresh()}else{projects=(await api("/api/v1/projects",{purpose:"research"})).items||[]}
+  if(typeof projectOptions==="function")projectOptions();await loadPortfolio();return projectById(editingId||currentProjectId())
  }
  async function rawConflict(){
   const current=await reloadProjects();if(current)fill(current);editor.hidden=false;message("Project changed on the server. Latest values reloaded; review them before saving again.",true)

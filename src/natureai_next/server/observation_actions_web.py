@@ -11,9 +11,11 @@ _OBSERVATION_ACTIONS_PATCH = bytes(
 (()=>{
  if(window.__fieldoraObservationActionsWired)return;
  window.__fieldoraObservationActionsWired=true;
- const rejected=document.querySelector('[data-observation-filter="disputed"]');
+ const observationsPage=document.getElementById("page-observations");
+ if(!observationsPage)return;
+ const rejected=observationsPage.querySelector('[data-observation-filter="disputed"]');
  if(rejected){rejected.dataset.observationFilter="rejected";rejected.textContent="Rejected";}
- const returnToReview=document.querySelector('[data-observation-decision="deferred"]');
+ const returnToReview=observationsPage.querySelector('[data-observation-decision="deferred"]');
  if(returnToReview){
   returnToReview.dataset.observationDecision="unconfirmed";
   returnToReview.textContent="Return to review";

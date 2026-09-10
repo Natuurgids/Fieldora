@@ -10,6 +10,7 @@ on:
       - "src/natureai_next/server/visible_control_audit_web.py"
       - "src/natureai_next/server/offline_first_api.py"
       - "tests/test_web041_observation_actions.py"
+      - "tests/test_observation_actions_dom_ownership.py"
       - "tests/test_web035_observation_parity_api.py"
       - "tests/test_web036_observation_evidence_links.py"
       - ".github/workflows/observation-actions-certification.yml"
@@ -51,9 +52,13 @@ jobs:
           src/natureai_next/server/observation_actions_web.py
           src/natureai_next/server/offline_first_api.py
           tests/test_web041_observation_actions.py
+          tests/test_observation_actions_dom_ownership.py
 
       - name: WEB-041 three-browser Observation actions
-        run: pytest -q tests/test_web041_observation_actions.py
+        run: >-
+          pytest -q
+          tests/test_web041_observation_actions.py
+          tests/test_observation_actions_dom_ownership.py
 
       - name: Governed Observation API regression
         run: >-

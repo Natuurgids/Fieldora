@@ -160,9 +160,9 @@ _NAVIGATION_WEB_PATCH = bytes(
  });
  if(knowledgeTabs.length)selectTab(knowledgeTabs,knowledgeTabs[0]);
 
- /* Normalize all remaining functional tab groups for accessibility and make
-    their active state testable without changing their existing data logic. */
- ["media-filter","observation-filter","research-domain","operations-domain"].forEach(key=>{
+ /* Normalize remaining generic functional tab groups for accessibility and make
+    their active state testable without taking ownership of feature-specific tabs. */
+ ["media-filter","research-domain","operations-domain"].forEach(key=>{
   const buttons=[...document.querySelectorAll(`[data-${key}]`)];
   buttons.forEach(button=>{
    const oldClick=button.onclick;

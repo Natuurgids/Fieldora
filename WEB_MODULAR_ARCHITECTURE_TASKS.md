@@ -17,7 +17,7 @@ Status legend: `[ ]` missing, `[~]` partial/evidence or migration in progress, `
 | A01 | [x] | Module contract | — | Module identity, route, capability, owned actions, provided/required contracts and lifecycle are explicit. |
 | A02 | [x] | Module/capability registry | A01 | Shell discovers modules from a validated registry; duplicate ownership and unresolved requirements fail validation. |
 | A03 | [x] | Shared application contracts | A01 | Auth, project context, navigation, inspector and notifications are consumed through public contracts. |
-| A04 | [~] | Event/message boundary | A03 | Cross-module runtime changes use declared actions/events; producer and consumer ownership are known. |
+| A04 | [x] | Event/message boundary | A03 | Cross-module runtime changes use declared actions/events; producer and consumer ownership are known. |
 | A05 | [~] | Service/API adapters | A03 | Presentation modules receive service/API adapters through stable interfaces; transport details are not feature globals. |
 | A06 | [x] | State ownership | A03,A04 | Every shared state field has one owner; consumers use snapshots/read contracts/events and cannot mutate owner state directly. |
 | A07 | [x] | DOM ownership | A01 | Each module owns a bounded render root and does not reach into another module's private DOM. |

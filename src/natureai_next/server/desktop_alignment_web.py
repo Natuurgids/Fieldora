@@ -72,10 +72,10 @@ _DESKTOP_ALIGNMENT_PATCH = bytes(
   });
  }
 
- function navigateWorkspace(target){
+ function navigateWorkspace(target,source="workspace-subnav"){
   const navigation=window.FieldoraModuleContracts?.resolve?.("navigation.navigate");
   if(navigation?.navigate){
-   const routed=navigation.navigate(`/${target}`,"workspace-subnav","push");
+   const routed=navigation.navigate(`/${target}`,source,"push");
    if(routed)return routed;
   }
   return showPage(target);
@@ -178,7 +178,7 @@ _DESKTOP_ALIGNMENT_PATCH = bytes(
   const actions=document.createElement("div");actions.id="home-primary-actions";actions.className="grid home-primary-actions";
   actions.innerHTML='<section class="card"><button type="button" data-home-target="library">Browse Library</button><p>Find governed evidence and linked archives.</p></section><section class="card"><button type="button" data-home-target="observations">Review observations</button><p>Work through field records and decisions.</p></section><section class="card"><button type="button" data-home-target="research">Research records</button><p>Continue specimens, protocols, surveys, samples, and laboratory records.</p></section><section class="card"><button type="button" data-home-target="knowledge">Knowledge &amp; AI</button><p>Review analyses and accepted knowledge.</p></section>';
   if(top){top.after(intro);intro.after(actions)}else{home.prepend(actions);home.prepend(intro)}
-  actions.querySelectorAll("[data-home-target]").forEach(b=>b.onclick=()=>showPage(b.dataset.homeTarget));
+  actions.querySelectorAll("[data-home-target]").forEach(b=>b.onclick=()=>navigateWorkspace(b.dataset.homeTarget,"home-primary-action"));
   const projectCard=q("home-projects")?.closest(".card");if(projectCard?.querySelector("h2"))projectCard.querySelector("h2").textContent="Continue scientific work";
   const metrics=q("home-metrics");if(metrics){const label=document.createElement("h2");label.className="home-overview-label";label.textContent="Workspace overview";metrics.before(label)}
   const runtime=q("home-runtime"),runtimeCard=runtime?.closest(".card");

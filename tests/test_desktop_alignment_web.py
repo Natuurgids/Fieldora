@@ -113,9 +113,14 @@ def test_workspace_subnav_routes_through_module_navigation_with_legacy_fallback(
     script = response.body.decode("utf-8")
 
     assert 'resolve?.("navigation.navigate")' in script
-    assert 'navigation.navigate(`/${target}`,"workspace-subnav","push")' in script
+    assert 'function navigateWorkspace(target,source="workspace-subnav")' in script
+    assert 'navigation.navigate(`/${target}`,source,"push")' in script
     assert "return showPage(target);" in script
     assert "b.onclick=()=>navigateWorkspace(target)" in script
+    assert (
+        'b.onclick=()=>navigateWorkspace(b.dataset.homeTarget,"home-primary-action")'
+        in script
+    )
 
 
 @pytest.mark.parametrize("browser_name", ("chromium", "firefox", "webkit"))

@@ -18,6 +18,8 @@ _PROJECT_RUNTIME_WEB_PATCH = bytes(
 (()=>{
  if(window.__fieldoraProjectRuntimeWired)return;window.__fieldoraProjectRuntimeWired=true;
  const q=id=>document.getElementById(id),page=q("page-projects");if(!page)return;
+ const projectContext=()=>window.FieldoraModuleContracts?.resolve?.("projects.context.select")||null;
+ const currentProjectId=()=>String(projectContext()?.current?.()||"");
  const top=page.querySelector(".top"),button=document.createElement("button");
  button.id="portfolio-project-work";button.type="button";button.textContent="Project work & evidence";
  button.dataset.fieldoraAuthorizationHidden="true";top?.appendChild(button);
@@ -26,7 +28,7 @@ _PROJECT_RUNTIME_WEB_PATCH = bytes(
  const cockpit=q("project-desktop-cockpit");if(cockpit)cockpit.before(panel);else page.appendChild(panel);
  const msg=(text,error=false)=>{const n=q("portfolio-project-runtime-message");n.textContent=text;n.classList.toggle("error",error)};
  async function authority(){
-  button.dataset.fieldoraAuthorizationHidden="true";const id=selectedProject||"";if(!id)return false;
+  button.dataset.fieldoraAuthorizationHidden="true";const id=currentProjectId();if(!id)return false;
   try{const caps=await api(`/api/v1/projects/${encodeURIComponent(id)}/capabilities`,{purpose:"research"});const allowed=caps?.actions?.edit===true;button.dataset.fieldoraAuthorizationHidden=allowed?"false":"true";if(!allowed)panel.hidden=true;return allowed}catch(_e){panel.hidden=true;return false}
  }
  async function evidenceOptions(){
@@ -35,21 +37,22 @@ _PROJECT_RUNTIME_WEB_PATCH = bytes(
   library.forEach(item=>{const option=document.createElement("option");option.value=item.media_id;option.textContent=`${item.mime_type||"evidence"} · ${String(item.media_id).slice(0,12)}`;select.appendChild(option)});
  }
  async function linkedEvidence(){
-  const host=q("portfolio-project-linked-evidence"),id=selectedProject||"";if(!id){host.textContent="";return}
+  const host=q("portfolio-project-linked-evidence"),id=currentProjectId();if(!id){host.textContent="";return}
   const linked=(await api(`/api/v1/media?project_id=${encodeURIComponent(id)}&limit=200`,{purpose:"research"})).items||[];
   host.textContent=linked.length?`Linked evidence: ${linked.map(item=>String(item.media_id).slice(0,12)).join(", ")}`:"No evidence linked yet.";
  }
  button.onclick=async()=>{if(!await authority())return;panel.hidden=false;msg("");try{await evidenceOptions();await linkedEvidence()}catch(e){msg(e.message,true)}};
  q("portfolio-project-runtime-close").onclick=()=>{panel.hidden=true;msg("")};
  q("portfolio-project-task-add").onclick=async()=>{
-  const projectId=selectedProject||"",title=q("portfolio-project-task-title").value.trim();if(!projectId||!title)return msg("Choose a project and enter a task title.",true);
+  const projectId=currentProjectId(),title=q("portfolio-project-task-title").value.trim();if(!projectId||!title)return msg("Choose a project and enter a task title.",true);
   try{await api("/api/v1/tasks",{method:"POST",purpose:"research",body:JSON.stringify({project_id:projectId,title})});q("portfolio-project-task-title").value="";msg("Task added to the selected project.")}catch(e){msg(e.message,true)}
  };
  q("portfolio-project-evidence-link").onclick=async()=>{
-  const projectId=selectedProject||"",mediaId=q("portfolio-project-evidence").value;if(!projectId||!mediaId)return msg("Choose existing Library evidence.",true);
+  const projectId=currentProjectId(),mediaId=q("portfolio-project-evidence").value;if(!projectId||!mediaId)return msg("Choose existing Library evidence.",true);
   try{await api(`/api/v1/projects/${encodeURIComponent(projectId)}/media-links`,{method:"POST",purpose:"research",body:JSON.stringify({media_id:mediaId})});msg("Existing Library evidence linked without changing its identity.");await linkedEvidence()}catch(e){msg(e.message,true)}
  };
  document.addEventListener("click",event=>{if(event.target.closest?.("[data-project-tree]"))setTimeout(authority,0)});
+ document.addEventListener("fieldora:project-context-changed",()=>setTimeout(authority,0));
  const tree=q("project-cockpit-tree");if(tree)new MutationObserver(()=>setTimeout(authority,0)).observe(tree,{childList:true,subtree:true});
  authority();
 })();

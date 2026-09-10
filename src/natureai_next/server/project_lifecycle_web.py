@@ -22,6 +22,8 @@ _PROJECT_LIFECYCLE_WEB_PATCH = bytes(
 (()=>{
  if(window.__fieldoraProjectLifecycleWired)return;window.__fieldoraProjectLifecycleWired=true;
  const q=id=>document.getElementById(id);
+ const projectContext=()=>window.FieldoraModuleContracts?.resolve?.("projects.context.select")||null;
+ const currentProjectId=()=>String(projectContext()?.current?.()||"");
  const page=q("page-projects");if(!page)return;
  const top=page.querySelector(".top");
  const editButton=document.createElement("button");
@@ -39,11 +41,11 @@ _PROJECT_LIFECYCLE_WEB_PATCH = bytes(
  }
  async function refreshAuthority(){
   editButton.dataset.fieldoraAuthorizationHidden="true";
-  const id=selectedProject||"";if(!id)return;
+  const id=currentProjectId();if(!id)return;
   try{const caps=await api(`/api/v1/projects/${encodeURIComponent(id)}/capabilities`,{purpose:"research"});editButton.dataset.fieldoraAuthorizationHidden=caps?.actions?.edit===true?"false":"true"}catch(_error){editButton.dataset.fieldoraAuthorizationHidden="true"}
  }
  async function reloadProjects(){
-  projects=(await api("/api/v1/projects",{purpose:"research"})).items||[];if(typeof projectOptions==="function")projectOptions();await loadPortfolio();return projectById(editingId||selectedProject)
+  projects=(await api("/api/v1/projects",{purpose:"research"})).items||[];if(typeof projectOptions==="function")projectOptions();await loadPortfolio();return projectById(editingId||currentProjectId())
  }
  async function rawConflict(){
   const current=await reloadProjects();if(current)fill(current);editor.hidden=false;message("Project changed on the server. Latest values reloaded; review them before saving again.",true)
@@ -51,7 +53,7 @@ _PROJECT_LIFECYCLE_WEB_PATCH = bytes(
  async function mutate(path,body,success){
   try{await api(path,{method:"PATCH",purpose:"research",body:JSON.stringify(body)});const current=await reloadProjects();if(current)fill(current);message(success);await refreshAuthority();return true}catch(error){if((error?.code||error?.message)==="revision_conflict"){await rawConflict();return false}message(error?.message||"Project update failed.",true);return false}
  }
- editButton.onclick=()=>{const project=projectById(selectedProject);if(!project)return;fill(project);message("");editor.hidden=false;q("portfolio-project-lifecycle-name").focus()};
+ editButton.onclick=()=>{const project=projectById(currentProjectId());if(!project)return;fill(project);message("");editor.hidden=false;q("portfolio-project-lifecycle-name").focus()};
  q("portfolio-project-lifecycle-cancel").onclick=()=>{editor.hidden=true;message("")};
  q("portfolio-project-lifecycle-save").onclick=async()=>{
   const project=projectById(editingId);if(!project)return;
@@ -68,6 +70,7 @@ _PROJECT_LIFECYCLE_WEB_PATCH = bytes(
   const ok=await mutate(`/api/v1/projects/${encodeURIComponent(editingId)}/archive`,{expected_revision:project.revision},"Project archived.");if(ok)editor.hidden=true
  };
  document.addEventListener("click",event=>{if(event.target.closest?.("[data-project-tree]")||event.target.closest?.('[data-portfolio-id][data-kind="project"]'))setTimeout(refreshAuthority,0)});
+ document.addEventListener("fieldora:project-context-changed",()=>setTimeout(refreshAuthority,0));
  const tree=q("project-cockpit-tree");if(tree)new MutationObserver(()=>setTimeout(refreshAuthority,0)).observe(tree,{childList:true,subtree:true});
  refreshAuthority();
 })();
@@ -124,7 +127,7 @@ class ProjectLifecycleWebApiMixin:
         suffix = "/status"
         if not path.startswith(prefix) or not path.endswith(suffix):
             return ""
-        project_id = unquote(path[len(prefix) : -len(suffix)]).strip("/")
+        project_id = unquote(path[len(prefix) : -len(suffix)].strip("/"))
         return project_id if project_id and "/" not in project_id else ""
 
     def _set_managed_project_status(

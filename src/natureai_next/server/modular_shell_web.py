@@ -91,22 +91,6 @@ _LEGACY_PROJECT_CREATION_START = (
 )
 _LEGACY_PROJECT_CREATION_END = b" function setIndicator(id,text){"
 
-# The desktop-density Projects/Facilities cockpit predates explicit module
-# ownership. Portfolio and Projects/Core are removed in separate marker-bounded
-# ranges so either module can be replaced without deleting the other's fallback.
-_PROJECT_COCKPIT_PORTFOLIO_RENDER_START = b" function portfolioData(){"
-_PROJECT_COCKPIT_PORTFOLIO_RENDER_END = b" function setProjectCenter(view){"
-_PROJECT_COCKPIT_PORTFOLIO_WIRING_START = b"  const oldPortfolio=loadPortfolio;"
-_PROJECT_COCKPIT_PORTFOLIO_WIRING_END = b'  q("portfolio-list").addEventListener("click"'
-_PROJECT_COCKPIT_BEHAVIOR_START = b' let cockpitProjectId="";'
-_PROJECT_COCKPIT_BEHAVIOR_END = b" function portfolioData(){"
-_PROJECT_COCKPIT_CENTER_START = b" function setProjectCenter(view){"
-_PROJECT_COCKPIT_CENTER_END = b' if(projectPage&&!q("project-desktop-cockpit")){'
-_PROJECT_COCKPIT_WIRING_START = b'  q("project-tree-filter").oninput=renderProjectTree;'
-_PROJECT_COCKPIT_WIRING_END = b"  const oldPortfolio=loadPortfolio;"
-_PROJECT_COCKPIT_WORK_WIRING_START = b'  q("portfolio-list").addEventListener("click"'
-_PROJECT_COCKPIT_WORK_WIRING_END = b" }\n\n /* ---- Facility / CMDB cockpit"
-
 
 def _strip_legacy_range(body: bytes, start: bytes, end: bytes) -> bytes:
     """Remove one migrated compatibility responsibility by stable markers."""
@@ -204,38 +188,9 @@ def _rewrite_owned_browser_response(body: bytes) -> bytes:
             _LEGACY_PORTFOLIO_CROSS_SCREEN_END,
         )
     if _PROJECT_OWNER_MARKER in body:
-        # Managed Project APIs remain authoritative; only browser competitors are
-        # retired after their Projects/Core replacements are present. Strip the
-        # leading Project cockpit behavior before Portfolio consumes its end marker.
         body = body.replace(_LEGACY_PROJECTS_SHOWPAGE_LOAD, b"", 1)
         body = body.replace(_LEGACY_WORK_SAVE_REFRESH, _PROJECT_EVENT_WORK_SAVE_REFRESH, 1)
         body = body.replace(_PROJECT_HIERARCHY_PATCH, b"", 1)
-        body = _strip_legacy_range(
-            body, _PROJECT_COCKPIT_BEHAVIOR_START, _PROJECT_COCKPIT_BEHAVIOR_END
-        )
-    if _PORTFOLIO_OWNER_MARKER in body:
-        body = _strip_legacy_range(
-            body,
-            _PROJECT_COCKPIT_PORTFOLIO_RENDER_START,
-            _PROJECT_COCKPIT_PORTFOLIO_RENDER_END,
-        )
-    if _PROJECT_OWNER_MARKER in body:
-        body = _strip_legacy_range(
-            body, _PROJECT_COCKPIT_CENTER_START, _PROJECT_COCKPIT_CENTER_END
-        )
-        body = _strip_legacy_range(
-            body, _PROJECT_COCKPIT_WIRING_START, _PROJECT_COCKPIT_WIRING_END
-        )
-    if _PORTFOLIO_OWNER_MARKER in body:
-        body = _strip_legacy_range(
-            body,
-            _PROJECT_COCKPIT_PORTFOLIO_WIRING_START,
-            _PROJECT_COCKPIT_PORTFOLIO_WIRING_END,
-        )
-    if _PROJECT_OWNER_MARKER in body:
-        body = _strip_legacy_range(
-            body, _PROJECT_COCKPIT_WORK_WIRING_START, _PROJECT_COCKPIT_WORK_WIRING_END
-        )
     if _PROJECT_OWNER_MARKER in body and _PORTFOLIO_OWNER_MARKER in body:
         body = _strip_legacy_range(
             body, _LEGACY_PORTFOLIO_LOADER_START, _LEGACY_PORTFOLIO_LOADER_END

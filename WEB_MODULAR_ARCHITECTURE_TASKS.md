@@ -21,7 +21,7 @@ Status legend: `[ ]` missing, `[~]` partial/evidence or migration in progress, `
 | A05 | [~] | Service/API adapters | A03 | Presentation modules receive service/API adapters through stable interfaces; transport details are not feature globals. |
 | A06 | [x] | State ownership | A03,A04 | Every shared state field has one owner; consumers use snapshots/read contracts/events and cannot mutate owner state directly. |
 | A07 | [x] | DOM ownership | A01 | Each module owns a bounded render root and does not reach into another module's private DOM. |
-| A08 | [~] | Shell decomposition | A01-A07 | Shell performs composition, capability gating, route/history and lifecycle only; feature business behavior is outside the shell. |
+| A08 | [x] | Shell decomposition | A01-A07 | Shell performs composition, capability gating, route/history and lifecycle only; feature business behavior is outside the shell. |
 
 ### Foundation contract certification
 

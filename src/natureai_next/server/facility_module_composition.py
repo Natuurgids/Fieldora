@@ -14,9 +14,10 @@ from natureai_next.server.offline_maps_web import (
     _OFFLINE_MAPS_SERVICE_PROVIDER_PATCH,
     _OFFLINE_MAPS_WEB_PATCH,
 )
+from natureai_next.server.project_facility_workspace_web import (
+    _PROJECT_FACILITY_WORKSPACE_PATCH,
+)
 
-_FACILITY_WORKSPACE_START = b" /* ---- Facility / CMDB cockpit"
-_FACILITY_WORKSPACE_END = b"})();"
 _FACILITY_BASE_OMISSION_PATCH = r"""
 
 /* WEB-FACILITIES-BASE-OMISSION: remove legacy Facilities controls. */
@@ -61,12 +62,8 @@ def suppress_facilities_browser_response(target: str, response: ApiResponse) -> 
         .replace(_FACILITY_WEB_PATCH, b"")
         .replace(_OFFLINE_MAPS_SERVICE_PROVIDER_PATCH, b"")
         .replace(_OFFLINE_MAPS_WEB_PATCH, b"")
+        .replace(_PROJECT_FACILITY_WORKSPACE_PATCH, b"")
     )
-    start = body.find(_FACILITY_WORKSPACE_START)
-    if start >= 0:
-        end = body.find(_FACILITY_WORKSPACE_END, start)
-        if end >= 0:
-            body = body[:start] + body[end:]
     if _FACILITY_BASE_OMISSION_PATCH not in body:
         body += _FACILITY_BASE_OMISSION_PATCH
 

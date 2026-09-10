@@ -75,7 +75,7 @@ def test_evidence_provider_requires_runtime_and_owns_governed_transport() -> Non
     assert "freezeItems" in script
 
 
-def test_evidence_provider_migrates_project_cockpit_consumer_to_contract() -> None:
+def test_evidence_provider_does_not_restore_retired_project_cockpit_consumer() -> None:
     shell = patch_modular_shell_response(
         "/app.js", ApiResponse(200, b"const base=true;", "text/javascript; charset=utf-8")
     )
@@ -85,8 +85,8 @@ def test_evidence_provider_migrates_project_cockpit_consumer_to_contract() -> No
     patched = patch_project_evidence_service_provider_response("/app.js", runtime)
     script = patched.body.decode("utf-8")
 
-    assert 'resolve("projects.evidence.service")' in script
-    assert "service.projectItems(cockpitProjectId)" in script
+    assert "WEB-PROJECT-EVIDENCE-SERVICE-PROVIDER" in script
+    assert "service.projectItems(cockpitProjectId)" not in script
     assert 'api("/api/v1/media?limit=500")' not in script
 
 
@@ -104,5 +104,5 @@ def test_production_orders_data_services_before_list_provider() -> None:
 
     assert -1 < runtime < work < projects
     assert -1 < runtime < evidence < projects
-    assert "service.projectItems(cockpitProjectId)" in script
+    assert "service.projectItems(cockpitProjectId)" not in script
     assert 'api("/api/v1/media?limit=500")' not in script

@@ -34,8 +34,20 @@ _PROJECT_LIST_PROVIDER_PATCH = bytes(
   if(current)return current===implementation;
   contracts.register(contractName,moduleId,implementation);return true;
  }
+ function bridgeLegacyCreateRefresh(){
+  const button=document.getElementById("portfolio-project-save");
+  if(!button||button.dataset.fieldoraProjectListBridge==="true"||typeof button.onclick!=="function")return;
+  const legacy=button.onclick;
+  button.dataset.fieldoraProjectListBridge="true";
+  button.onclick=async function(...args){
+   const result=await legacy.apply(this,args);
+   await refresh();
+   return result;
+  };
+ }
  register();
- document.addEventListener('fieldora:contracts-ready',register,{once:true});
+ bridgeLegacyCreateRefresh();
+ document.addEventListener('fieldora:contracts-ready',()=>{register();bridgeLegacyCreateRefresh()},{once:true});
  window.FieldoraProjectList=implementation;
 })();
 """,

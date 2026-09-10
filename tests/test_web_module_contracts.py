@@ -46,6 +46,7 @@ def test_foundation_registry_has_separate_projects_and_portfolio_ownership() -> 
         "notifications.publish",
         "projects.list.read",
         "projects.context.select",
+        "projects.work-data.service",
     )
     assert isinstance(auth, WebApplicationContractProvider)
     assert auth.provider_id == "application.auth"

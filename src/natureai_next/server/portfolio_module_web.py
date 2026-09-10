@@ -26,6 +26,7 @@ _PORTFOLIO_MODULE_PATCH = bytes(
  const notifications=()=>window.FieldoraModuleContracts?.resolve?.("notifications.publish")||null;
  const projectList=()=>window.FieldoraModuleContracts?.resolve?.("projects.list.read")||null;
  const projectContext=()=>window.FieldoraModuleContracts?.resolve?.("projects.context.select")||null;
+ const workData=()=>window.FieldoraModuleContracts?.resolve?.("projects.work-data.service")||null;
  function status(message,error=false){
   const page=q("page-portfolio");if(!page)return;
   let node=q("portfolio-module-status");
@@ -93,13 +94,12 @@ _PORTFOLIO_MODULE_PATCH = bytes(
   }
  }
  async function loadWorkData(){
-  const [phases,tasks,sprints]=await Promise.all([
-   api("/api/v1/phases",{purpose:"research"}),
-   api("/api/v1/tasks",{purpose:"research"}),
-   api("/api/v1/sprints",{purpose:"research"})
-  ]),list=q("portfolio-list");
+  const service=workData(),projects=projectList()?.items?.()||[],list=q("portfolio-list");
   if(!list)return;
-  list.dataset.phases=JSON.stringify(phases.items||[]);list.dataset.tasks=JSON.stringify(tasks.items||[]);list.dataset.sprints=JSON.stringify(sprints.items||[]);
+  if(!service?.load)throw new Error("Project work-data service is not available.");
+  const snapshots=await Promise.all(projects.map(project=>service.load(project.id)));
+  const phases=snapshots.flatMap(snapshot=>snapshot?.phases||[]),tasks=snapshots.flatMap(snapshot=>snapshot?.tasks||[]),sprints=snapshots.flatMap(snapshot=>snapshot?.sprints||[]);
+  list.dataset.phases=JSON.stringify(phases);list.dataset.tasks=JSON.stringify(tasks);list.dataset.sprints=JSON.stringify(sprints);
  }
  async function refresh(){
   try{

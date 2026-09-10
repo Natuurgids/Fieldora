@@ -34,7 +34,7 @@ def test_portfolio_module_patch_is_idempotent_and_lifecycle_owned() -> None:
     assert "showPage=function" not in script
 
 
-def test_portfolio_module_uses_public_contracts_and_owns_work_data_loading() -> None:
+def test_portfolio_module_uses_public_contracts_and_work_data_service() -> None:
     patched = patch_portfolio_module_response(
         "/app.js", ApiResponse(200, b"", "text/javascript; charset=utf-8")
     )
@@ -44,6 +44,7 @@ def test_portfolio_module_uses_public_contracts_and_owns_work_data_loading() -> 
     assert 'resolve?.("navigation.navigate")' in script
     assert 'resolve?.("projects.list.read")' in script
     assert 'resolve?.("projects.context.select")' in script
+    assert 'resolve?.("projects.work-data.service")' in script
     assert "allProjects=projectList()?.items?.()||[]" in script
     assert "identity=currentUser()" in script
     assert "identity.identity_id" in script
@@ -55,12 +56,16 @@ def test_portfolio_module_uses_public_contracts_and_owns_work_data_loading() -> 
     assert "window.projects" not in script
     assert "window.openProject" not in script
     assert "window.loadPortfolio" not in script
-    assert 'api("/api/v1/phases",{purpose:"research"})' in script
-    assert 'api("/api/v1/tasks",{purpose:"research"})' in script
-    assert 'api("/api/v1/sprints",{purpose:"research"})' in script
-    assert "list.dataset.phases=JSON.stringify(phases.items||[])" in script
-    assert "list.dataset.tasks=JSON.stringify(tasks.items||[])" in script
-    assert "list.dataset.sprints=JSON.stringify(sprints.items||[])" in script
+    assert 'api("/api/v1/phases",{purpose:"research"})' not in script
+    assert 'api("/api/v1/tasks",{purpose:"research"})' not in script
+    assert 'api("/api/v1/sprints",{purpose:"research"})' not in script
+    assert "projects.map(project=>service.load(project.id))" in script
+    assert "snapshots.flatMap(snapshot=>snapshot?.phases||[])" in script
+    assert "snapshots.flatMap(snapshot=>snapshot?.tasks||[])" in script
+    assert "snapshots.flatMap(snapshot=>snapshot?.sprints||[])" in script
+    assert "list.dataset.phases=JSON.stringify(phases)" in script
+    assert "list.dataset.tasks=JSON.stringify(tasks)" in script
+    assert "list.dataset.sprints=JSON.stringify(sprints)" in script
     assert "data-portfolio-id" in script
     assert "data-portfolio-view" in script
     assert 'q("portfolio-scope")' in script

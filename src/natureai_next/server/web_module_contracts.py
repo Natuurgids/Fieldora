@@ -372,6 +372,7 @@ FOUNDATION_WEB_MODULES: tuple[WebModuleSpec, ...] = (
             "notifications.publish",
             "projects.list.read",
             "projects.context.select",
+            "projects.work-data.service",
         ),
     ),
     WebModuleSpec(

@@ -47,6 +47,7 @@ def test_runtime_manifest_publishes_project_provider_and_portfolio_requirements(
         "notifications.publish",
         "projects.list.read",
         "projects.context.select",
+        "projects.work-data.service",
     ]
     assert by_id["portfolio"]["optional_contracts"] == []
 

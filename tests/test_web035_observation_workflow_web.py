@@ -93,7 +93,7 @@ def test_observation_workspace_state_is_owned_inside_science_module() -> None:
     assert "setObservationFilter(button.dataset.observationFilter)" in script
     assert "observations.find(" not in script
     assert "selectedObservations" not in script
-    assert "observationFilter==" not in script
+    assert 'let observationFilter="all"' not in script
     assert "observations=(await" not in script
 
 

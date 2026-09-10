@@ -178,9 +178,9 @@ def test_observation_workspace_actions_use_revisioned_governed_contracts(
             "Return to review",
         ]
 
-        page.get_by_role("button", name="Rejected", exact=True).click()
+        page.get_by_role("tab", name="Rejected", exact=True).click()
         assert page.locator("#observation-list [data-observation]").count() == 0
-        page.get_by_role("button", name="All records", exact=True).click()
+        page.get_by_role("tab", name="All records", exact=True).click()
         assert page.locator("#observation-list [data-observation]").count() == 1
 
         checkbox = page.locator('[data-observation-select="observation-1"]')

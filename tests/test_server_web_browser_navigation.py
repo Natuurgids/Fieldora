@@ -13,6 +13,7 @@ from natureai_next.server.api import ApiResponse
 from natureai_next.server.contract_web_compatibility import patch_contract_web_response
 from natureai_next.server.facility_web_compatibility import patch_facility_web_response
 from natureai_next.server.navigation_web_compatibility import patch_navigation_web_response
+from natureai_next.server.science_workflow_web import patch_science_workflow_web_response
 from natureai_next.server.web_compatibility import patch_web_response
 
 
@@ -30,6 +31,7 @@ def _web_fixture(tmp_path: Path):
         patch_web_response,
         patch_facility_web_response,
         patch_navigation_web_response,
+        patch_science_workflow_web_response,
     ):
         response = patch("/app.js", response)
     (tmp_path / "app.js").write_bytes(response.body)
@@ -159,9 +161,21 @@ def _mock_api(route: Route) -> None:
     elif path == "observations":
         payload = {
             "items": [
-                {"id": "obs-confirmed", "name": "Confirmed bird", "status": "confirmed"},
-                {"id": "obs-review", "name": "Review beetle", "status": "needs_review"},
-                {"id": "obs-disputed", "name": "Disputed moss", "status": "disputed"},
+                {
+                    "id": "obs-confirmed",
+                    "name": "Confirmed bird",
+                    "confirmation_state": "confirmed",
+                },
+                {
+                    "id": "obs-review",
+                    "name": "Review beetle",
+                    "confirmation_state": "unconfirmed",
+                },
+                {
+                    "id": "obs-disputed",
+                    "name": "Disputed moss",
+                    "confirmation_state": "disputed",
+                },
             ]
         }
     elif path == "knowledge":

@@ -2,7 +2,7 @@
 
 The legacy Capacity page still contains schedules/absence compatibility UI. This
 adapter owns only the Project-context allocation slice and consumes the governed
-Project hierarchy allocation API rather than duplicating Capacity persistence.
+Project hierarchy allocation service rather than duplicating Capacity persistence.
 """
 
 from __future__ import annotations
@@ -20,6 +20,7 @@ _CAPACITY_MODULE_PATCH = bytes(
  const moduleId="capacity",q=id=>document.getElementById(id);
  const state={mounted:false,controller:null,projectId:"",allocations:[]};
  const projectContext=()=>window.FieldoraModuleContracts?.resolve?.("projects.context.select")||null;
+ const workData=()=>window.FieldoraModuleContracts?.resolve?.("projects.work-data.service")||null;
  const notifications=()=>window.FieldoraModuleContracts?.resolve?.("notifications.publish")||null;
  const canonicalProjectId=()=>String(projectContext()?.current?.()||"");
  const esc=value=>String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -47,7 +48,7 @@ _CAPACITY_MODULE_PATCH = bytes(
  }
  async function refresh(){
   render();if(!state.projectId)return;
-  try{const result=await api(`/api/v1/allocations?project_id=${encodeURIComponent(state.projectId)}`,{purpose:"research"});state.allocations=result.items||[];render();clearStatus()}
+  try{const service=workData();if(!service?.load)throw new Error("Project work-data service is unavailable.");const result=await service.load(state.projectId);state.allocations=result.allocations||[];render();clearStatus()}
   catch(error){state.allocations=[];render();report(error,"Project allocations could not be loaded.")}
  }
  async function createAllocation(event){
@@ -56,7 +57,7 @@ _CAPACITY_MODULE_PATCH = bytes(
   if(!userId||!startDate){report(null,"User and start date are required.");return false}
   const record={project_id:projectId,user_id:userId,start_date:startDate,end_date:q("capacity-allocation-end")?.value||"",hours_per_week:Number(q("capacity-allocation-hours")?.value||0),allocation_percent:Number(q("capacity-allocation-percent")?.value||0),role:q("capacity-allocation-role")?.value.trim()||""};
   try{
-   await api("/api/v1/allocations",{method:"POST",purpose:"research",body:JSON.stringify(record)});state.projectId=projectId;q("capacity-project-allocation-create")?.reset();await refresh();document.dispatchEvent(new CustomEvent("fieldora:capacity-allocations-changed",{detail:{module_id:moduleId,project_id:projectId}}));return true
+   const service=workData();if(!service?.create)throw new Error("Project work-data service is unavailable.");await service.create("allocation",record);state.projectId=projectId;q("capacity-project-allocation-create")?.reset();await refresh();document.dispatchEvent(new CustomEvent("fieldora:capacity-allocations-changed",{detail:{module_id:moduleId,project_id:projectId}}));return true
   }catch(error){report(error,"Project allocation could not be created.");return false}
  }
  async function openProject(projectId){state.projectId=String(projectId||"");document.dispatchEvent(new CustomEvent("fieldora:capacity-project-changed",{detail:{module_id:moduleId,project_id:state.projectId}}));await refresh();return state.projectId}

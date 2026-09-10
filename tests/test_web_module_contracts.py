@@ -87,6 +87,7 @@ def test_project_integrations_are_owned_by_bounded_modules() -> None:
         "notifications.publish",
         "projects.context.select",
         "projects.toolbar.extend",
+        "projects.work-data.service",
     )
     assert research.module_id == "research.dossiers"
     assert research.dependencies == ()
@@ -201,7 +202,7 @@ def test_registry_rejects_duplicate_contract_provider() -> None:
             WebModuleSpec(
                 "projects.replacement",
                 "/replacement-projects",
-                "Replacement Projects",
+                "Projects replacement",
                 provides_contracts=("projects.list.read",),
             )
         )
@@ -259,13 +260,21 @@ def test_capacity_can_bind_to_replacement_projects_contract_provider() -> None:
         "projects.replacement",
         "/projects",
         "Projects replacement",
-        provides_contracts=("projects.context.select", "projects.toolbar.extend"),
+        provides_contracts=(
+            "projects.context.select",
+            "projects.toolbar.extend",
+            "projects.work-data.service",
+        ),
     )
     capacity = WebModuleSpec(
         "capacity",
         "/capacity",
         "Capacity",
-        requires_contracts=("projects.context.select", "projects.toolbar.extend"),
+        requires_contracts=(
+            "projects.context.select",
+            "projects.toolbar.extend",
+            "projects.work-data.service",
+        ),
     )
     registry = WebModuleRegistry((replacement, capacity))
 
@@ -274,6 +283,7 @@ def test_capacity_can_bind_to_replacement_projects_contract_provider() -> None:
 
     assert registry.contract_provider("projects.context.select") is replacement
     assert registry.contract_provider("projects.toolbar.extend") is replacement
+    assert registry.contract_provider("projects.work-data.service") is replacement
     assert capacity.dependencies == ()
 
 

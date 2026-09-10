@@ -30,6 +30,7 @@ def test_capacity_owns_project_integration_actions() -> None:
         "notifications.publish",
         "projects.context.select",
         "projects.toolbar.extend",
+        "projects.work-data.service",
     )
 
 
@@ -47,8 +48,10 @@ def test_capacity_module_is_idempotent_and_reads_governed_project_allocations() 
     assert 'runtime.actionOwner?.("capacity.project.open")!==moduleId' in script
     assert 'runtime.resolveAction?.("capacity.project.open")' in script
     assert 'runtime.registerAction?.("capacity.project.open",moduleId,openProjectAction)' in script
-    assert "/api/v1/allocations?project_id=${encodeURIComponent(state.projectId)}" in script
-    assert 'purpose:"research"' in script
+    assert 'resolve?.("projects.work-data.service")' in script
+    assert "await service.load(state.projectId)" in script
+    assert "state.allocations=result.allocations||[]" in script
+    assert "/api/v1/allocations?project_id=" not in script
     assert 'data-fieldora-action="capacity.project.allocations.view"' in script
     assert "fieldora:capacity-project-changed" in script
     assert "work-schedules" not in script
@@ -61,12 +64,14 @@ def test_capacity_module_creates_allocations_from_canonical_project_context() ->
     script = patch_capacity_module_response("/app.js", original).body.decode("utf-8")
 
     assert 'resolve?.("projects.context.select")' in script
+    assert 'resolve?.("projects.work-data.service")' in script
     assert "projectContext()?.current?.()" in script
     assert "async function createAllocation(event)" in script
     assert 'data-fieldora-action="capacity.project.allocations.create"' in script
     assert 'const projectId=canonicalProjectId();if(!projectId){report(null,"Select a project before creating an allocation.");return false}' in script
     assert "record={project_id:projectId" in script
-    assert 'api("/api/v1/allocations",{method:"POST",purpose:"research",body:JSON.stringify(record)})' in script
+    assert 'await service.create("allocation",record)' in script
+    assert 'api("/api/v1/allocations"' not in script
     assert "fieldora:capacity-allocations-changed" in script
     assert 'addEventListener("submit",createAllocation,{signal:state.controller.signal})' in script
     assert "createAllocation,currentProject" in script

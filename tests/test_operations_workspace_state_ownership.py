@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from natureai_next.server.api import ApiResponse
 from natureai_next.server.modular_shell_web import patch_modular_shell_response
+from natureai_next.server.navigation_web_compatibility import patch_navigation_web_response
 from natureai_next.server.web_module_contract_runtime import patch_runtime_contracts_response
 
 
@@ -17,7 +18,8 @@ def test_operations_workspace_owner_rebinds_legacy_state_controls() -> None:
         ),
         "text/javascript; charset=utf-8",
     )
-    shell = patch_modular_shell_response("/app.js", legacy)
+    navigation = patch_navigation_web_response("/app.js", legacy)
+    shell = patch_modular_shell_response("/app.js", navigation)
     script = patch_runtime_contracts_response("/app.js", shell).body.decode("utf-8")
     runtime = script.split("WEB-MODULE-CONTRACT-RUNTIME", 1)[1]
 
@@ -25,6 +27,14 @@ def test_operations_workspace_owner_rebinds_legacy_state_controls() -> None:
     assert "register('operations.workspace.host','application.operations-workspace',implementation)" in runtime
     assert "refreshButton.onclick=()=>implementation.refresh()" in runtime
     assert "implementation.selectDomain(button.dataset.operationsDomain)" in runtime
+    assert "item.classList.toggle('primary',active)" in runtime
+    assert "item.setAttribute('aria-selected',String(active))" in runtime
+    assert "item.setAttribute('role','tab')" in runtime
+    assert '["media-filter","observation-filter","research-domain"]' in script
+    assert (
+        '["media-filter","observation-filter","research-domain","operations-domain"]'
+        not in script
+    )
     assert runtime.index("refreshButton.onclick=()=>implementation.refresh()") > runtime.index(
         "register('operations.workspace.host','application.operations-workspace',implementation)"
     )
@@ -67,7 +77,10 @@ def test_operations_workspace_domain_is_private_owner_state() -> None:
         "operationsDomain=operationsWorkspaceDomain;const result=await baseOperationsLoad()"
         in runtime
     )
-    assert "operationsWorkspaceDomain=next;return loadOperations()" in runtime
+    assert (
+        "operationsWorkspaceDomain=next;projectDomainSelection();return loadOperations()"
+        in runtime
+    )
     assert "currentDomain=()=>typeof operationsDomain" not in runtime
     assert "operationsDomain=next" not in runtime
 

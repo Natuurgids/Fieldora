@@ -12,6 +12,12 @@ _LEGACY_OPERATIONS_RELATED_PROJECT_START = (
 _LEGACY_OPERATIONS_RELATED_PROJECT_END = (
     b'\n document.querySelectorAll(".nav[data-page]").forEach'
 )
+_LEGACY_OPERATIONS_DOMAIN_TAB_GROUP = (
+    b'["media-filter","observation-filter","research-domain","operations-domain"]'
+)
+_APPLICATION_OWNED_TAB_GROUPS = (
+    b'["media-filter","observation-filter","research-domain"]'
+)
 
 _OPERATIONS_RELATED_PROJECT_PATCH = bytes(
     r"""
@@ -145,12 +151,20 @@ def _strip_legacy_related_project_wiring(body: bytes) -> bytes:
     return body[:start] + body[end:]
 
 
+def _strip_legacy_operations_domain_tab_wiring(body: bytes) -> bytes:
+    return body.replace(
+        _LEGACY_OPERATIONS_DOMAIN_TAB_GROUP,
+        _APPLICATION_OWNED_TAB_GROUPS,
+    )
+
+
 def compose_operations_browser_response(target: str, response: ApiResponse) -> ApiResponse:
     """Replace legacy cross-screen wiring with the Operations-owned adapter."""
 
     if urlsplit(target).path != "/app.js" or response.status != 200:
         return response
-    body = _strip_legacy_related_project_wiring(response.body)
+    body = _strip_legacy_operations_domain_tab_wiring(response.body)
+    body = _strip_legacy_related_project_wiring(body)
     if _OPERATIONS_RELATED_PROJECT_PATCH not in body:
         body += _OPERATIONS_RELATED_PROJECT_PATCH
     if body == response.body:
@@ -173,7 +187,8 @@ def suppress_operations_browser_response(
         if facilities_composed
         else _OPERATIONS_WITHOUT_FACILITIES_PATCH
     )
-    body = _strip_legacy_related_project_wiring(response.body)
+    body = _strip_legacy_operations_domain_tab_wiring(response.body)
+    body = _strip_legacy_related_project_wiring(body)
     if patch not in body:
         body += patch
     if body == response.body:

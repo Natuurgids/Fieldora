@@ -45,6 +45,7 @@ _SCIENCE_WORKFLOW_PATCH = bytes(
   let observationNav=null;
   let observationItems=Object.freeze([]),observationFilterState="all";
   const selectedObservationIds=new Set();
+  const observationList=()=>observationsPage.querySelector("#observation-list");
   const projectContext=()=>window.FieldoraModuleContracts?.resolve?.("projects.context.select")||null;
   const projectList=()=>window.FieldoraModuleContracts?.resolve?.("projects.list.read")||null;
   const projectItems=()=>{const items=projectList()?.items?.();return Array.isArray(items)?items:[]};
@@ -54,6 +55,10 @@ _SCIENCE_WORKFLOW_PATCH = bytes(
     item&&typeof item==="object"?Object.freeze({...item}):item
    )
   );
+  function renderObservationRows(items,renderer,empty="No records available for your access scope."){
+   const list=observationList();if(!list)return;
+   list.innerHTML=items.length?items.map(renderer).join(""):`<div class="empty">${esc(empty)}</div>`;
+  }
   function publishObservationState(){
    const detail=Object.freeze({
     items:observationItems,
@@ -70,7 +75,7 @@ _SCIENCE_WORKFLOW_PATCH = bytes(
    return publishObservationState();
   }
   function projectObservationFilterState(){
-   document.querySelectorAll("[data-observation-filter]").forEach(button=>{
+   observationsPage.querySelectorAll("[data-observation-filter]").forEach(button=>{
     const active=button.dataset.observationFilter===observationFilterState;
     button.classList.toggle("primary",active);
     button.setAttribute("aria-selected",String(active));
@@ -89,7 +94,7 @@ _SCIENCE_WORKFLOW_PATCH = bytes(
    publishObservationState();
   }
   function clearObservationSelection(){
-   document.querySelectorAll('#observation-list [data-observation-select]:checked').forEach(input=>{
+   observationsPage.querySelectorAll('#observation-list [data-observation-select]:checked').forEach(input=>{
     input.checked=false;input.dispatchEvent(new Event("change",{bubbles:true}));
    });
    selectedObservationIds.clear();
@@ -290,14 +295,14 @@ _SCIENCE_WORKFLOW_PATCH = bytes(
    const button=event.target.closest("[data-unlink-evidence]");if(button)unlinkSupportingEvidence(button.dataset.unlinkEvidence);
   });
   q("obs-cancel-aligned")?.addEventListener("click",()=>{editingObservation=null;if(q("obs-project"))q("obs-project").disabled=false;setObservationView("review")});
-  q("observation-list")?.addEventListener("click",event=>{
+  observationList()?.addEventListener("click",event=>{
    if(event.target.closest("input[type=checkbox]"))return;
    const row=event.target.closest("[data-observation]");if(row)beginObservationEdit(row.dataset.observation);
   });
-  q("observation-list")?.addEventListener("change",event=>{
+  observationList()?.addEventListener("change",event=>{
    const id=event.target.dataset.observationSelect;if(id)toggleObservationSelection(id,event.target.checked);
   });
-  document.querySelectorAll("[data-observation-filter]").forEach(button=>{
+  observationsPage.querySelectorAll("[data-observation-filter]").forEach(button=>{
    button.onclick=()=>{
     setObservationFilter(button.dataset.observationFilter);
     renderObservations();
@@ -312,16 +317,16 @@ _SCIENCE_WORKFLOW_PATCH = bytes(
 
   loadObservations=async function(){
    try{replaceObservationItems((await api("/api/v1/observations")).items);renderObservations()}
-   catch(e){cards("observation-list",[],x=>x,e.message)}
+   catch(e){renderObservationRows([],x=>x,e.message)}
   };
   renderObservations=function(){
-   const query=(document.querySelector("#page-observations .global-search")?.value||"").toLowerCase();
+   const query=(observationsPage.querySelector(".global-search")?.value||"").toLowerCase();
    const shown=observationItems.filter(item=>{
     const state=item.confirmation_state||"unconfirmed";
     const filterOk=observationFilterState==="all"||state===observationFilterState||(observationFilterState==="review"&&state==="unconfirmed");
     return filterOk&&JSON.stringify(item).toLowerCase().includes(query);
    });
-   cards("observation-list",shown,item=>`<div class="row" data-observation="${esc(item.id)}"><input type="checkbox" data-observation-select="${esc(item.id)}" ${selectedObservationIds.has(item.id)?"checked":""}><strong>${esc(item.observation_type||"unknown")}</strong><span>${esc(item.asset_id||"")}</span><span>${item.count==null?"":esc(item.count)}</span><span class="pill">${esc(item.confirmation_state||"unconfirmed")}</span></div>`);
+   renderObservationRows(shown,item=>`<div class="row" data-observation="${esc(item.id)}"><input type="checkbox" data-observation-select="${esc(item.id)}" ${selectedObservationIds.has(item.id)?"checked":""}><strong>${esc(item.observation_type||"unknown")}</strong><span>${esc(item.asset_id||"")}</span><span>${item.count==null?"":esc(item.count)}</span><span class="pill">${esc(item.confirmation_state||"unconfirmed")}</span></div>`);
   };
   reviewSelected=async function(statusValue){
    const ids=[...selectedObservationIds];if(!ids.length)return;

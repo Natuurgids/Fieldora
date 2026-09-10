@@ -113,3 +113,22 @@ def test_observation_filter_presentation_is_not_owned_by_generic_navigation() ->
     assert 'button.setAttribute("role","tab")' in science_script
     assert "projectObservationFilterState();" in science_script
     assert '"observation-filter"' not in navigation_script
+
+
+def test_observation_projection_is_bounded_to_observation_workspace_dom() -> None:
+    script = patch_science_workflow_web_response(
+        "/app.js",
+        ApiResponse(200, b"", "text/javascript; charset=utf-8"),
+    ).body.decode("utf-8")
+
+    assert 'const observationsPage=q("page-observations")' in script
+    assert 'const observationList=()=>observationsPage.querySelector("#observation-list")' in script
+    assert 'observationsPage.querySelectorAll("[data-observation-filter]")' in script
+    assert "observationsPage.querySelectorAll('#observation-list [data-observation-select]:checked')" in script
+    assert 'observationsPage.querySelector(".global-search")' in script
+    assert "observationList()?.addEventListener" in script
+    assert "renderObservationRows(shown" in script
+    assert 'document.querySelectorAll("[data-observation-filter]")' not in script
+    assert 'document.querySelector("#page-observations .global-search")' not in script
+    assert 'q("observation-list")?.addEventListener' not in script
+    assert 'cards("observation-list"' not in script

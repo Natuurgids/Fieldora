@@ -127,7 +127,7 @@ class ProjectLifecycleWebApiMixin:
         suffix = "/status"
         if not path.startswith(prefix) or not path.endswith(suffix):
             return ""
-        project_id = unquote(path[len(prefix) : -len(suffix)].strip("/"))
+        project_id = unquote(path[len(prefix) : -len(suffix)]).strip("/")
         return project_id if project_id and "/" not in project_id else ""
 
     def _set_managed_project_status(

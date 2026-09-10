@@ -105,6 +105,19 @@ def _mock_api(route: Route) -> None:
     route.fulfill(status=200, content_type="application/json", body=json.dumps(payload))
 
 
+def test_workspace_subnav_routes_through_module_navigation_with_legacy_fallback() -> None:
+    response = patch_desktop_alignment_web_response(
+        "/app.js",
+        ApiResponse(200, b"", "text/javascript; charset=utf-8"),
+    )
+    script = response.body.decode("utf-8")
+
+    assert 'resolve?.("navigation.navigate")' in script
+    assert 'navigation.navigate(`/${target}`,"workspace-subnav","push")' in script
+    assert "return showPage(target);" in script
+    assert "b.onclick=()=>navigateWorkspace(target)" in script
+
+
 @pytest.mark.parametrize("browser_name", ("chromium", "firefox", "webkit"))
 def test_server_web_matches_desktop_workspace_model_and_single_import_action(
     tmp_path: Path,

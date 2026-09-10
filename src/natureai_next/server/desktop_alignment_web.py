@@ -72,13 +72,21 @@ _DESKTOP_ALIGNMENT_PATCH = bytes(
   });
  }
 
+ function navigateWorkspace(target){
+  const navigation=window.FieldoraModuleContracts?.resolve?.("navigation.navigate");
+  if(navigation?.navigate){
+   const routed=navigation.navigate(`/${target}`,"workspace-subnav","push");
+   if(routed)return routed;
+  }
+  return showPage(target);
+ }
  function addSubnav(entries){
   entries.forEach(([page])=>{
    const host=q(`page-${page}`);if(!host||host.querySelector(".workspace-subnav"))return;
    const nav=document.createElement("div");nav.className="workspace-subnav";nav.setAttribute("role","tablist");
    entries.forEach(([target,label])=>{
     if(!q(`page-${target}`))return;
-    const b=document.createElement("button");b.type="button";b.dataset.workspaceTarget=target;b.textContent=label;b.onclick=()=>showPage(target);nav.appendChild(b);
+    const b=document.createElement("button");b.type="button";b.dataset.workspaceTarget=target;b.textContent=label;b.onclick=()=>navigateWorkspace(target);nav.appendChild(b);
    });
    const top=host.querySelector(".top");if(top)top.after(nav);else host.prepend(nav);
   });

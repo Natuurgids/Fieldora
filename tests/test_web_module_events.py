@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from natureai_next.server.dossier_module_web import _DOSSIER_MODULE_PATCH
+from natureai_next.server.modular_shell_composition import foundation_composition_registry
 from natureai_next.server.portfolio_module_web import _PORTFOLIO_MODULE_PATCH
 from natureai_next.server.project_capacity_integration_web import (
     _PROJECT_CAPACITY_INTEGRATION_PATCH,
@@ -100,6 +101,19 @@ def test_event_registry_rejects_unknown_producer_or_consumer() -> None:
                 ),
             ),
         )
+
+
+def test_event_registry_accepts_route_less_composition_identities() -> None:
+    modules = foundation_composition_registry()
+    event = WebModuleEventSpec(
+        "fieldora:route-less-example",
+        "facilities",
+        ("operations",),
+    )
+
+    registry = WebModuleEventRegistry(modules, (event,))
+
+    assert registry.event("fieldora:route-less-example") is event
 
 
 def test_event_registry_rejects_non_event_specs() -> None:

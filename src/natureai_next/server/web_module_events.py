@@ -5,7 +5,8 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 
-from natureai_next.server.web_module_contracts import WebModuleRegistry, foundation_registry
+from natureai_next.server.modular_shell_composition import foundation_composition_registry
+from natureai_next.server.web_module_contracts import WebModuleRegistry
 
 
 class WebModuleEventError(ValueError):
@@ -66,6 +67,9 @@ class WebModuleEventRegistry:
                 f"event {event.event_name!r} is already produced by {owner!r}"
             )
         module_ids = set(self._modules.as_mapping())
+        extension_mapping = getattr(self._modules, "extension_mapping", None)
+        if callable(extension_mapping):
+            module_ids.update(extension_mapping())
         if event.producer_module_id not in module_ids:
             raise WebModuleEventError(
                 f"event {event.event_name!r} has unknown producer "
@@ -114,4 +118,6 @@ def foundation_event_registry(
 ) -> WebModuleEventRegistry:
     """Return validated production event ownership for evidenced boundaries."""
 
-    return WebModuleEventRegistry(modules or foundation_registry(), FOUNDATION_WEB_MODULE_EVENTS)
+    return WebModuleEventRegistry(
+        modules or foundation_composition_registry(), FOUNDATION_WEB_MODULE_EVENTS
+    )

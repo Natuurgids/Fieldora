@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from natureai_next.server.api import ApiResponse
 from natureai_next.server.modular_shell_web import patch_modular_shell_response
-from natureai_next.server.project_core_module_web import patch_project_core_module_response
+from natureai_next.server.project_core_module_web import (
+    patch_project_core_module_response,
+)
 from natureai_next.server.project_facility_workspace_web import (
     patch_project_facility_workspace_response,
 )
@@ -10,7 +12,9 @@ from natureai_next.server.project_hierarchy_web import ProjectHierarchyWebApiMix
 
 
 def test_project_core_adapter_is_idempotent_and_owns_project_interactions() -> None:
-    original = ApiResponse(200, b"const baseApp=true;", "text/javascript; charset=utf-8")
+    original = ApiResponse(
+        200, b"const baseApp=true;", "text/javascript; charset=utf-8"
+    )
     patched = patch_project_core_module_response("/app.js", original)
     patched_again = patch_project_core_module_response("/app.js", patched)
 
@@ -54,7 +58,8 @@ def test_project_core_consumes_project_list_contract_and_waits_for_provider() ->
     assert "Array.isArray(projects)" not in script
 
 
-def test_project_hierarchy_consumes_context_contract_instead_of_owning_selection() -> None:
+def test_project_hierarchy_consumes_context_contract_instead_of_owning_selection(
+) -> None:
     patched = patch_project_core_module_response(
         "/app.js", ApiResponse(200, b"", "text/javascript; charset=utf-8")
     )
@@ -76,14 +81,18 @@ def test_project_hierarchy_consumes_context_contract_instead_of_owning_selection
     assert 'q("work-project")' in script
 
 
-def test_project_hierarchy_publishes_selected_records_without_inspector_dom_ownership() -> None:
+def test_project_hierarchy_publishes_selected_records_without_inspector_dom_ownership(
+) -> None:
     script = patch_project_core_module_response(
         "/app.js", ApiResponse(200, b"", "text/javascript; charset=utf-8")
     ).body.decode("utf-8")
 
     assert 'resolve?.("projects.selected-record.select")' in script
     assert 'selection.select({kind,id:String(id),record})' in script
-    assert 'selection.select(record?{kind:"project",id:String(record.id),record}:null)' in script
+    assert (
+        'selection.select(record?{kind:"project",id:String(record.id),record}:null)'
+        in script
+    )
     assert "fieldora:project-selected-record-changed" in script
     assert "workSelection" not in script
     assert "function renderInspector" not in script
@@ -104,34 +113,47 @@ def test_my_work_scope_is_strict_when_no_matching_projects_exist() -> None:
     assert "if(mine.length)visible=mine;" not in script
 
 
-def test_final_shell_removes_legacy_project_behavior_but_keeps_cockpit_markup() -> None:
+def test_project_core_owns_cockpit_scaffold_before_facility_workspace_patch() -> None:
     base = ApiResponse(200, b"const baseApp=true;", "text/javascript; charset=utf-8")
     owned = patch_project_core_module_response("/app.js", base)
-    legacy = patch_project_facility_workspace_response("/app.js", owned)
+    combined = patch_project_facility_workspace_response("/app.js", owned)
 
-    before = legacy.body.decode("utf-8")
-    assert "function renderProjectTree()" in before
-    assert 'q("portfolio-scope").value=b.dataset.projectScope' in before
-    assert 'q("project-tree-filter").oninput=renderProjectTree' in before
+    before = combined.body.decode("utf-8")
+    assert 'shell.id="project-desktop-cockpit"' in before
+    assert "shell.dataset.projectOwner=moduleId" in before
+    assert 'right.id="project-inspector-host"' in before
+    assert "function renderProjectTree()" not in before
+    assert 'q("portfolio-scope").value=b.dataset.projectScope' not in before
+    assert 'q("project-tree-filter").oninput=renderProjectTree' not in before
+    assert "facility-desktop-cockpit" in before
 
-    final = patch_modular_shell_response("/app.js", legacy)
+    final = patch_modular_shell_response("/app.js", combined)
     script = final.body.decode("utf-8")
 
     assert "WEB-PROJECT-CORE-MODULE" in script
-    assert "function renderProjectTree()" not in script
+    assert 'shell.id="project-desktop-cockpit"' in script
     assert "function selectCockpitProject" not in script
     assert 'q("portfolio-scope").value=b.dataset.projectScope' not in script
     assert 'q("project-tree-filter").oninput=renderProjectTree' not in script
-    assert "project-desktop-cockpit" in script
     assert "facility-desktop-cockpit" in script
-    assert script.rfind("WEB-MODULAR-SHELL: registry-owned navigation bridge") > script.find("WEB-PROJECT-CORE-MODULE")
-    assert script.rfind("WEB-MODULAR-SHELL: registry-owned navigation bridge") > script.find("facility-desktop-cockpit")
+    assert script.rfind(
+        "WEB-MODULAR-SHELL: registry-owned navigation bridge"
+    ) > script.find("WEB-PROJECT-CORE-MODULE")
+    assert script.rfind(
+        "WEB-MODULAR-SHELL: registry-owned navigation bridge"
+    ) > script.find("facility-desktop-cockpit")
 
 
-def test_final_shell_retires_old_hierarchy_browser_patch_when_project_owner_exists() -> None:
+def test_final_shell_retires_old_hierarchy_browser_patch_when_project_owner_exists(
+) -> None:
     base = ApiResponse(200, b"const baseApp=true;", "text/javascript; charset=utf-8")
-    legacy_hierarchy = ProjectHierarchyWebApiMixin._patch_project_hierarchy_response("/app.js", base)
-    assert "WEB-032: contextual Project hierarchy creation" in legacy_hierarchy.body.decode("utf-8")
+    legacy_hierarchy = ProjectHierarchyWebApiMixin._patch_project_hierarchy_response(
+        "/app.js", base
+    )
+    assert (
+        "WEB-032: contextual Project hierarchy creation"
+        in legacy_hierarchy.body.decode("utf-8")
+    )
 
     owned = patch_project_core_module_response("/app.js", legacy_hierarchy)
     final = patch_modular_shell_response("/app.js", owned)
@@ -161,7 +183,7 @@ def test_projects_work_surface_consumes_governed_work_data_contract() -> None:
     assert "/api/v1/tasks?project_id=" not in script
     assert "/api/v1/sprints?project_id=" not in script
     assert "/api/v1/allocations?project_id=" not in script
-    assert "JSON.parse(q(\"portfolio-list\")" not in script
+    assert 'JSON.parse(q("portfolio-list")' not in script
     assert "data-project-work-kind" in script
 
 
@@ -179,7 +201,9 @@ def test_project_evidence_surface_consumes_evidence_service_contract() -> None:
 
 
 def test_project_core_consumes_shared_application_contracts() -> None:
-    from natureai_next.server.web_module_contract_runtime import runtime_contract_manifest
+    from natureai_next.server.web_module_contract_runtime import (
+        runtime_contract_manifest,
+    )
     from natureai_next.server.web_module_contracts import foundation_registry
 
     projects = foundation_registry().resolve("/projects")
@@ -202,7 +226,11 @@ def test_project_core_consumes_shared_application_contracts() -> None:
     ).body.decode("utf-8")
     assert 'resolve?.("auth.current-user")?.current?.()' in script
     assert 'resolve?.("notifications.publish")' in script
-    assert 'notifications()?.publish?.(String(message),{level:"error",source_module:moduleId})' in script
+    assert (
+        'notifications()?.publish?.(String(message),'
+        '{level:"error",source_module:moduleId})'
+        in script
+    )
     assert "status(message,true)" in script
     assert 'new CustomEvent("fieldora:module-error"' not in script
     assert "me.identity_id" not in script

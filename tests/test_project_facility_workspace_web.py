@@ -6,7 +6,7 @@ from natureai_next.server.project_facility_workspace_web import (
 )
 
 
-def test_project_and_facility_cockpit_is_appended_once_to_managed_app() -> None:
+def test_facility_cockpit_is_appended_once_to_managed_app() -> None:
     original = ApiResponse(200, b"const fieldora=true;", "text/javascript")
 
     patched = patch_project_facility_workspace_response("/app.js", original)
@@ -14,7 +14,6 @@ def test_project_and_facility_cockpit_is_appended_once_to_managed_app() -> None:
 
     assert repeated.body == patched.body
     text = patched.body.decode("utf-8")
-    assert "project-desktop-cockpit" in text
     assert "facility-desktop-cockpit" in text
     assert "Properties" in text
     assert "Metadata" in text
@@ -26,8 +25,15 @@ def test_project_and_facility_cockpit_is_appended_once_to_managed_app() -> None:
     assert 'operations.workspace.host' in text
     assert 'host.selectDomain(domain)' in text
     assert 'host.subscribe(()=>renderFacilityCenter())' in text
-    assert 'api("/api/v1/media?limit=500")' in text
-    assert "loadPortfolio=async function()" in text
+
+    # Project workspace ownership moved to Projects/Core.
+    assert "project-desktop-cockpit" not in text
+    assert "function renderProjectTree()" not in text
+    assert 'api("/api/v1/media?limit=500")' not in text
+    assert "loadPortfolio=async function()" not in text
+    assert 'q("portfolio-list")' not in text
+    assert "selectedProject" not in text
+
     assert "operationsDomain" not in text
     assert "loadOperations=async function()" not in text
 

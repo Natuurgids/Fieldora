@@ -198,32 +198,32 @@ def test_final_composed_response_removes_migrated_navigation_and_portfolio_wirin
     assert "loadKnowledge=async function" in script
 
 
-def test_final_composed_response_removes_project_cockpit_owned_behavior() -> None:
+def test_shared_facility_workspace_contains_no_project_cockpit_behavior() -> None:
     base = ApiResponse(200, b"const baseApp=true;", "text/javascript; charset=utf-8")
     owned = patch_project_core_module_response("/app.js", base)
     owned = patch_portfolio_module_response("/app.js", owned)
-    cockpit = patch_project_facility_workspace_response("/app.js", owned)
-    before = cockpit.body.decode("utf-8")
+    combined = patch_project_facility_workspace_response("/app.js", owned)
+    before = combined.body.decode("utf-8")
 
-    assert "function renderProjectTree()" in before
-    assert "function portfolioData()" in before
-    assert "const oldPortfolio=loadPortfolio" in before
-    assert "project-desktop-cockpit" in before
+    assert "WEB-PROJECT-CORE-MODULE" in before
+    assert "WEB-PORTFOLIO-MODULE" in before
     assert "facility-desktop-cockpit" in before
+    assert "function renderProjectTree()" not in before
+    assert "function selectCockpitProject" not in before
+    assert "function portfolioData()" not in before
+    assert "applyPortfolioView()" not in before
+    assert "const oldPortfolio=loadPortfolio" not in before
+    assert 'q("portfolio-scope").value=b.dataset.projectScope' not in before
 
-    final = patch_modular_shell_response("/app.js", cockpit)
+    final = patch_modular_shell_response("/app.js", combined)
     script = final.body.decode("utf-8")
 
-    assert "function renderProjectTree()" not in script
-    assert "function selectCockpitProject" not in script
-    assert "function portfolioData()" not in script
-    assert "applyPortfolioView()" not in script
-    assert "const oldPortfolio=loadPortfolio" not in script
-    assert 'q("portfolio-scope").value=b.dataset.projectScope' not in script
     assert "WEB-PROJECT-CORE-MODULE" in script
     assert "WEB-PORTFOLIO-MODULE" in script
     assert "project-desktop-cockpit" in script
     assert "facility-desktop-cockpit" in script
+    assert "function renderProjectTree()" not in script
+    assert "function portfolioData()" not in script
 
 
 def test_production_patch_order_finalizes_after_legacy_append_only_patches() -> None:
@@ -256,7 +256,9 @@ def test_managed_web_finalizer_is_inert_without_modular_shell() -> None:
 
     assert "WEB-MODULAR-SHELL: registry-owned navigation bridge" not in script
     assert "showPage=function(name)" in script
-    assert "function renderProjectTree()" in script
+    assert "facility-desktop-cockpit" in script
+    assert "function renderProjectTree()" not in script
+    assert "project-desktop-cockpit" not in script
 
 
 def test_non_app_script_response_is_untouched() -> None:

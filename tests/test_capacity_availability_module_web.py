@@ -98,6 +98,10 @@ def test_capacity_contract_owns_desktop_availability_actions() -> None:
         owner = registry.action_owner(action)
         assert owner is not None
         assert owner.module_id == "capacity"
+    provider = registry.contract_provider("capacity.availability.service")
+    assert provider is not None
+    assert provider.module_id == "capacity"
+    assert provider.provides_contracts == ("capacity.availability.service",)
 
 
 def test_browser_adapter_is_lifecycle_owned_and_hides_private_hr_detail() -> None:
@@ -106,12 +110,17 @@ def test_browser_adapter_is_lifecycle_owned_and_hides_private_hr_detail() -> Non
     again = CapacityAvailabilityModuleWebApiMixin._patch_browser("/app.js", patched)
     assert patched.body == again.body
     script = patched.body.decode("utf-8")
+    assert "WEB-CAPACITY-AVAILABILITY-SERVICE" in script
+    assert 'contractName="capacity.availability.service"' in script
     assert "WEB-CAPACITY-AVAILABILITY-MODULE" in script
     assert "window.FieldoraCapacityAvailability=Object.freeze" in script
     assert "fieldora:capacity-project-changed" in script
     assert 'resolve?.("projects.context.select")' in script
+    assert 'resolve?.("capacity.availability.service")' in script
     assert "window.FieldoraCapacity?.currentProject" not in script
     assert "/api/v1/capacity/availability?project_id=" in script
+    presentation = script.split("WEB-CAPACITY-AVAILABILITY-MODULE", 1)[1]
+    assert "api(" not in presentation
     assert 'data-fieldora-action="capacity.schedule.assign"' in script
     assert 'data-fieldora-action="capacity.absence.register"' in script
     assert 'data-fieldora-action="capacity.obligation.create"' in script

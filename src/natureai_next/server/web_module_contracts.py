@@ -388,6 +388,7 @@ FOUNDATION_WEB_MODULES: tuple[WebModuleSpec, ...] = (
             "capacity.absence.register",
             "capacity.obligation.create",
         ),
+        provides_contracts=("capacity.availability.service",),
         requires_contracts=(
             "navigation.navigate",
             "notifications.publish",

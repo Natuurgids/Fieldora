@@ -38,6 +38,26 @@ def _retire_legacy_capacity_create(body: bytes) -> bytes:
     return body.replace(_LEGACY_CAPACITY_SAVE_WIRING, b"", 1)
 
 
+_CAPACITY_AVAILABILITY_SERVICE_PROVIDER_PATCH = bytes(
+    r'''
+
+/* WEB-CAPACITY-AVAILABILITY-SERVICE: Capacity-owned transport boundary. */
+(()=>{
+ if(window.__fieldoraCapacityAvailabilityServiceWired)return;window.__fieldoraCapacityAvailabilityServiceWired=true;
+ const moduleId="capacity",contractName="capacity.availability.service";
+ const projectId=value=>String(value||"").trim();
+ async function canEdit(value){const id=projectId(value);if(!id)return false;const caps=await api(`/api/v1/projects/${encodeURIComponent(id)}/capabilities`,{purpose:"research"});return caps?.actions?.edit===true}
+ async function load(value){const id=projectId(value);if(!id)return Object.freeze({items:Object.freeze([]),schedule_templates:Object.freeze([])});const result=await api(`/api/v1/capacity/availability?project_id=${encodeURIComponent(id)}`,{purpose:"research"});return Object.freeze({items:Object.freeze([...(result?.items||[])]),schedule_templates:Object.freeze([...(result?.schedule_templates||[])])})}
+ async function create(kind,record){const name=String(kind||"").trim(),path=name==="schedule"?"/api/v1/capacity/schedules":name==="absence"?"/api/v1/capacity/absences":name==="obligation"?"/api/v1/capacity/obligations":"";if(!path)throw new Error(`Unsupported Capacity availability kind: ${name}`);return api(path,{method:"POST",purpose:"research",body:JSON.stringify({...record})})}
+ const implementation=Object.freeze({canEdit,load,create});
+ function register(){const contracts=window.FieldoraModuleContracts;if(!contracts)return false;const current=contracts.resolve(contractName);if(current)return current===implementation;contracts.register(contractName,moduleId,implementation);return true}
+ register();document.addEventListener('fieldora:contracts-ready',register,{once:true});
+})();
+''',
+    "utf-8",
+)
+
+
 _CAPACITY_AVAILABILITY_PATCH = bytes(
     r'''
 
@@ -49,6 +69,7 @@ _CAPACITY_AVAILABILITY_PATCH = bytes(
  const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
  const notifications=()=>window.FieldoraModuleContracts?.resolve?.("notifications.publish")||null;
  const projectContext=()=>window.FieldoraModuleContracts?.resolve?.("projects.context.select")||null;
+ const availabilityService=()=>window.FieldoraModuleContracts?.resolve?.("capacity.availability.service")||null;
  const canonicalProjectId=()=>String(projectContext()?.current?.()||"");
  function fail(text){const node=q("capacity-availability-message");if(node){node.textContent=text;node.classList.add("error")}return false}
  function clearMessage(){const node=q("capacity-availability-message");if(node){node.textContent="";node.classList.remove("error")}}
@@ -65,8 +86,8 @@ _CAPACITY_AVAILABILITY_PATCH = bytes(
   if(!list)return;if(!state.projectId){list.innerHTML='<div class="empty">No Project context selected.</div>';return}
   list.innerHTML=state.rows.length?state.rows.map(row=>`<div class="row" data-capacity-user="${esc(row.user_id)}"><strong>${esc(row.user_id)}</strong><span>${esc(row.role||"member")}</span><span>${esc(row.scheduled_hours??0)} h scheduled</span><span>${esc(row.absence_hours??0)} h absence · ${esc(row.organisational_hours??0)} h organisation</span><span>${esc(row.allocated_hours??0)} h allocated · ${esc(row.remaining_hours??0)} h remaining</span></div>`).join(""):'<div class="empty">No Project members are available in this view.</div>';
  }
- async function authority(){state.canEdit=false;if(!state.projectId){render();return}try{const caps=await api(`/api/v1/projects/${encodeURIComponent(state.projectId)}/capabilities`,{purpose:"research"});state.canEdit=caps?.actions?.edit===true}catch(_error){state.canEdit=false}render()}
- async function refresh(){render();if(!state.projectId)return;try{const pid=encodeURIComponent(state.projectId);const result=await api(`/api/v1/capacity/availability?project_id=${pid}`,{purpose:"research"});state.rows=result.items||[];state.templates=result.schedule_templates||[];clearMessage();render()}catch(error){state.rows=[];render();report(error,"Availability could not be loaded.")}}
+ async function authority(){state.canEdit=false;if(!state.projectId){render();return}try{const service=availabilityService();if(!service?.canEdit)throw new Error("Capacity availability service is unavailable.");state.canEdit=await service.canEdit(state.projectId)}catch(_error){state.canEdit=false}render()}
+ async function refresh(){render();if(!state.projectId)return;try{const service=availabilityService();if(!service?.load)throw new Error("Capacity availability service is unavailable.");const result=await service.load(state.projectId);state.rows=result.items||[];state.templates=result.schedule_templates||[];clearMessage();render()}catch(error){state.rows=[];render();report(error,"Availability could not be loaded.")}}
  function editorFields(kind){
   const users=state.rows.map(row=>`<option value="${esc(row.user_id)}">${esc(row.user_id)}</option>`).join("");
   if(kind==="schedule"){const templates=state.templates.map(row=>`<option value="${esc(row.template_id)}">${esc(row.name)}</option>`).join("");return `<label>User<select id="capacity-editor-user">${users}</select></label><label>Schedule template<select id="capacity-editor-template">${templates}</select></label><label>Effective from<input id="capacity-editor-start" type="date"></label>`}
@@ -76,11 +97,11 @@ _CAPACITY_AVAILABILITY_PATCH = bytes(
  function openEditor(kind){if(!state.canEdit||!state.projectId)return;const editor=q("capacity-availability-editor");if(!editor)return;editor.dataset.kind=kind;editor.hidden=false;editor.innerHTML=`<h3>${kind==="schedule"?"Assign work schedule":kind==="absence"?"Register absence":"Add organisational obligation"}</h3><div class="form-grid">${editorFields(kind)}</div><div class="actions section"><button id="capacity-editor-save" class="primary" type="button">Save</button><button id="capacity-editor-cancel" type="button">Cancel</button></div>`;q("capacity-editor-cancel").onclick=()=>{editor.hidden=true};q("capacity-editor-save").onclick=saveEditor}
  async function saveEditor(){
   const editor=q("capacity-availability-editor"),kind=editor?.dataset.kind,user=q("capacity-editor-user")?.value||"",start=q("capacity-editor-start")?.value||"",end=q("capacity-editor-end")?.value||"";if(!user)return fail("Project member is required.");if(!start)return fail("Start date is required.");if(end&&end<=start)return fail("End must be after start.");
-  let path="",record={project_id:state.projectId,user_id:user};
-  if(kind==="schedule"){const template=q("capacity-editor-template")?.value||"";if(!template)return fail("Schedule template is required.");path="/api/v1/capacity/schedules";record.template_id=template;record.effective_from=start}
-  else if(kind==="absence"){path="/api/v1/capacity/absences";record.start_at=start;record.end_at=end;record.absence_type=q("capacity-editor-type")?.value||"other"}
-  else{const title=q("capacity-editor-title")?.value.trim()||"";if(!title)return fail("Obligation title is required.");path="/api/v1/capacity/obligations";record.start_at=start;record.end_at=end;record.title=title;record.obligation_type="organisation"}
-  try{await api(path,{method:"POST",purpose:"research",body:JSON.stringify(record)});editor.hidden=true;clearMessage();await refresh();document.dispatchEvent(new CustomEvent("fieldora:capacity-availability-changed",{detail:{module_id:moduleId,project_id:state.projectId,kind}}))}catch(error){report(error,"Availability record could not be saved.")}
+  const record={project_id:state.projectId,user_id:user};
+  if(kind==="schedule"){const template=q("capacity-editor-template")?.value||"";if(!template)return fail("Schedule template is required.");record.template_id=template;record.effective_from=start}
+  else if(kind==="absence"){record.start_at=start;record.end_at=end;record.absence_type=q("capacity-editor-type")?.value||"other"}
+  else{const title=q("capacity-editor-title")?.value.trim()||"";if(!title)return fail("Obligation title is required.");record.start_at=start;record.end_at=end;record.title=title;record.obligation_type="organisation"}
+  try{const service=availabilityService();if(!service?.create)throw new Error("Capacity availability service is unavailable.");await service.create(kind,record);editor.hidden=true;clearMessage();await refresh();document.dispatchEvent(new CustomEvent("fieldora:capacity-availability-changed",{detail:{module_id:moduleId,project_id:state.projectId,kind}}))}catch(error){report(error,"Availability record could not be saved.")}
  }
  async function setProject(projectId){state.projectId=String(projectId||"");await authority();await refresh()}
  function mount(){if(state.mounted)return;if(!ensureSurface())return;state.mounted=true;state.controller=new AbortController();hideLegacy();const signal=state.controller.signal;q("capacity-availability-refresh")?.addEventListener("click",refresh,{signal});q("capacity-availability-actions")?.addEventListener("click",event=>{const button=event.target.closest?.("[data-capacity-availability-create]");if(button)openEditor(button.dataset.capacityAvailabilityCreate)},{signal});state.projectId=canonicalProjectId()||state.projectId;authority();refresh()}
@@ -260,6 +281,8 @@ class CapacityAvailabilityModuleWebApiMixin:
         if urlsplit(target).path != "/app.js" or response.status != 200:
             return response
         body = _retire_legacy_capacity_create(response.body)
+        if _CAPACITY_AVAILABILITY_SERVICE_PROVIDER_PATCH not in body:
+            body += _CAPACITY_AVAILABILITY_SERVICE_PROVIDER_PATCH
         if _CAPACITY_AVAILABILITY_PATCH not in body:
             body += _CAPACITY_AVAILABILITY_PATCH
         if body == response.body:

@@ -159,7 +159,7 @@ def _browser_fixture(tmp_path: Path):
       </section>
     </main>
     <script>
-      let selectedProject="project-1";
+      window.FieldoraModuleContracts={resolve(name){if(name==="projects.context.select")return {current:()=>"project-1"};return null}};
       let projects=[{id:"project-1",name:"Field survey",description:"Initial",status:"active",owner_id:"user-1",start_date:"2026-08-30",due_date:"2026-09-30",budget:100,currency:"EUR",revision:7}];
       window.calls=[];window.portfolioReloads=0;window.allowEdit=true;window.forceConflict=false;
       function projectOptions(){}

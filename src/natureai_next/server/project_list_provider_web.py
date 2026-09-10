@@ -47,6 +47,7 @@ _PROJECT_LIST_PROVIDER_PATCH = bytes(
  }
  register();
  bridgeLegacyCreateRefresh();
+ setTimeout(bridgeLegacyCreateRefresh,0);
  document.addEventListener('fieldora:contracts-ready',()=>{register();bridgeLegacyCreateRefresh()},{once:true});
  window.FieldoraProjectList=implementation;
 })();

@@ -67,6 +67,7 @@ def test_project_list_provider_bridges_legacy_create_refresh_to_canonical_list()
     assert 'button.dataset.fieldoraProjectListBridge="true"' in script
     assert "const result=await legacy.apply(this,args);" in script
     assert "await refresh();" in script
+    assert "setTimeout(bridgeLegacyCreateRefresh,0);" in script
 
 
 def test_production_patch_orders_project_list_provider_after_contract_runtime() -> None:

@@ -34,6 +34,7 @@ def test_browser_manifest_contract_metadata_matches_typed_registry() -> None:
         "notifications.publish",
         "projects.list.read",
         "projects.context.select",
+        "projects.work-data.service",
     ]
     assert manifest["projects.core"]["optional_contracts"] == []
 

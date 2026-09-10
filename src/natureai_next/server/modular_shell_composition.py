@@ -12,6 +12,7 @@ from natureai_next.server.facility_module_composition import (
     suppress_facilities_browser_response,
 )
 from natureai_next.server.operations_module_composition import (
+    compose_operations_browser_response,
     suppress_operations_browser_response,
 )
 from natureai_next.server.web_module_contracts import (
@@ -236,7 +237,9 @@ def finalize_modular_shell_response(
     )
     if not facilities_composed:
         response = suppress_facilities_browser_response(target, response)
-    if not operations_composed:
+    if operations_composed:
+        response = compose_operations_browser_response(target, response)
+    else:
         response = suppress_operations_browser_response(
             target,
             response,

@@ -1,10 +1,67 @@
-"""Composition-time suppression for the nested Operations browser projections."""
+"""Composition-time ownership for the nested Operations browser projections."""
 
 from __future__ import annotations
 
 from urllib.parse import urlsplit
 
 from natureai_next.server.api import ApiResponse
+
+_LEGACY_OPERATIONS_RELATED_PROJECT_START = (
+    b' const operations=q("operations-list");\n if(operations){\n  const oldOperationsClick=operations.onclick;'
+)
+_LEGACY_OPERATIONS_RELATED_PROJECT_END = (
+    b'\n document.querySelectorAll(".nav[data-page]").forEach'
+)
+
+_OPERATIONS_RELATED_PROJECT_PATCH = bytes(
+    r"""
+
+/* WEB-OPERATIONS-RELATED-PROJECT: Operations-owned related-project affordance. */
+(()=>{
+ if(window.__fieldoraOperationsRelatedProjectWired)return;
+ window.__fieldoraOperationsRelatedProjectWired=true;
+ const moduleId="operations";
+ const ownedDomains=new Set(["assets","maintenance","calibrations","documents"]);
+ let host=null,unsubscribe=null;
+ const contracts=()=>window.FieldoraModuleContracts;
+ const currentHost=()=>contracts()?.resolve("operations.workspace.host")||null;
+ const projectContext=()=>contracts()?.resolve("projects.context.select")||null;
+ const navigation=()=>contracts()?.resolve("navigation.navigate")||null;
+ const detail=()=>document.getElementById("operations-detail");
+ const clear=()=>detail()?.querySelector("[data-open-related-project]")?.remove();
+ const installHost=()=>{
+  const next=currentHost();if(!next)return false;
+  if(host===next)return true;
+  if(unsubscribe)unsubscribe();
+  host=next;
+  unsubscribe=typeof host.subscribe==="function"?host.subscribe(clear):null;
+  return true;
+ };
+ const openProject=projectId=>{
+  const context=projectContext(),navigator=navigation();
+  if(!context?.select||!navigator?.navigate)return false;
+  if(context.select(projectId)===false)return false;
+  navigator.navigate("/projects",moduleId,"push");
+  return true;
+ };
+ const onRecordClick=event=>{
+  if(!installHost()||!ownedDomains.has(String(host.currentDomain?.()||""))){clear();return}
+  const row=event.target.closest?.("[data-operations-id]");if(!row)return;
+  const item=(host.records?.()||[]).find(record=>String(record?.id)===String(row.dataset.operationsId));
+  clear();
+  if(!item?.project_id||!projectContext()?.select||!navigation()?.navigate)return;
+  const target=detail();if(!target)return;
+  const button=document.createElement("button");button.className="primary section";
+  button.dataset.openRelatedProject="true";button.textContent="Open related project";
+  button.onclick=()=>openProject(item.project_id);
+  target.appendChild(button);
+ };
+ document.getElementById("operations-list")?.addEventListener("click",onRecordClick);
+ if(!installHost())document.addEventListener("fieldora:contracts-ready",installHost,{once:true});
+})();
+""",
+    "utf-8",
+)
 
 _OPERATIONS_WITH_FACILITIES_PATCH = bytes(
     r"""
@@ -78,6 +135,29 @@ _OPERATIONS_WITHOUT_FACILITIES_PATCH = bytes(
 )
 
 
+def _strip_legacy_related_project_wiring(body: bytes) -> bytes:
+    start = body.find(_LEGACY_OPERATIONS_RELATED_PROJECT_START)
+    if start < 0:
+        return body
+    end = body.find(_LEGACY_OPERATIONS_RELATED_PROJECT_END, start)
+    if end < 0:
+        return body
+    return body[:start] + body[end:]
+
+
+def compose_operations_browser_response(target: str, response: ApiResponse) -> ApiResponse:
+    """Replace legacy cross-screen wiring with the Operations-owned adapter."""
+
+    if urlsplit(target).path != "/app.js" or response.status != 200:
+        return response
+    body = _strip_legacy_related_project_wiring(response.body)
+    if _OPERATIONS_RELATED_PROJECT_PATCH not in body:
+        body += _OPERATIONS_RELATED_PROJECT_PATCH
+    if body == response.body:
+        return response
+    return ApiResponse(response.status, body, response.content_type, response.headers)
+
+
 def suppress_operations_browser_response(
     target: str,
     response: ApiResponse,
@@ -93,11 +173,9 @@ def suppress_operations_browser_response(
         if facilities_composed
         else _OPERATIONS_WITHOUT_FACILITIES_PATCH
     )
-    if patch in response.body:
+    body = _strip_legacy_related_project_wiring(response.body)
+    if patch not in body:
+        body += patch
+    if body == response.body:
         return response
-    return ApiResponse(
-        response.status,
-        response.body + patch,
-        response.content_type,
-        response.headers,
-    )
+    return ApiResponse(response.status, body, response.content_type, response.headers)

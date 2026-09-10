@@ -69,8 +69,17 @@ _SCIENCE_WORKFLOW_PATCH = bytes(
    [...selectedObservationIds].forEach(id=>{if(!available.has(id))selectedObservationIds.delete(id)});
    return publishObservationState();
   }
+  function projectObservationFilterState(){
+   document.querySelectorAll("[data-observation-filter]").forEach(button=>{
+    const active=button.dataset.observationFilter===observationFilterState;
+    button.classList.toggle("primary",active);
+    button.setAttribute("aria-selected",String(active));
+    button.setAttribute("role","tab");
+   });
+  }
   function setObservationFilter(value){
    observationFilterState=String(value||"all");
+   projectObservationFilterState();
    publishObservationState();
    return observationFilterState;
   }
@@ -291,11 +300,11 @@ _SCIENCE_WORKFLOW_PATCH = bytes(
   document.querySelectorAll("[data-observation-filter]").forEach(button=>{
    button.onclick=()=>{
     setObservationFilter(button.dataset.observationFilter);
-    document.querySelectorAll("[data-observation-filter]").forEach(item=>item.classList.toggle("primary",item===button));
     renderObservations();
     return loadObservations();
    };
   });
+  projectObservationFilterState();
   document.addEventListener("fieldora:contract-registered",event=>{
    const name=event.detail?.contract;if(name==="projects.list.read"&&!editingObservation)renderObservationProjectOptions(q("obs-project")?.value||"");
   });

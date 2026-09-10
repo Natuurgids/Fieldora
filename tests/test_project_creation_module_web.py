@@ -31,7 +31,12 @@ def test_creation_adapter_is_idempotent_and_not_portfolio_coupled() -> None:
     assert "WEB-PROJECT-CREATION-MODULE" in script
     assert "window.FieldoraProjectCreation" in script
     assert 'id="project-core-create-editor"' in script
-    assert 'api("/api/v1/projects",{method:"POST",purpose:"research"' in script
+    assert 'async function createProject(record){return api("/api/v1/projects",{method:"POST",purpose:"research",body:JSON.stringify(record)})}' in script
+    assert "const projectDataService=Object.freeze({createProject});" in script
+    assert "const result=await projectDataService.createProject(record);" in script
+    assert script.count('api("/api/v1/projects"') == 1
+    save_body = script.split("async function save(){", 1)[1].split("function mount(){", 1)[0]
+    assert "api(" not in save_body
     assert 'resolve?.("notifications.publish")' in script
     assert 'notifications()?.publish?.(String(text),{level:"error",source_module:moduleId})' in script
     assert "fieldora:module-error" not in script

@@ -109,6 +109,8 @@ def test_browser_adapter_is_lifecycle_owned_and_hides_private_hr_detail() -> Non
     assert "WEB-CAPACITY-AVAILABILITY-MODULE" in script
     assert "window.FieldoraCapacityAvailability=Object.freeze" in script
     assert "fieldora:capacity-project-changed" in script
+    assert 'resolve?.("projects.context.select")' in script
+    assert "window.FieldoraCapacity?.currentProject" not in script
     assert "/api/v1/capacity/availability?project_id=" in script
     assert 'data-fieldora-action="capacity.schedule.assign"' in script
     assert 'data-fieldora-action="capacity.absence.register"' in script

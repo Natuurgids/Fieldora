@@ -48,6 +48,8 @@ _CAPACITY_AVAILABILITY_PATCH = bytes(
  const state={mounted:false,controller:null,projectId:"",rows:[],templates:[],canEdit:false,legacy:[]};
  const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
  const notifications=()=>window.FieldoraModuleContracts?.resolve?.("notifications.publish")||null;
+ const projectContext=()=>window.FieldoraModuleContracts?.resolve?.("projects.context.select")||null;
+ const canonicalProjectId=()=>String(projectContext()?.current?.()||"");
  function fail(text){const node=q("capacity-availability-message");if(node){node.textContent=text;node.classList.add("error")}return false}
  function clearMessage(){const node=q("capacity-availability-message");if(node){node.textContent="";node.classList.remove("error")}}
  function report(error,fallback){const text=error?.message||fallback;fail(text);notifications()?.publish?.(String(text),{level:"error",source_module:moduleId})}
@@ -81,7 +83,7 @@ _CAPACITY_AVAILABILITY_PATCH = bytes(
   try{await api(path,{method:"POST",purpose:"research",body:JSON.stringify(record)});editor.hidden=true;clearMessage();await refresh();document.dispatchEvent(new CustomEvent("fieldora:capacity-availability-changed",{detail:{module_id:moduleId,project_id:state.projectId,kind}}))}catch(error){report(error,"Availability record could not be saved.")}
  }
  async function setProject(projectId){state.projectId=String(projectId||"");await authority();await refresh()}
- function mount(){if(state.mounted)return;if(!ensureSurface())return;state.mounted=true;state.controller=new AbortController();hideLegacy();const signal=state.controller.signal;q("capacity-availability-refresh")?.addEventListener("click",refresh,{signal});q("capacity-availability-actions")?.addEventListener("click",event=>{const button=event.target.closest?.("[data-capacity-availability-create]");if(button)openEditor(button.dataset.capacityAvailabilityCreate)},{signal});state.projectId=window.FieldoraCapacity?.currentProject?.()||state.projectId;authority();refresh()}
+ function mount(){if(state.mounted)return;if(!ensureSurface())return;state.mounted=true;state.controller=new AbortController();hideLegacy();const signal=state.controller.signal;q("capacity-availability-refresh")?.addEventListener("click",refresh,{signal});q("capacity-availability-actions")?.addEventListener("click",event=>{const button=event.target.closest?.("[data-capacity-availability-create]");if(button)openEditor(button.dataset.capacityAvailabilityCreate)},{signal});state.projectId=canonicalProjectId()||state.projectId;authority();refresh()}
  function unmount(){if(!state.mounted)return;state.controller?.abort();state.controller=null;state.mounted=false;restoreLegacy();q("capacity-availability-editor")?.setAttribute("hidden","")}
  document.addEventListener("fieldora:capacity-project-changed",event=>setProject(event.detail?.project_id||""));document.addEventListener("fieldora:module-mount",event=>{if(event.detail?.module?.module_id===moduleId)mount()});document.addEventListener("fieldora:module-unmount",event=>{if(event.detail?.module?.module_id===moduleId)unmount()});
  window.FieldoraCapacityAvailability=Object.freeze({mount,unmount,refresh,setProject});if(window.FieldoraModules?.current?.()?.module_id===moduleId)mount();

@@ -121,6 +121,8 @@ def test_workspace_subnav_routes_through_module_navigation_with_legacy_fallback(
         'b.onclick=()=>navigateWorkspace(b.dataset.homeTarget,"home-primary-action")'
         in script
     )
+    assert script.count('navigateWorkspace("library","import-menu")') == 2
+    assert 'showPage("library");setLibraryView("import")' not in script
 
 
 @pytest.mark.parametrize("browser_name", ("chromium", "firefox", "webkit"))

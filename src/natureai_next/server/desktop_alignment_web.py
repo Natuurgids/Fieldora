@@ -165,8 +165,8 @@ _DESKTOP_ALIGNMENT_PATCH = bytes(
  const sourceSummary=document.createElement("p");sourceSummary.id="import-source-summary";sourceSummary.className="import-source-summary";sourceSummary.textContent="Choose Files or Folder from Import.";
  q("import-card")?.querySelector(".form-grid")?.after(sourceSummary);
  if(uploadInput)uploadInput.addEventListener("change",()=>{const n=uploadInput.files?.length||0;sourceSummary.textContent=n?`${n} file${n===1?"":"s"} selected for governed import.`:"Choose Files or Folder from Import."});
- menu.querySelector('[data-import-source="files"]').onclick=()=>{closeImportMenu();showPage("library");setLibraryView("import");q("import-card")?.scrollIntoView({behavior:"smooth",block:"start"});uploadInput?.click()};
- menu.querySelector('[data-import-source="folder"]').onclick=()=>{closeImportMenu();showPage("library");setLibraryView("import");q("import-card")?.scrollIntoView({behavior:"smooth",block:"start"});folderInput?.click()};
+ menu.querySelector('[data-import-source="files"]').onclick=()=>{closeImportMenu();navigateWorkspace("library","import-menu");setLibraryView("import");q("import-card")?.scrollIntoView({behavior:"smooth",block:"start"});uploadInput?.click()};
+ menu.querySelector('[data-import-source="folder"]').onclick=()=>{closeImportMenu();navigateWorkspace("library","import-menu");setLibraryView("import");q("import-card")?.scrollIntoView({behavior:"smooth",block:"start"});folderInput?.click()};
  const uploadButton=q("upload-start");if(uploadButton)uploadButton.textContent="Import selected files";
 
  /* Home is a scientist's launch surface, not a server dashboard. Keep status

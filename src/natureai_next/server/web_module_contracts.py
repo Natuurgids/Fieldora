@@ -421,6 +421,8 @@ FOUNDATION_WEB_MODULES: tuple[WebModuleSpec, ...] = (
             "dossiers.create",
             "dossiers.review.create",
         ),
+        # Dossier transport is intentionally module-owned rather than a shell concern.
+        provides_contracts=("dossiers.data.service",),
         requires_contracts=(
             "auth.current-user",
             "notifications.publish",

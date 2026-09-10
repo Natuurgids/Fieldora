@@ -24,7 +24,9 @@ from natureai_next.domain.access_control import (
 from natureai_next.infrastructure.database.access_control import SqliteAccessControlRepository
 from natureai_next.server.browser_functionality_api import BrowserFunctionalityFieldoraApi
 from natureai_next.server.http import handler_for
+from natureai_next.server.modular_shell_web import ModularShellWebApiMixin
 from natureai_next.server.postgres_project_management import PostgresProjectManagementService
+from natureai_next.server.project_core_module_web import ProjectCoreModuleWebApiMixin
 
 
 class _Authentication:
@@ -58,6 +60,14 @@ class _Science:
 
     def put(self, _collection: str, _record: dict, _expected_revision: int | None) -> int:
         raise AssertionError("managed browser project creation must not write Science snapshots")
+
+
+class _ManagedBrowserApi(
+    ModularShellWebApiMixin,
+    ProjectCoreModuleWebApiMixin,
+    BrowserFunctionalityFieldoraApi,
+):
+    pass
 
 
 def _connect_factory():
@@ -97,7 +107,7 @@ def _managed_browser_server(organization_id: str, access_database: Path):
     authentication = _Authentication(organization_id)
     access_repository = _access_repository(access_database, authentication.identity)
     decisions = _Decisions(access_repository)
-    api = BrowserFunctionalityFieldoraApi(
+    api = _ManagedBrowserApi(
         authentication,
         decisions,
         _Science(),

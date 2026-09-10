@@ -20,7 +20,9 @@ from natureai_next.domain.access_control import (
 )
 from natureai_next.infrastructure.database.access_control import SqliteAccessControlRepository
 from natureai_next.server.http import handler_for
+from natureai_next.server.modular_shell_web import ModularShellWebApiMixin
 from natureai_next.server.postgres_project_management import PostgresProjectManagementService
+from natureai_next.server.project_core_module_web import ProjectCoreModuleWebApiMixin
 from natureai_next.server.project_lifecycle_api import ProjectLifecycleFieldoraApi
 
 
@@ -45,6 +47,14 @@ class _Science:
 
     def put(self, _collection: str, _record: dict, _expected_revision: int | None) -> int:
         raise AssertionError("managed Project lifecycle must not write Science snapshots")
+
+
+class _LifecycleApi(
+    ModularShellWebApiMixin,
+    ProjectCoreModuleWebApiMixin,
+    ProjectLifecycleFieldoraApi,
+):
+    pass
 
 
 def _connect_factory():
@@ -119,7 +129,7 @@ def _managed_server(organization_id: str, access_database: Path):
     project_management = PostgresProjectManagementService(_connect_factory())
     access_repository = _access_repository(access_database, organization_id)
     decisions = PolicyDecisionService(access_repository)
-    api = ProjectLifecycleFieldoraApi(
+    api = _LifecycleApi(
         _Authentication(organization_id),
         decisions,
         _Science(),

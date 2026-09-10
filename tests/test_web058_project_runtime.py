@@ -24,7 +24,9 @@ from natureai_next.domain.access_control import (
 from natureai_next.infrastructure.database.access_control import SqliteAccessControlRepository
 from natureai_next.server.http import handler_for
 from natureai_next.server.media import GovernedMediaStore
+from natureai_next.server.modular_shell_web import ModularShellWebApiMixin
 from natureai_next.server.object_storage import FileObjectStore
+from natureai_next.server.project_core_module_web import ProjectCoreModuleWebApiMixin
 from natureai_next.server.project_lifecycle_api import ProjectLifecycleFieldoraApi
 from natureai_next.server.project_runtime_web import ProjectRuntimeWebApiMixin
 
@@ -159,7 +161,12 @@ class _ManagedSqliteProjects:
         return ()
 
 
-class _RuntimeApi(ProjectRuntimeWebApiMixin, ProjectLifecycleFieldoraApi):
+class _RuntimeApi(
+    ModularShellWebApiMixin,
+    ProjectCoreModuleWebApiMixin,
+    ProjectRuntimeWebApiMixin,
+    ProjectLifecycleFieldoraApi,
+):
     pass
 
 

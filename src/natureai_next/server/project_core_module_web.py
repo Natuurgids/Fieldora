@@ -30,8 +30,25 @@ _PROJECT_CORE_MODULE_PATCH = bytes(
  const evidenceData=()=>window.FieldoraModuleContracts?.resolve?.("projects.evidence.service")||null;
  const projectItems=()=>projectList()?.items?.()||[];
  const projectById=id=>projectItems().find(project=>project.id===id)||null;
+ function ensureProjectPresentation(){
+  if(q("project-core-cockpit-style"))return;
+  const style=document.createElement("style");style.id="project-core-cockpit-style";style.textContent=`
+   #project-desktop-cockpit{display:grid;grid-template-columns:minmax(205px,18%) minmax(480px,1fr) minmax(280px,25%);height:calc(100vh - 150px);min-height:590px;border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#111a1d}
+   #project-desktop-cockpit .cockpit-pane{min-width:0;min-height:0;background:var(--panel);overflow:auto}#project-desktop-cockpit .cockpit-pane+.cockpit-pane{border-left:1px solid var(--line)}
+   #project-desktop-cockpit .cockpit-pane-head{position:sticky;top:0;z-index:4;display:flex;gap:7px;align-items:center;min-height:45px;padding:7px 9px;background:#152023;border-bottom:1px solid var(--line)}
+   #project-desktop-cockpit .cockpit-pane-head strong{white-space:nowrap}#project-desktop-cockpit .cockpit-pane-head input{width:100%;min-width:0;padding:7px 9px}
+   #project-desktop-cockpit .cockpit-tree{padding:5px}#project-desktop-cockpit .tree-group{margin:5px 0 9px}#project-desktop-cockpit .tree-label{padding:7px 8px;color:var(--muted);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em}
+   #project-desktop-cockpit .tree-item{width:100%;display:flex;gap:7px;align-items:center;border:0;border-radius:5px;background:transparent;text-align:left;padding:7px 8px;color:#d7e3df}#project-desktop-cockpit .tree-item:hover,#project-desktop-cockpit .tree-item[aria-selected="true"]{background:#203b32;color:#fff}#project-desktop-cockpit .tree-item .tree-icon{width:18px;text-align:center;color:var(--green)}
+   #project-desktop-cockpit .cockpit-center{display:flex;flex-direction:column;overflow:hidden}#project-desktop-cockpit .cockpit-toolbar{display:flex;gap:7px;align-items:center;flex-wrap:wrap;padding:7px 9px;border-bottom:1px solid var(--line);background:#182326}#project-desktop-cockpit .cockpit-toolbar .tabs{margin:0}#project-desktop-cockpit .cockpit-toolbar button,#project-desktop-cockpit .inspector-tabs button{padding:6px 9px;border-radius:5px;background:transparent}#project-desktop-cockpit .cockpit-toolbar button.primary,#project-desktop-cockpit .inspector-tabs button[aria-selected="true"]{background:#254239;border-color:#4f8e6a;color:#fff}
+   #project-desktop-cockpit .cockpit-content{flex:1;overflow:auto;padding:8px}#project-desktop-cockpit .cockpit-content .card{border-radius:7px}#project-desktop-cockpit .cockpit-content>.card{border:0;background:transparent;padding:0}#project-desktop-cockpit .cockpit-content .row{cursor:pointer;border-radius:4px}
+   #project-desktop-cockpit .inspector-tabs{display:flex;gap:4px;position:sticky;top:0;z-index:5;padding:7px;background:#152023;border-bottom:1px solid var(--line)}#project-desktop-cockpit .inspector-panel{padding:10px}#project-desktop-cockpit .inspector-panel[hidden]{display:none!important}#project-desktop-cockpit .inspector-panel pre{white-space:pre-wrap;overflow-wrap:anywhere}#project-desktop-cockpit .inspector-panel>.card{border:0;background:transparent;padding:0}
+   #project-desktop-cockpit .project-map-stage{min-height:270px;border:1px dashed #46605b;border-radius:7px;background:linear-gradient(45deg,#132024 25%,#162529 25%,#162529 50%,#132024 50%,#132024 75%,#162529 75%);background-size:24px 24px;padding:12px}#project-desktop-cockpit .project-map-stage h3{margin-top:0}#project-desktop-cockpit .project-map-stage .muted{max-width:600px}
+   @media(max-width:1180px){#project-desktop-cockpit{grid-template-columns:210px minmax(430px,1fr) 290px}}
+   @media(max-width:900px){#project-desktop-cockpit{display:block;height:auto;min-height:0}#project-desktop-cockpit .cockpit-pane{max-height:none;overflow:visible}#project-desktop-cockpit .cockpit-pane+.cockpit-pane{border-left:0;border-top:1px solid var(--line)}#project-desktop-cockpit .cockpit-left{max-height:260px;overflow:auto}#project-desktop-cockpit .cockpit-center{min-height:540px}#project-desktop-cockpit .cockpit-right{min-height:360px}}
+  `;document.head.appendChild(style);
+ }
  function ensureProjectScaffold(){
-  const page=q("page-projects");if(!page)return null;
+  const page=q("page-projects");if(!page)return null;ensureProjectPresentation();
   let shell=q("project-desktop-cockpit");if(shell)return shell;
   shell=document.createElement("section");shell.id="project-desktop-cockpit";shell.className="desktop-cockpit";shell.dataset.projectOwner=moduleId;
   const left=document.createElement("aside");left.className="cockpit-pane cockpit-left";left.innerHTML='<div class="cockpit-pane-head"><strong>Projects</strong></div><div style="padding:7px"><input id="project-tree-filter" placeholder="Filter projects"></div><div id="project-cockpit-tree" class="cockpit-tree"></div>';

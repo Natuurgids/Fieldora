@@ -17,11 +17,22 @@ _MANAGED_RESEARCH_PROJECT_FILTER = (
 _RESEARCH_RECORDS_PATCH = bytes(
     r"""
 
-/* WEB-042: Research records use server-owned identity and revisions. */
+/* WEB-RESEARCH-DATA-SERVICE: Research-owned transport boundary. */
 (()=>{
  if(window.__fieldoraResearchRecordsWired)return;
  window.__fieldoraResearchRecordsWired=true;
- const moduleId="research.dossiers",projectOpenAction="research.project.open";
+ const moduleId="research.dossiers",contractName="research.data.service",projectOpenAction="research.project.open";
+ async function listRecords(domain,projectId){const project=String(projectId||"").trim(),suffix=project?`?project_id=${encodeURIComponent(project)}`:"";return api(`/api/v1/${domain}${suffix}`)}
+ async function getRecord(domain,id){return api(`/api/v1/${domain}/${encodeURIComponent(id)}`)}
+ async function createRecord(domain,record){return api(`/api/v1/${domain}`,{method:"POST",body:JSON.stringify({...record})})}
+ async function updateRecord(domain,id,revision,changes){return api(`/api/v1/${domain}/${encodeURIComponent(id)}`,{method:"PATCH",headers:{"If-Match":String(revision)},body:JSON.stringify({...changes})})}
+ async function exportProject(projectId){return api("/api/v1/jobs",{method:"POST",purpose:"research",body:JSON.stringify({job_type:"export_project",project_id:String(projectId||"").trim(),include_library_references:true})})}
+ const implementation=Object.freeze({listRecords,getRecord,createRecord,updateRecord,exportProject});
+ function registerDataService(){const runtime=window.FieldoraModuleContracts;if(!runtime)return false;const current=runtime.resolve?.(contractName);if(current)return current===implementation;runtime.register?.(contractName,moduleId,implementation);return true}
+ const dataService=()=>window.FieldoraModuleContracts?.resolve?.(contractName)||implementation;
+ registerDataService();document.addEventListener("fieldora:contracts-ready",registerDataService,{once:true});
+
+ /* WEB-042: Research records use server-owned identity and revisions. */
  const byId=id=>document.getElementById(id);
  const html=value=>String(value??"").replace(/[&<>"']/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
  const projectContext=()=>window.FieldoraModuleContracts?.resolve?.("projects.context.select")||null;
@@ -39,8 +50,7 @@ _RESEARCH_RECORDS_PATCH = bytes(
   const generation=++researchLoadGeneration;
   try{
    const project=integrationProjectId||byId("science-project")?.value||projectContext()?.current?.()||"";
-   const suffix=project?`?project_id=${encodeURIComponent(project)}`:"";
-   const items=(await api(`/api/v1/${researchDomain}${suffix}`)).items||[];
+   const items=(await dataService().listRecords(researchDomain,project)).items||[];
    if(generation!==researchLoadGeneration)return;
    governedResearchRecords=items;render();
   }catch(error){if(generation===researchLoadGeneration)list.innerHTML=`<div class="empty">${html(error.message)}</div>`}
@@ -48,7 +58,7 @@ _RESEARCH_RECORDS_PATCH = bytes(
  function clearEditor(){editingResearchRecord=null;for(const id of ["science-name","science-parent","science-description"]){if(byId(id))byId(id).value=""}if(byId("science-status"))byId("science-status").value="active";save.textContent="Save research record";status("science-save-status","")}
  async function openRecord(id){
   try{
-   const payload=await api(`/api/v1/${researchDomain}/${encodeURIComponent(id)}`),item=payload.item;
+   const payload=await dataService().getRecord(researchDomain,id),item=payload.item;
    editingResearchRecord={...item,revision:payload.revision||item.revision||1};integrationProjectId=item.project_id||integrationProjectId;
    if(byId("science-project")){byId("science-project").value=item.project_id||"";byId("science-project").disabled=true}
    byId("science-name").value=item.name||"";byId("science-status").value=item.status||"active";byId("science-parent").value=item.parent_id||"";byId("science-description").value=item.description||"";
@@ -65,10 +75,10 @@ _RESEARCH_RECORDS_PATCH = bytes(
   try{
    if(editingResearchRecord){
     const changes={name:record.name,status:record.status,parent_id:record.parent_id,description:record.description,payload:record.payload};
-    const result=await api(`/api/v1/${researchDomain}/${encodeURIComponent(editingResearchRecord.id)}`,{method:"PATCH",headers:{"If-Match":String(editingResearchRecord.revision)},body:JSON.stringify(changes)});
+    const result=await dataService().updateRecord(researchDomain,editingResearchRecord.id,editingResearchRecord.revision,changes);
     editingResearchRecord={...result.item,revision:result.revision};status("science-save-status","Research record updated.");
    }else{
-    await api(`/api/v1/${researchDomain}`,{method:"POST",body:JSON.stringify(record)});status("science-save-status","Research record created.");
+    await dataService().createRecord(researchDomain,record);status("science-save-status","Research record created.");
    }
    if(byId("science-project"))byId("science-project").disabled=false;clearEditor();detail.hidden=true;await loadResearchDomain();
   }catch(error){status("science-save-status",error.message,true)}

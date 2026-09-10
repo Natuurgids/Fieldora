@@ -405,6 +405,7 @@ FOUNDATION_WEB_MODULES: tuple[WebModuleSpec, ...] = (
             "research.project.open",
             "research.project.records.view",
         ),
+        provides_contracts=("research.data.service",),
         requires_contracts=(
             "navigation.navigate",
             "notifications.publish",

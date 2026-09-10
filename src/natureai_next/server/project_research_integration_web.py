@@ -22,6 +22,7 @@ _PROJECT_RESEARCH_INTEGRATION_PATCH = bytes(
  const projectToolbar=()=>window.FieldoraModuleContracts?.resolve?.("projects.toolbar.extend")||null;
  const navigation=()=>window.FieldoraModuleContracts?.resolve?.("navigation.navigate")||null;
  const notifications=()=>window.FieldoraModuleContracts?.resolve?.("notifications.publish")||null;
+ const researchData=()=>window.FieldoraModuleContracts?.resolve?.("research.data.service")||null;
  const researchProject=()=>window.FieldoraModuleContracts?.resolveAction?.(entryKey)||null;
  const legacyOpenProject=typeof openProject==="function"?openProject:null;
  function report(error,fallback){
@@ -69,7 +70,8 @@ _PROJECT_RESEARCH_INTEGRATION_PATCH = bytes(
  async function exportCurrentProject(){
   const pid=currentProject();if(!pid)return status("project-job-status","Select a project.",true);
   try{
-   const job=await api("/api/v1/jobs",{method:"POST",purpose:"research",body:JSON.stringify({job_type:"export_project",project_id:pid,include_library_references:true})});
+   const service=researchData();if(!service?.exportProject)throw new Error("Research data service is unavailable.");
+   const job=await service.exportProject(pid);
    status("project-job-status",`Export queued · job ${job.job_id}`);q("job-id").value=job.job_id;
   }catch(error){status("project-job-status",error.message,true)}
  }

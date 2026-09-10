@@ -22,6 +22,8 @@ def test_research_owns_project_integration_actions() -> None:
     assert records is research
     assert research.module_id == "research.dossiers"
     assert research.dependencies == ()
+    assert research.provides_contracts == ("research.data.service",)
+    assert registry.contract_provider("research.data.service") is research
     assert research.requires_contracts == (
         "navigation.navigate",
         "notifications.publish",
@@ -44,6 +46,7 @@ def test_project_research_adapter_uses_replaceable_projects_contracts() -> None:
     assert 'resolve?.("projects.toolbar.extend")' in script
     assert 'resolve?.("navigation.navigate")' in script
     assert 'resolve?.("notifications.publish")' in script
+    assert 'resolve?.("research.data.service")' in script
     assert 'resolveAction?.(entryKey)' in script
     assert "const action=researchProject()" in script
     assert "await action.openProject(pid)" in script
@@ -66,6 +69,7 @@ def test_project_research_adapter_uses_replaceable_projects_contracts() -> None:
     assert "window.FieldoraResearchRecords" not in script
     assert "science-project" not in script
     assert "loadResearchDomain" not in script
+    assert "api(" not in script.split("WEB-PROJECT-RESEARCH-INTEGRATION", 1)[1]
 
 
 def test_research_project_open_uses_project_context_contract() -> None:
@@ -92,7 +96,7 @@ def test_research_project_open_uses_project_context_contract() -> None:
     assert "openSelectedProject,openResearchProject,applyResearchProject" in adapter
 
 
-def test_research_export_uses_project_context_contract() -> None:
+def test_research_export_uses_project_context_and_data_service_contracts() -> None:
     response = patch_project_research_integration_response(
         "/app.js",
         ApiResponse(
@@ -107,7 +111,11 @@ def test_research_export_uses_project_context_contract() -> None:
     assert "async function exportCurrentProject()" in adapter
     assert "const pid=currentProject()" in adapter
     assert 'resolve?.("projects.context.select")' in adapter
-    assert "project_id:pid" in adapter
+    assert 'resolve?.("research.data.service")' in adapter
+    assert "const service=researchData()" in adapter
+    assert "await service.exportProject(pid)" in adapter
+    assert "project_id:pid" not in adapter
+    assert 'api("/api/v1/jobs"' not in adapter
     assert "selectedProject" not in adapter
     assert 'if(typeof exportProject==="function")exportProject=exportCurrentProject' in adapter
 
@@ -184,6 +192,29 @@ def test_legacy_record_project_selector_remains_required_by_generic_record_save(
     assert "selectedProject" not in adapter
 
 
+def test_research_records_use_module_owned_data_service_boundary() -> None:
+    response = patch_research_records_response(
+        "/app.js", ApiResponse(200, b"", "text/javascript; charset=utf-8")
+    )
+    script = response.body.decode("utf-8")
+    provider = script.split("/* WEB-RESEARCH-DATA-SERVICE", 1)[1].split(
+        "/* WEB-042", 1
+    )[0]
+    presentation = script.split("/* WEB-042", 1)[1]
+
+    assert 'contractName="research.data.service"' in provider
+    assert 'api(`/api/v1/${domain}${suffix}`)' in provider
+    assert 'api(`/api/v1/${domain}/${encodeURIComponent(id)}`)' in provider
+    assert 'api("/api/v1/jobs"' in provider
+    assert 'runtime.register?.(contractName,moduleId,implementation)' in provider
+    assert 'resolve?.(contractName)||implementation' in provider
+    assert "dataService().listRecords(researchDomain,project)" in presentation
+    assert "dataService().getRecord(researchDomain,id)" in presentation
+    assert "dataService().createRecord(researchDomain,record)" in presentation
+    assert "dataService().updateRecord(" in presentation
+    assert "api(" not in presentation
+
+
 def test_research_records_exposes_project_context_bridge() -> None:
     response = patch_research_records_response(
         "/app.js", ApiResponse(200, b"", "text/javascript; charset=utf-8")
@@ -200,7 +231,6 @@ def test_research_records_exposes_project_context_bridge() -> None:
     assert 'runtime.resolveAction?.(projectOpenAction)' in script
     assert 'runtime.registerAction?.(projectOpenAction,moduleId,openProjectAction)' in script
     assert "window.FieldoraResearchRecords=Object.freeze" in script
-    assert "?project_id=${encodeURIComponent(project)}" in script
 
 
 def test_project_research_integration_is_composed_inside_shell() -> None:

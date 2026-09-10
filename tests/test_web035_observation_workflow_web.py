@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from natureai_next.server.api import ApiResponse
+from natureai_next.server.navigation_web_compatibility import patch_navigation_web_response
 from natureai_next.server.observation_parity_api import ObservationParityApiMixin
 from natureai_next.server.offline_first_api import OfflineFirstFieldoraApi
 from natureai_next.server.science_workflow_web import patch_science_workflow_web_response
@@ -94,3 +95,21 @@ def test_observation_workspace_state_is_owned_inside_science_module() -> None:
     assert "selectedObservations" not in script
     assert "observationFilter==" not in script
     assert "observations=(await" not in script
+
+
+def test_observation_filter_presentation_is_not_owned_by_generic_navigation() -> None:
+    science_script = patch_science_workflow_web_response(
+        "/app.js",
+        ApiResponse(200, b"", "text/javascript; charset=utf-8"),
+    ).body.decode("utf-8")
+    navigation_script = patch_navigation_web_response(
+        "/app.js",
+        ApiResponse(200, b"", "text/javascript; charset=utf-8"),
+    ).body.decode("utf-8")
+
+    assert "function projectObservationFilterState()" in science_script
+    assert 'button.classList.toggle("primary",active)' in science_script
+    assert 'button.setAttribute("aria-selected",String(active))' in science_script
+    assert 'button.setAttribute("role","tab")' in science_script
+    assert "projectObservationFilterState();" in science_script
+    assert '"observation-filter"' not in navigation_script

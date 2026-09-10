@@ -18,6 +18,7 @@ def test_capacity_requires_notification_contract_in_registry_and_manifest() -> N
         "notifications.publish",
         "projects.context.select",
         "projects.toolbar.extend",
+        "projects.work-data.service",
     )
     assert manifest["capacity"]["requires_contracts"] == list(spec.requires_contracts)
 

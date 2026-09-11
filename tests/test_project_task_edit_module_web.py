@@ -26,6 +26,7 @@ def test_task_editor_patch_is_lifecycle_owned_and_governed() -> None:
     assert "window.FieldoraProjectTaskEdit" in script
     assert 'resolve?.("projects.context.select")' in script
     assert 'resolve?.("projects.list.read")' in script
+    assert 'resolve?.("projects.work-data.service")' in script
     assert 'state.projectId=projectContext()?.current?.()||""' in script
     assert "window.FieldoraProjects?.currentProject?.()" not in script
     assert 'resolve?.("notifications.publish")' in script
@@ -34,11 +35,20 @@ def test_task_editor_patch_is_lifecycle_owned_and_governed() -> None:
     assert "const service=projectList();if(!service?.capabilities)return" in script
     assert "const caps=await service.capabilities(state.projectId)" in script
     assert 'event.detail?.contract==="projects.list.read"' in script
+    assert 'event.detail?.contract==="projects.work-data.service"' in script
     assert "/capabilities" not in script
-    assert "/api/v1/project-statuses?project_id=" in script
-    assert "/api/v1/tasks/${tid}?project_id=${pid}" in script
-    assert 'method:"PATCH"' in script
-    assert "/api/v1/tasks/${encodeURIComponent(state.taskId)}" in script
+    assert "service.taskDetail(state.projectId,taskId)" in script
+    assert "service.statuses(state.projectId)" in script
+    assert "service.phases(state.projectId)" in script
+    assert "service.sprints(state.projectId)" in script
+    assert "service.updateTask(state.projectId,state.taskId,record)" in script
+    assert "/api/v1/project-statuses?project_id=" not in script
+    assert "/api/v1/tasks/${tid}?project_id=${pid}" not in script
+    assert "/api/v1/phases?project_id=" not in script
+    assert "/api/v1/sprints?project_id=" not in script
+    assert 'method:"PATCH"' not in script
+    assert "/api/v1/tasks/${encodeURIComponent(state.taskId)}" not in script
+    assert "state.pendingTaskId=taskId" in script
     assert "fieldora:project-work-changed" in script
     assert "fieldora:module-mount" in script
     assert "fieldora:module-unmount" in script

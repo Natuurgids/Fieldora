@@ -11,6 +11,56 @@ from urllib.parse import urlsplit
 
 from natureai_next.server.api import ApiResponse
 
+_PROJECT_LIFECYCLE_ACTION_PROVIDER_PATCH = bytes(
+    r"""
+
+/* WEB-PROJECT-LIFECYCLE-ACTION-PROVIDER: governed top-level Project lifecycle commands. */
+(()=>{
+ if(window.__fieldoraProjectLifecycleActionProviderWired)return;window.__fieldoraProjectLifecycleActionProviderWired=true;
+ const moduleId="projects.core";
+ const freezeItem=item=>item&&typeof item==="object"?Object.freeze({...item}):null;
+ const projectId=value=>String(value||"").trim();
+ async function create(record){
+  const result=await api("/api/v1/projects",{method:"POST",purpose:"research",body:JSON.stringify({...record})});
+  return freezeItem(result?.item);
+ }
+ async function update(value,changes){
+  const id=projectId(value);if(!id)return null;
+  const result=await api(`/api/v1/projects/${encodeURIComponent(id)}`,{method:"PATCH",purpose:"research",body:JSON.stringify({...changes})});
+  return freezeItem(result?.item);
+ }
+ async function changeStatus(value,expectedRevision,status){
+  const id=projectId(value);if(!id)return null;
+  const result=await api(`/api/v1/projects/${encodeURIComponent(id)}/status`,{method:"PATCH",purpose:"research",body:JSON.stringify({expected_revision:expectedRevision,status})});
+  return freezeItem(result?.item);
+ }
+ async function archive(value,expectedRevision){
+  const id=projectId(value);if(!id)return null;
+  const result=await api(`/api/v1/projects/${encodeURIComponent(id)}/archive`,{method:"PATCH",purpose:"research",body:JSON.stringify({expected_revision:expectedRevision})});
+  return freezeItem(result?.item);
+ }
+ const implementations=Object.freeze({
+  "projects.create":create,
+  "projects.details.edit":update,
+  "projects.status.change":changeStatus,
+  "projects.archive":archive,
+ });
+ function register(){
+  const contracts=window.FieldoraModuleContracts;if(!contracts?.registerAction)return false;
+  Object.entries(implementations).forEach(([name,implementation])=>{
+   const current=contracts.resolveAction(name);
+   if(current&&current!==implementation)throw new Error(`Action already registered by another implementation: ${name}`);
+   if(!current)contracts.registerAction(name,moduleId,implementation);
+  });
+  return true;
+ }
+ register();document.addEventListener('fieldora:contracts-ready',register,{once:true});
+})();
+""",
+    "utf-8",
+)
+
+
 _PROJECT_LIFECYCLE_MODULE_PATCH = bytes(
     r"""
 
@@ -90,15 +140,18 @@ def patch_project_lifecycle_module_response(
 ) -> ApiResponse:
     """Append module-owned Project lifecycle controls exactly once."""
 
-    if (
-        urlsplit(target).path != "/app.js"
-        or response.status != 200
-        or _PROJECT_LIFECYCLE_MODULE_PATCH in response.body
-    ):
+    if urlsplit(target).path != "/app.js" or response.status != 200:
+        return response
+    body = response.body
+    if _PROJECT_LIFECYCLE_ACTION_PROVIDER_PATCH not in body:
+        body += _PROJECT_LIFECYCLE_ACTION_PROVIDER_PATCH
+    if _PROJECT_LIFECYCLE_MODULE_PATCH not in body:
+        body += _PROJECT_LIFECYCLE_MODULE_PATCH
+    if body == response.body:
         return response
     return ApiResponse(
         response.status,
-        response.body + _PROJECT_LIFECYCLE_MODULE_PATCH,
+        body,
         response.content_type,
         response.headers,
     )

@@ -50,10 +50,13 @@ def test_work_data_provider_requires_runtime_and_owns_governed_transport() -> No
     assert 'api(`/api/v1/allocations?project_id=${pid}`' in script
     assert 'api(`/api/v1/project-statuses?project_id=${encodeURIComponent(id)}`' in script
     assert 'api(`/api/v1/tasks/${encodeURIComponent(taskId)}?project_id=${encodeURIComponent(id)}`' in script
+    assert 'api(`/api/v1/tasks/${encodeURIComponent(taskId)}`' in script
+    assert 'method:"PATCH",purpose:"research"' in script
+    assert "JSON.stringify({project_id:id,...(changes||{})})" in script
     assert 'name==="phase"?"/api/v1/phases"' in script
     assert 'name==="sprint"?"/api/v1/sprints"' in script
     assert 'name==="allocation"?"/api/v1/allocations"' in script
-    assert "Object.freeze({load,statuses,taskDetail,create})" in script
+    assert "Object.freeze({load,statuses,taskDetail,updateTask,create})" in script
     assert "return freezeItems(result?.items)" in script
     assert "return result?.item?Object.freeze({...result.item}):null" in script
     assert "freezeItems" in script

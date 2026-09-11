@@ -10,7 +10,7 @@ from natureai_next.server.library_media_state_provider_web import (
 )
 from natureai_next.server.media_detail_web import _MEDIA_DETAIL_PATCH
 from natureai_next.server.modular_shell_composition import foundation_composition_registry
-from natureai_next.server.web_module_contracts import FOUNDATION_WEB_MODULES
+from natureai_next.server.web_module_contracts import FOUNDATION_WEB_MODULES, foundation_registry
 
 
 def test_library_media_state_provider_owns_immutable_items_and_filter() -> None:
@@ -33,6 +33,38 @@ def test_library_media_state_provider_owns_immutable_items_and_filter() -> None:
 
     assert "media=reset?" not in script
     assert "mediaFilter=" not in script
+
+
+def test_library_media_transport_is_module_owned_data_service() -> None:
+    script = _LIBRARY_MEDIA_STATE_PROVIDER_PATCH.decode("utf-8")
+    provider = script.split("/* WEB-LIBRARY-MEDIA-DATA-SERVICE", 1)[1].split(
+        "/* WEB-LIBRARY-MEDIA-STATE-PROVIDER", 1
+    )[0]
+    state = script.split("/* WEB-LIBRARY-MEDIA-STATE-PROVIDER", 1)[1]
+
+    registry = foundation_registry()
+    library = registry.resolve("/library")
+    assert library is not None
+    assert library.module_id == "library.catalog"
+    assert library.provides_contracts == (
+        "library.collections.service",
+        "library.media.service",
+    )
+    assert registry.contract_provider("library.media.service") is library
+
+    assert 'contractName="library.media.service"' in provider
+    assert "new URLSearchParams({limit:String(pageSize)})" in provider
+    assert 'params.set("q",String(search))' in provider
+    assert 'params.set("kind",String(kind))' in provider
+    assert 'params.set("after",String(after))' in provider
+    assert "return api(`/api/v1/media?${params}`)" in provider
+    assert 'runtime.register?.(contractName,moduleId,implementation)' in provider
+    assert 'resolve?.(contractName)||implementation' in provider
+
+    assert "dataService().listMedia({search,kind,after:" in state
+    assert "/api/v1/media" not in state
+    assert "new URLSearchParams" not in state
+    assert "params.set(" not in state
 
 
 def test_library_gallery_and_detail_consume_frozen_state_event() -> None:

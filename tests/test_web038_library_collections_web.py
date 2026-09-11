@@ -39,7 +39,10 @@ def test_library_collection_transport_is_module_owned_data_service() -> None:
     library = registry.resolve("/library")
     assert library is not None
     assert library.module_id == "library.catalog"
-    assert library.provides_contracts == ("library.collections.service",)
+    assert library.provides_contracts == (
+        "library.collections.service",
+        "library.media.service",
+    )
     assert registry.contract_provider("library.collections.service") is library
 
     assert 'contractName="library.collections.service"' in provider

@@ -100,7 +100,7 @@ _PROJECT_LIFECYCLE_MODULE_PATCH = bytes(
  }
  async function conflict(){const current=await reloadProjects();if(current)fill(current);if(editor())editor().hidden=false;message("Project changed on the server. Latest values reloaded; review them before saving again.",true)}
  async function mutate(path,body,success,actionName=""){
-  try{if(actionName){const action=lifecycleAction(actionName);if(!action)throw new Error(`Project lifecycle action is unavailable: ${actionName}`);await action(state.editingId,body)}else{await api(path,{method:"PATCH",purpose:"research",body:JSON.stringify(body)})}const current=await reloadProjects();if(current)fill(current);message(success);await refreshAuthority();document.dispatchEvent(new CustomEvent("fieldora:project-lifecycle-changed",{detail:{module_id:moduleId,project_id:state.editingId,item:current||null}}));return true}
+  try{if(actionName){const action=lifecycleAction(actionName);if(!action)throw new Error(`Project lifecycle action is unavailable: ${actionName}`);if(actionName==="projects.status.change")await action(state.editingId,body.expected_revision,body.status);else await action(state.editingId,body)}else{await api(path,{method:"PATCH",purpose:"research",body:JSON.stringify(body)})}const current=await reloadProjects();if(current)fill(current);message(success);await refreshAuthority();document.dispatchEvent(new CustomEvent("fieldora:project-lifecycle-changed",{detail:{module_id:moduleId,project_id:state.editingId,item:current||null}}));return true}
   catch(error){if((error?.code||error?.message)==="revision_conflict"){await conflict();return false}message(error?.message||"Project update failed.",true);emitError(error,"Project update failed.");return false}
  }
  function open(){const project=projectById(state.projectId);if(!project||!state.canEdit)return;fill(project);message("");editor().hidden=false;q("project-core-lifecycle-name")?.focus()}
@@ -111,7 +111,7 @@ _PROJECT_LIFECYCLE_MODULE_PATCH = bytes(
   const start=q("project-core-lifecycle-start").value,due=q("project-core-lifecycle-due").value;if(start&&due&&due<start)return message("Due date must not be before start date.",true);
   await mutate("",{expected_revision:project.revision,name,description:q("project-core-lifecycle-description").value.trim(),start_date:start,due_date:due,budget,currency:q("project-core-lifecycle-currency").value.trim()||"EUR"},"Project details saved.","projects.details.edit")
  }
- async function applyStatus(){const project=projectById(state.editingId);if(!project)return;await mutate(`/api/v1/projects/${encodeURIComponent(state.editingId)}/status`,{expected_revision:project.revision,status:q("project-core-lifecycle-status").value},"Project status updated.")}
+ async function applyStatus(){const project=projectById(state.editingId);if(!project)return;await mutate("",{expected_revision:project.revision,status:q("project-core-lifecycle-status").value},"Project status updated.","projects.status.change")}
  async function archive(){const project=projectById(state.editingId);if(!project)return;const ok=await mutate(`/api/v1/projects/${encodeURIComponent(state.editingId)}/archive`,{expected_revision:project.revision},"Project archived.");if(ok&&editor())editor().hidden=true}
  function mount(){
   if(state.mounted)return;if(!ensureSurface())return;state.mounted=true;state.controller=new AbortController();const signal=state.controller.signal;

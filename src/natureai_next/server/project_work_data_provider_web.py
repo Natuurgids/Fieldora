@@ -31,6 +31,11 @@ _PROJECT_WORK_DATA_PROVIDER_PATCH = bytes(
   const result=await api(`/api/v1/project-statuses?project_id=${encodeURIComponent(id)}`,{purpose:"research"});
   return freezeItems(result?.items);
  }
+ async function taskDetail(value,taskValue){
+  const id=projectId(value),taskId=String(taskValue||"").trim();if(!id||!taskId)return null;
+  const result=await api(`/api/v1/tasks/${encodeURIComponent(taskId)}?project_id=${encodeURIComponent(id)}`,{purpose:"research"});
+  return result?.item?Object.freeze({...result.item}):null;
+ }
  async function create(kind,record){
   const name=String(kind||"").trim();
   const path=name==="phase"?"/api/v1/phases":(name==="task"||name==="milestone"||name==="subtask")?"/api/v1/tasks":name==="sprint"?"/api/v1/sprints":name==="allocation"?"/api/v1/allocations":"";
@@ -38,7 +43,7 @@ _PROJECT_WORK_DATA_PROVIDER_PATCH = bytes(
   const result=await api(path,{method:"POST",purpose:"research",body:JSON.stringify({...record})});
   return result?.item?Object.freeze({...result.item}):null;
  }
- const implementation=Object.freeze({load,statuses,create});
+ const implementation=Object.freeze({load,statuses,taskDetail,create});
  function register(){
   const contracts=window.FieldoraModuleContracts;if(!contracts)return false;
   const current=contracts.resolve(contractName);if(current)return current===implementation;

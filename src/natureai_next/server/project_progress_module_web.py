@@ -98,11 +98,10 @@ _PROJECT_PROGRESS_MODULE_PATCH = bytes(
  async function refresh(){
   if(!ensureSurface())return;const pid=state.projectId||projectContext()?.current?.()||"";state.projectId=pid;
   if(!pid){state.project=null;state.tasks=[];state.statuses=[];render();return}
-  const service=workData();if(!service?.statuses){state.project=null;state.tasks=[];state.statuses=[];render();return}
+  const service=workData();if(!service?.tasks||!service?.statuses){state.project=null;state.tasks=[];state.statuses=[];render();return}
   try{
-   const encoded=encodeURIComponent(pid);
-   const [projectResult,taskResult,statuses]=await Promise.all([api("/api/v1/projects",{purpose:"research"}),api(`/api/v1/tasks?project_id=${encoded}`,{purpose:"research"}),service.statuses(pid)]);
-   state.project=(projectResult.items||[]).find(item=>String(item.id)===String(pid))||null;state.tasks=taskResult.items||[];state.statuses=statuses||[];render();await authority();
+   const [projectResult,tasks,statuses]=await Promise.all([api("/api/v1/projects",{purpose:"research"}),service.tasks(pid),service.statuses(pid)]);
+   state.project=(projectResult.items||[]).find(item=>String(item.id)===String(pid))||null;state.tasks=tasks||[];state.statuses=statuses||[];render();await authority();
   }catch(error){state.project=null;state.tasks=[];state.statuses=[];render();emitError(error,"Project planning could not be loaded.")}
  }
  function setView(view){state.view=["overview","kanban","gantt"].includes(view)?view:"overview";render()}

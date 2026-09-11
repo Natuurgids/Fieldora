@@ -34,16 +34,17 @@ def test_progress_adapter_is_idempotent_and_projects_owned() -> None:
     assert "showPage=" not in script
 
 
-def test_progress_projection_routes_statuses_through_work_data_service() -> None:
+def test_progress_projection_routes_statuses_and_tasks_through_work_data_service() -> None:
     patched = patch_project_progress_module_response(
         "/app.js", ApiResponse(200, b"", "text/javascript; charset=utf-8")
     )
     script = patched.body.decode("utf-8")
 
     assert 'api("/api/v1/projects",{purpose:"research"})' in script
-    assert "api(`/api/v1/tasks?project_id=${encoded}`" in script
+    assert "api(`/api/v1/tasks?project_id=${encoded}`" not in script
     assert 'resolve?.("projects.work-data.service")' in script
-    assert "const service=workData();if(!service?.statuses)" in script
+    assert "const service=workData();if(!service?.tasks||!service?.statuses)" in script
+    assert "service.tasks(pid)" in script
     assert "service.statuses(pid)" in script
     assert 'event.detail?.contract==="projects.work-data.service"' in script
     assert "/api/v1/project-statuses?project_id=" not in script

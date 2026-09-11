@@ -20,10 +20,6 @@ _PROJECT_LIFECYCLE_ACTION_PROVIDER_PATCH = bytes(
  const moduleId="projects.core";
  const freezeItem=item=>item&&typeof item==="object"?Object.freeze({...item}):null;
  const projectId=value=>String(value||"").trim();
- async function create(record){
-  const result=await api("/api/v1/projects",{method:"POST",purpose:"research",body:JSON.stringify({...record})});
-  return freezeItem(result?.item);
- }
  async function update(value,changes){
   const id=projectId(value);if(!id)return null;
   const result=await api(`/api/v1/projects/${encodeURIComponent(id)}`,{method:"PATCH",purpose:"research",body:JSON.stringify({...changes})});
@@ -40,7 +36,6 @@ _PROJECT_LIFECYCLE_ACTION_PROVIDER_PATCH = bytes(
   return freezeItem(result?.item);
  }
  const implementations=Object.freeze({
-  "projects.create":create,
   "projects.details.edit":update,
   "projects.status.change":changeStatus,
   "projects.archive":archive,

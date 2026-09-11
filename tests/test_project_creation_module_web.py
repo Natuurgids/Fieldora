@@ -28,13 +28,16 @@ def test_creation_adapter_is_idempotent_and_not_portfolio_coupled() -> None:
 
     assert patched.body == patched_again.body
     script = patched.body.decode("utf-8")
+    assert script.count("WEB-PROJECT-CREATION-ACTION-PROVIDER") == 1
     assert "WEB-PROJECT-CREATION-MODULE" in script
     assert "window.FieldoraProjectCreation" in script
     assert 'id="project-core-create-editor"' in script
     assert 'resolveAction?.("projects.create")' in script
     assert 'const action=createProject();if(!action)throw new Error("Project create action is unavailable.")' in script
     assert "const result=await action(record);" in script
-    assert 'api("/api/v1/projects"' not in script
+    assert script.count('api("/api/v1/projects",{method:"POST",purpose:"research"') == 1
+    assert 'contracts.registerAction("projects.create",moduleId,create)' in script
+    assert "return freezeItem(result?.item)" in script
     assert "projectDataService" not in script
     save_body = script.split("async function save(){", 1)[1].split("function mount(){", 1)[0]
     assert "api(" not in save_body

@@ -11,6 +11,32 @@ from urllib.parse import urlsplit
 
 from natureai_next.server.api import ApiResponse
 
+_PROJECT_CREATION_ACTION_PROVIDER_PATCH = bytes(
+    r"""
+
+/* WEB-PROJECT-CREATION-ACTION-PROVIDER: governed top-level Project create command. */
+(()=>{
+ if(window.__fieldoraProjectCreationActionProviderWired)return;window.__fieldoraProjectCreationActionProviderWired=true;
+ const moduleId="projects.core";
+ const freezeItem=item=>item&&typeof item==="object"?Object.freeze({...item}):null;
+ async function create(record){
+  const result=await api("/api/v1/projects",{method:"POST",purpose:"research",body:JSON.stringify({...record})});
+  return freezeItem(result?.item);
+ }
+ function register(){
+  const contracts=window.FieldoraModuleContracts;if(!contracts?.registerAction)return false;
+  const current=contracts.resolveAction("projects.create");
+  if(current&&current!==create)throw new Error("Action already registered by another implementation: projects.create");
+  if(!current)contracts.registerAction("projects.create",moduleId,create);
+  return true;
+ }
+ register();document.addEventListener('fieldora:contracts-ready',register,{once:true});
+})();
+""",
+    "utf-8",
+)
+
+
 _PROJECT_CREATION_MODULE_PATCH = bytes(
     r"""
 
@@ -85,15 +111,18 @@ _PROJECT_CREATION_MODULE_PATCH = bytes(
 def patch_project_creation_module_response(target: str, response: ApiResponse) -> ApiResponse:
     """Append the independently owned Project creation adapter once."""
 
-    if (
-        urlsplit(target).path != "/app.js"
-        or response.status != 200
-        or _PROJECT_CREATION_MODULE_PATCH in response.body
-    ):
+    if urlsplit(target).path != "/app.js" or response.status != 200:
+        return response
+    body = response.body
+    if _PROJECT_CREATION_ACTION_PROVIDER_PATCH not in body:
+        body += _PROJECT_CREATION_ACTION_PROVIDER_PATCH
+    if _PROJECT_CREATION_MODULE_PATCH not in body:
+        body += _PROJECT_CREATION_MODULE_PATCH
+    if body == response.body:
         return response
     return ApiResponse(
         response.status,
-        response.body + _PROJECT_CREATION_MODULE_PATCH,
+        body,
         response.content_type,
         response.headers,
     )

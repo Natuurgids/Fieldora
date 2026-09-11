@@ -37,13 +37,13 @@ def test_lifecycle_action_provider_preserves_governed_routes() -> None:
     script = patched.body.decode("utf-8")
     assert script.count("WEB-PROJECT-LIFECYCLE-ACTION-PROVIDER") == 1
     assert 'moduleId="projects.core"' in script
-    assert 'api("/api/v1/projects",{method:"POST",purpose:"research"' in script
+    assert 'api("/api/v1/projects",{method:"POST",purpose:"research"' not in script
     assert 'api(`/api/v1/projects/${encodeURIComponent(id)}`,{method:"PATCH",purpose:"research"' in script
     assert 'api(`/api/v1/projects/${encodeURIComponent(id)}/status`,{method:"PATCH",purpose:"research"' in script
     assert 'api(`/api/v1/projects/${encodeURIComponent(id)}/archive`,{method:"PATCH",purpose:"research"' in script
     assert "JSON.stringify({expected_revision:expectedRevision,status})" in script
     assert "JSON.stringify({expected_revision:expectedRevision})" in script
-    assert '"projects.create":create' in script
+    assert '"projects.create":create' not in script
     assert '"projects.details.edit":update' in script
     assert '"projects.status.change":changeStatus' in script
     assert '"projects.archive":archive' in script

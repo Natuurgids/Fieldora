@@ -34,19 +34,22 @@ def test_progress_adapter_is_idempotent_and_projects_owned() -> None:
     assert "showPage=" not in script
 
 
-def test_progress_projection_routes_statuses_and_tasks_through_work_data_service() -> None:
+def test_progress_projection_routes_projects_statuses_and_tasks_through_contracts() -> None:
     patched = patch_project_progress_module_response(
         "/app.js", ApiResponse(200, b"", "text/javascript; charset=utf-8")
     )
     script = patched.body.decode("utf-8")
 
-    assert 'api("/api/v1/projects",{purpose:"research"})' in script
+    assert 'api("/api/v1/projects",{purpose:"research"})' not in script
     assert "api(`/api/v1/tasks?project_id=${encoded}`" not in script
+    assert 'resolve?.("projects.list.read")' in script
     assert 'resolve?.("projects.work-data.service")' in script
-    assert "const service=workData();if(!service?.tasks||!service?.statuses)" in script
+    assert "const service=workData(),list=projectList();if(!service?.tasks||!service?.statuses||!list?.refresh)" in script
+    assert "list.refresh()" in script
     assert "service.tasks(pid)" in script
     assert "service.statuses(pid)" in script
-    assert 'event.detail?.contract==="projects.work-data.service"' in script
+    assert 'event.detail?.contract==="projects.list.read"&&state.mounted)refresh()' in script
+    assert 'event.detail?.contract==="projects.work-data.service"&&state.mounted)refresh()' in script
     assert "/api/v1/project-statuses?project_id=" not in script
     assert "Average task progress" in script
     assert "Blocked tasks" in script

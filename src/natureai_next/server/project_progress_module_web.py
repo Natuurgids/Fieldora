@@ -98,10 +98,10 @@ _PROJECT_PROGRESS_MODULE_PATCH = bytes(
  async function refresh(){
   if(!ensureSurface())return;const pid=state.projectId||projectContext()?.current?.()||"";state.projectId=pid;
   if(!pid){state.project=null;state.tasks=[];state.statuses=[];render();return}
-  const service=workData();if(!service?.tasks||!service?.statuses){state.project=null;state.tasks=[];state.statuses=[];render();return}
+  const service=workData(),list=projectList();if(!service?.tasks||!service?.statuses||!list?.refresh){state.project=null;state.tasks=[];state.statuses=[];render();return}
   try{
-   const [projectResult,tasks,statuses]=await Promise.all([api("/api/v1/projects",{purpose:"research"}),service.tasks(pid),service.statuses(pid)]);
-   state.project=(projectResult.items||[]).find(item=>String(item.id)===String(pid))||null;state.tasks=tasks||[];state.statuses=statuses||[];render();await authority();
+   const [projects,tasks,statuses]=await Promise.all([list.refresh(),service.tasks(pid),service.statuses(pid)]);
+   state.project=(projects||[]).find(item=>String(item.id)===String(pid))||null;state.tasks=tasks||[];state.statuses=statuses||[];render();await authority();
   }catch(error){state.project=null;state.tasks=[];state.statuses=[];render();emitError(error,"Project planning could not be loaded.")}
  }
  function setView(view){state.view=["overview","kanban","gantt"].includes(view)?view:"overview";render()}
@@ -120,7 +120,7 @@ _PROJECT_PROGRESS_MODULE_PATCH = bytes(
  document.addEventListener("fieldora:project-context-changed",()=>{state.projectId=projectContext()?.current?.()||"";refresh()});
  document.addEventListener("fieldora:project-work-changed",event=>{if(event.detail?.project_id===state.projectId)refresh()});
  document.addEventListener("fieldora:project-lifecycle-changed",event=>{if(event.detail?.project_id===state.projectId)refresh()});
- document.addEventListener("fieldora:contract-registered",event=>{if(event.detail?.contract==="projects.list.read"&&state.mounted)authority();if(event.detail?.contract==="projects.work-data.service"&&state.mounted)refresh()});
+ document.addEventListener("fieldora:contract-registered",event=>{if(event.detail?.contract==="projects.list.read"&&state.mounted)refresh();if(event.detail?.contract==="projects.work-data.service"&&state.mounted)refresh()});
  document.addEventListener("fieldora:module-mount",event=>{if(event.detail?.module?.module_id===moduleId)mount()});
  document.addEventListener("fieldora:module-unmount",event=>{if(event.detail?.module?.module_id===moduleId)unmount()});
  window.FieldoraProjectProgress=Object.freeze({mount,unmount,refresh,setView,moveTask});

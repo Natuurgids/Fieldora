@@ -48,10 +48,12 @@ def test_work_data_provider_requires_runtime_and_owns_governed_transport() -> No
     assert 'api(`/api/v1/tasks?project_id=${pid}`' in script
     assert 'api(`/api/v1/sprints?project_id=${pid}`' in script
     assert 'api(`/api/v1/allocations?project_id=${pid}`' in script
+    assert 'api(`/api/v1/project-statuses?project_id=${encodeURIComponent(id)}`' in script
     assert 'name==="phase"?"/api/v1/phases"' in script
     assert 'name==="sprint"?"/api/v1/sprints"' in script
     assert 'name==="allocation"?"/api/v1/allocations"' in script
-    assert "Object.freeze({load,create})" in script
+    assert "Object.freeze({load,statuses,create})" in script
+    assert "return freezeItems(result?.items)" in script
     assert "freezeItems" in script
 
 

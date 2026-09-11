@@ -89,8 +89,9 @@ _PROJECT_PROGRESS_MODULE_PATCH = bytes(
  }
  async function moveTask(taskId,statusId){
   if(!state.canEdit||!taskId||!statusId)return;
+  const service=workData();if(!service?.updateTask)return;
   try{
-   await api(`/api/v1/tasks/${encodeURIComponent(taskId)}`,{method:"PATCH",purpose:"research",body:JSON.stringify({project_id:state.projectId,status_id:statusId})});
+   await service.updateTask(state.projectId,taskId,{status_id:statusId});
    document.dispatchEvent(new CustomEvent("fieldora:project-work-changed",{detail:{module_id:moduleId,project_id:state.projectId,kind:"task",item_id:taskId}}));
   }catch(error){emitError(error,"Task status could not be changed.");await refresh()}
  }

@@ -58,7 +58,7 @@ def test_progress_projection_routes_statuses_through_work_data_service() -> None
     assert "task.realized_hours??task.realized??task.actual_hours" in script
 
 
-def test_kanban_moves_are_capability_aware_and_use_authorized_task_patch() -> None:
+def test_kanban_moves_are_capability_aware_and_use_work_data_service() -> None:
     patched = patch_project_progress_module_response(
         "/app.js", ApiResponse(200, b"", "text/javascript; charset=utf-8")
     )
@@ -74,9 +74,10 @@ def test_kanban_moves_are_capability_aware_and_use_authorized_task_patch() -> No
     assert "/capabilities" not in script
     assert "caps?.actions?.edit===true" in script
     assert "if(!state.canEdit||!taskId||!statusId)return" in script
-    assert "api(`/api/v1/tasks/${encodeURIComponent(taskId)}`" in script
-    assert 'method:"PATCH"' in script
-    assert "JSON.stringify({project_id:state.projectId,status_id:statusId})" in script
+    assert "const service=workData();if(!service?.updateTask)return" in script
+    assert "service.updateTask(state.projectId,taskId,{status_id:statusId})" in script
+    assert "api(`/api/v1/tasks/${encodeURIComponent(taskId)}`" not in script
+    assert 'method:"PATCH"' not in script
     assert "text/x-fieldora-task-id" in script
     assert "fieldora:project-work-changed" in script
     success = script.split('async function moveTask(taskId,statusId){', 1)[1].split(

@@ -5,11 +5,60 @@ from natureai_next.server.api import ApiResponse
 _LIBRARY_COLLECTIONS_PATCH = bytes(
     r"""
 
-/* Fieldora Library alignment: Collections/Datasets belong with governed evidence,
-   not in the Research-record surface. */
+/* WEB-LIBRARY-COLLECTIONS-DATA-SERVICE: Library-owned collection transport boundary. */
 (()=>{
  if(window.__fieldoraLibraryCollectionsWired)return;
  window.__fieldoraLibraryCollectionsWired=true;
+ const moduleId="library.catalog",contractName="library.collections.service";
+ const request=async(method,path,payload,revision)=>{
+  const headers={"Accept":"application/json"};
+  if(payload!==undefined)headers["Content-Type"]="application/json";
+  if(revision!==undefined)headers["If-Match"]=String(revision);
+  const response=await fetch(path,{method,headers,credentials:"same-origin",body:payload===undefined?undefined:JSON.stringify(payload)});
+  const text=await response.text();
+  let data={};
+  try{data=text?JSON.parse(text):{};}catch(_error){data={detail:text};}
+  if(!response.ok)throw new Error(data.detail||data.error||`Request failed (${response.status})`);
+  return data;
+ };
+ const listCollections=projectId=>{
+  const selected=String(projectId||"").trim();
+  const suffix=selected?`?project_id=${encodeURIComponent(selected)}`:"";
+  return request("GET",`/api/v1/library/collections${suffix}`);
+ };
+ const createCollection=(projectId,name,description)=>request(
+  "POST","/api/v1/library/collections",
+  {project_id:String(projectId||"").trim(),name:String(name||"").trim(),description:String(description||"").trim()||null}
+ );
+ const updateCollection=(collectionId,revision,changes)=>request(
+  "PATCH",`/api/v1/library/collections/${encodeURIComponent(collectionId)}`,changes,revision
+ );
+ const linkAssets=(collectionId,revision,assetPublicIds)=>request(
+  "POST",`/api/v1/library/collections/${encodeURIComponent(collectionId)}/assets`,
+  {asset_public_ids:assetPublicIds},revision
+ );
+ const unlinkAssets=(collectionId,revision,assetPublicIds)=>request(
+  "DELETE",`/api/v1/library/collections/${encodeURIComponent(collectionId)}/assets`,
+  {asset_public_ids:assetPublicIds},revision
+ );
+ const deleteCollection=(collectionId,revision)=>request(
+  "DELETE",`/api/v1/library/collections/${encodeURIComponent(collectionId)}`,undefined,revision
+ );
+ const implementation=Object.freeze({
+  listCollections,createCollection,updateCollection,linkAssets,unlinkAssets,deleteCollection
+ });
+ function registerDataService(){
+  const runtime=window.FieldoraModuleContracts;
+  if(!runtime)return false;
+  const existing=runtime.resolve?.(contractName);
+  if(existing)return true;
+  return runtime.register?.(contractName,moduleId,implementation)!==false;
+ }
+ const dataService=()=>window.FieldoraModuleContracts?.resolve?.(contractName)||implementation;
+ registerDataService();
+ document.addEventListener("fieldora:contracts-ready",registerDataService);
+
+ /* WEB-038: Library-owned Collections/Datasets presentation. */
  const collections=document.getElementById("collection-list")?.closest(".card");
  const browse=document.getElementById("library-browse-panel");
  if(!collections||!browse)return;
@@ -43,17 +92,6 @@ _LIBRARY_COLLECTIONS_PATCH = bytes(
  const status=parity.querySelector("#library-collection-parity-status");
  const list=parity.querySelector("#library-collection-parity-list");
  const esc=value=>String(value??"").replace(/[&<>"']/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
- const request=async(method,path,payload,revision)=>{
-  const headers={"Accept":"application/json"};
-  if(payload!==undefined)headers["Content-Type"]="application/json";
-  if(revision!==undefined)headers["If-Match"]=String(revision);
-  const response=await fetch(path,{method,headers,credentials:"same-origin",body:payload===undefined?undefined:JSON.stringify(payload)});
-  const text=await response.text();
-  let data={};
-  try{data=text?JSON.parse(text):{};}catch(_error){data={detail:text};}
-  if(!response.ok)throw new Error(data.detail||data.error||`Request failed (${response.status})`);
-  return data;
- };
  const ids=value=>String(value||"").split(/[\s,]+/).map(item=>item.trim()).filter(Boolean);
  const setStatus=(message,error=false)=>{status.textContent=message||"";status.dataset.error=error?"true":"false";};
  const render=items=>{
@@ -74,9 +112,7 @@ _LIBRARY_COLLECTIONS_PATCH = bytes(
  const load=async()=>{
   try{
    setStatus("Loading collections…");
-   const selected=project.value.trim();
-   const suffix=selected?`?project_id=${encodeURIComponent(selected)}`:"";
-   const data=await request("GET",`/api/v1/library/collections${suffix}`);
+   const data=await dataService().listCollections(project.value.trim());
    render(Array.isArray(data.items)?data.items:[]);
    setStatus(`${Array.isArray(data.items)?data.items.length:0} collection(s) loaded.`);
   }catch(error){setStatus(error.message,true);}
@@ -86,7 +122,7 @@ _LIBRARY_COLLECTIONS_PATCH = bytes(
    const projectId=project.value.trim(), collectionName=name.value.trim();
    if(!projectId||!collectionName)throw new Error("Project ID and collection name are required.");
    setStatus("Creating collection…");
-   await request("POST","/api/v1/library/collections",{project_id:projectId,name:collectionName,description:description.value.trim()||null});
+   await dataService().createCollection(projectId,collectionName,description.value.trim());
    name.value="";description.value="";
    await load();
   }catch(error){setStatus(error.message,true);}
@@ -106,17 +142,18 @@ _LIBRARY_COLLECTIONS_PATCH = bytes(
     if(nextName===null)return;
     const nextDescription=window.prompt("Description (blank removes it)",card.querySelector("p")?.textContent||"");
     if(nextDescription===null)return;
-    await request("PATCH",`/api/v1/library/collections/${encodeURIComponent(collectionId)}`,{name:nextName,description:nextDescription||null},revision);
+    await dataService().updateCollection(collectionId,revision,{name:nextName,description:nextDescription||null});
    }else if(action==="link"||action==="unlink"){
     const promptText=action==="link"?"Evidence public IDs to add (comma or space separated)":"Evidence public IDs to remove from this collection only";
     const entered=window.prompt(promptText,"");
     if(entered===null)return;
     const assetIds=ids(entered);
     if(!assetIds.length)throw new Error("Enter at least one evidence public ID.");
-    await request(action==="link"?"POST":"DELETE",`/api/v1/library/collections/${encodeURIComponent(collectionId)}/assets`,{asset_public_ids:assetIds},revision);
+    if(action==="link")await dataService().linkAssets(collectionId,revision,assetIds);
+    else await dataService().unlinkAssets(collectionId,revision,assetIds);
    }else if(action==="delete"){
     if(!window.confirm("Delete this collection? Governed evidence and provenance will not be deleted."))return;
-    await request("DELETE",`/api/v1/library/collections/${encodeURIComponent(collectionId)}`,undefined,revision);
+    await dataService().deleteCollection(collectionId,revision);
    }
    await load();
   }catch(error){setStatus(error.message,true);}

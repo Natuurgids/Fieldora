@@ -2,6 +2,7 @@ from natureai_next.server.api import ApiResponse
 from natureai_next.server.library_collections_web import (
     patch_library_collections_web_response,
 )
+from natureai_next.server.web_module_contracts import foundation_registry
 
 
 def test_library_collection_patch_exposes_full_non_destructive_parity_controls() -> None:
@@ -22,6 +23,40 @@ def test_library_collection_patch_exposes_full_non_destructive_parity_controls()
     assert "never deletes the governed evidence or its provenance" in script
     assert "Evidence public IDs to remove from this collection only" in script
     assert "evidence and provenance will not be deleted" in script
+
+
+def test_library_collection_transport_is_module_owned_data_service() -> None:
+    response = patch_library_collections_web_response(
+        "/app.js", ApiResponse(200, b"", "text/javascript")
+    )
+    script = response.body.decode()
+    provider = script.split("/* WEB-LIBRARY-COLLECTIONS-DATA-SERVICE", 1)[1].split(
+        "/* WEB-038", 1
+    )[0]
+    presentation = script.split("/* WEB-038", 1)[1]
+
+    registry = foundation_registry()
+    library = registry.resolve("/library")
+    assert library is not None
+    assert library.module_id == "library.catalog"
+    assert library.provides_contracts == ("library.collections.service",)
+    assert registry.contract_provider("library.collections.service") is library
+
+    assert 'contractName="library.collections.service"' in provider
+    assert "fetch(path" in provider
+    assert 'headers["If-Match"]=String(revision)' in provider
+    assert "/api/v1/library/collections" in provider
+    assert 'runtime.register?.(contractName,moduleId,implementation)' in provider
+    assert 'resolve?.(contractName)||implementation' in provider
+
+    assert "dataService().listCollections(" in presentation
+    assert "dataService().createCollection(" in presentation
+    assert "dataService().updateCollection(" in presentation
+    assert "dataService().linkAssets(" in presentation
+    assert "dataService().unlinkAssets(" in presentation
+    assert "dataService().deleteCollection(" in presentation
+    assert "fetch(" not in presentation
+    assert "/api/v1/library/collections" not in presentation
 
 
 def test_library_collection_patch_is_app_js_only_and_idempotent() -> None:

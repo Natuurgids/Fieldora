@@ -314,7 +314,12 @@ FOUNDATION_WEB_MODULES: tuple[WebModuleSpec, ...] = (
         "Home",
         optional_contracts=("projects.list.read",),
     ),
-    WebModuleSpec("library.catalog", "/library", "Library"),
+    WebModuleSpec(
+        "library.catalog",
+        "/library",
+        "Library",
+        provides_contracts=("library.collections.service",),
+    ),
     WebModuleSpec("observations.core", "/observations", "Observations"),
     WebModuleSpec(
         "projects.core",

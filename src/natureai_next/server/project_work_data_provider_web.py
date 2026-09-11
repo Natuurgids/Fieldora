@@ -26,6 +26,11 @@ _PROJECT_WORK_DATA_PROVIDER_PATCH = bytes(
   ]);
   return Object.freeze({phases:freezeItems(phases?.items),tasks:freezeItems(tasks?.items),sprints:freezeItems(sprints?.items),allocations:freezeItems(allocations?.items)});
  }
+ async function tasks(value){
+  const id=projectId(value);if(!id)return Object.freeze([]);
+  const result=await api(`/api/v1/tasks?project_id=${encodeURIComponent(id)}`,{purpose:"research"});
+  return freezeItems(result?.items);
+ }
  async function statuses(value){
   const id=projectId(value);if(!id)return Object.freeze([]);
   const result=await api(`/api/v1/project-statuses?project_id=${encodeURIComponent(id)}`,{purpose:"research"});
@@ -48,7 +53,7 @@ _PROJECT_WORK_DATA_PROVIDER_PATCH = bytes(
   const result=await api(path,{method:"POST",purpose:"research",body:JSON.stringify({...record})});
   return result?.item?Object.freeze({...result.item}):null;
  }
- const implementation=Object.freeze({load,statuses,taskDetail,updateTask,create});
+ const implementation=Object.freeze({load,tasks,statuses,taskDetail,updateTask,create});
  function register(){
   const contracts=window.FieldoraModuleContracts;if(!contracts)return false;
   const current=contracts.resolve(contractName);if(current)return current===implementation;

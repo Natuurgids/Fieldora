@@ -96,13 +96,17 @@ def test_lifecycle_adapter_keeps_revision_conflict_and_visible_validation() -> N
     assert "fieldora:project-lifecycle-changed" in script
 
 
-def test_lifecycle_capability_projection_is_not_server_authorization() -> None:
+def test_lifecycle_capability_projection_uses_project_list_contract() -> None:
     patched = patch_project_lifecycle_module_response(
         "/app.js", ApiResponse(200, b"", "text/javascript; charset=utf-8")
     )
     script = patched.body.decode("utf-8")
 
-    assert "/capabilities" in script
+    assert 'resolve?.("projects.list.read")' in script
+    assert "const service=projectList();if(!service?.capabilities)" in script
+    assert "const caps=await service.capabilities(state.projectId)" in script
+    assert 'event.detail?.contract==="projects.list.read"' in script
+    assert "/capabilities" not in script
     assert "fieldoraAuthorizationHidden" in script
     assert "caps?.actions?.edit===true" in script
     assert 'method:"PATCH",purpose:"research"' in script

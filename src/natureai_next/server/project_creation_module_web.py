@@ -21,8 +21,7 @@ _PROJECT_CREATION_MODULE_PATCH = bytes(
  const state={mounted:false,controller:null};
  const notifications=()=>window.FieldoraModuleContracts?.resolve?.("notifications.publish")||null;
  const navigation=()=>window.FieldoraModuleContracts?.resolve?.("navigation.navigate")||null;
- async function createProject(record){return api("/api/v1/projects",{method:"POST",purpose:"research",body:JSON.stringify(record)})}
- const projectDataService=Object.freeze({createProject});
+ const createProject=()=>window.FieldoraModuleContracts?.resolveAction?.("projects.create")||null;
  function message(text,error=false){const node=q("project-core-create-message");if(node){node.textContent=text||"";node.classList.toggle("error",Boolean(error))}}
  function emitError(error,fallback){const text=error?.message||fallback;message(text,true);notifications()?.publish?.(String(text),{level:"error",source_module:moduleId})}
  function ensureSurface(){
@@ -54,8 +53,9 @@ _PROJECT_CREATION_MODULE_PATCH = bytes(
   const record={name,description:q("project-core-create-description")?.value.trim()||"",start_date:start,due_date:due,budget,currency:q("project-core-create-currency")?.value.trim()||"EUR"};
   try{
    message("Creating project…");
-   const result=await projectDataService.createProject(record);
-   const id=result?.item?.id||"";await reloadProjects(id);closeEditor();
+   const action=createProject();if(!action)throw new Error("Project create action is unavailable.");
+   const result=await action(record);
+   const id=result?.id||"";await reloadProjects(id);closeEditor();
    const status=q("project-core-module-status");if(status){status.textContent="Project created.";status.classList.remove("error")}
   }catch(error){emitError(error,"Project could not be created.")}
  }

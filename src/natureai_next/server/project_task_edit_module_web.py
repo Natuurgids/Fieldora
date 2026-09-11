@@ -33,10 +33,11 @@ _PROJECT_TASK_EDIT_PATCH = bytes(
  const state={mounted:false,controller:null,projectId:"",taskId:"",canEdit:false};
  const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
  const projectContext=()=>window.FieldoraModuleContracts?.resolve?.("projects.context.select")||null;
+ const projectList=()=>window.FieldoraModuleContracts?.resolve?.("projects.list.read")||null;
  const notifications=()=>window.FieldoraModuleContracts?.resolve?.("notifications.publish")||null;
  function emitError(error,fallback){notifications()?.publish?.(String(error?.message||fallback),{level:"error",source_module:moduleId})}
  function ensureSurface(){const cockpit=q("project-desktop-cockpit");if(!cockpit)return false;let host=q("project-core-task-editor");if(!host){host=document.createElement("section");host.id="project-core-task-editor";host.className="card section";host.hidden=true;cockpit.before(host)}return true}
- async function authority(){state.canEdit=false;if(!state.projectId)return;try{const caps=await api(`/api/v1/projects/${encodeURIComponent(state.projectId)}/capabilities`,{purpose:"research"});state.canEdit=caps?.actions?.edit===true}catch(error){emitError(error,"Project permissions could not be loaded.")}}
+ async function authority(){state.canEdit=false;if(!state.projectId)return;const service=projectList();if(!service?.capabilities)return;try{const caps=await service.capabilities(state.projectId);state.canEdit=caps?.actions?.edit===true}catch(error){emitError(error,"Project permissions could not be loaded.")}}
  function fail(text){const node=q("project-core-task-edit-message");if(node){node.textContent=text;node.classList.add("error")}return false}
  async function open(taskId){
   if(!state.projectId||!taskId||!state.canEdit)return;state.taskId=taskId;const pid=encodeURIComponent(state.projectId),tid=encodeURIComponent(taskId);
@@ -58,7 +59,7 @@ _PROJECT_TASK_EDIT_PATCH = bytes(
  }
  function mount(){if(state.mounted)return;if(!ensureSurface())return;state.mounted=true;state.controller=new AbortController();const signal=state.controller.signal;state.projectId=projectContext()?.current?.()||"";authority();q("project-desktop-cockpit")?.addEventListener("dblclick",event=>{const row=event.target.closest?.('[data-project-work-kind="task"]');if(row)open(row.dataset.projectWorkId)},{signal});document.addEventListener("fieldora:project-task-edit-request",event=>open(event.detail?.task_id||""),{signal})}
  function unmount(){state.controller?.abort();state.controller=null;state.mounted=false;const host=q("project-core-task-editor");if(host)host.hidden=true}
- document.addEventListener("fieldora:project-context-changed",()=>{state.projectId=projectContext()?.current?.()||"";authority()});document.addEventListener("fieldora:module-mount",event=>{if(event.detail?.module?.module_id===moduleId)mount()});document.addEventListener("fieldora:module-unmount",event=>{if(event.detail?.module?.module_id===moduleId)unmount()});
+ document.addEventListener("fieldora:project-context-changed",()=>{state.projectId=projectContext()?.current?.()||"";authority()});document.addEventListener("fieldora:contract-registered",event=>{if(event.detail?.contract==="projects.list.read"&&state.mounted)authority()});document.addEventListener("fieldora:module-mount",event=>{if(event.detail?.module?.module_id===moduleId)mount()});document.addEventListener("fieldora:module-unmount",event=>{if(event.detail?.module?.module_id===moduleId)unmount()});
  window.FieldoraProjectTaskEdit=Object.freeze({mount,unmount,open,refreshAuthority:authority});if(window.FieldoraModules?.current?.()?.module_id===moduleId)mount();
 })();
 ''',

@@ -25,11 +25,16 @@ def test_task_editor_patch_is_lifecycle_owned_and_governed() -> None:
     assert 'moduleId="projects.core"' in script
     assert "window.FieldoraProjectTaskEdit" in script
     assert 'resolve?.("projects.context.select")' in script
+    assert 'resolve?.("projects.list.read")' in script
     assert 'state.projectId=projectContext()?.current?.()||""' in script
     assert "window.FieldoraProjects?.currentProject?.()" not in script
     assert 'resolve?.("notifications.publish")' in script
     assert 'notifications()?.publish?.(String(error?.message||fallback),{level:"error",source_module:moduleId})' in script
     assert 'new CustomEvent("fieldora:module-error"' not in script
+    assert "const service=projectList();if(!service?.capabilities)return" in script
+    assert "const caps=await service.capabilities(state.projectId)" in script
+    assert 'event.detail?.contract==="projects.list.read"' in script
+    assert "/capabilities" not in script
     assert "/api/v1/project-statuses?project_id=" in script
     assert "/api/v1/tasks/${tid}?project_id=${pid}" in script
     assert 'method:"PATCH"' in script

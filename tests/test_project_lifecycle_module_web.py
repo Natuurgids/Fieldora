@@ -91,7 +91,7 @@ def test_lifecycle_adapter_keeps_revision_conflict_and_visible_validation() -> N
     assert "Project name is required." in script
     assert "Budget must be zero or greater." in script
     assert "Due date must not be before start date." in script
-    assert '/status`' in script
+    assert '/status`' not in script
     assert '/archive`' in script
     assert "fieldora:project-lifecycle-changed" in script
 
@@ -109,7 +109,7 @@ def test_lifecycle_details_edit_uses_action_contract() -> None:
     assert '"projects.details.edit"' in module
     assert 'await mutate("",{expected_revision:project.revision' in module
     assert '`/api/v1/projects/${encodeURIComponent(state.editingId)}`' not in module
-    assert '/status`' in module
+    assert '/status`' not in module
     assert '/archive`' in module
 
 def test_lifecycle_capability_projection_uses_project_list_contract() -> None:

@@ -63,7 +63,11 @@ def test_kanban_moves_are_capability_aware_and_use_authorized_task_patch() -> No
     assert 'data-project-planning-view="kanban"' in script
     assert 'data-project-kanban-drop="${esc(id)}"' in script
     assert 'data-project-kanban-status="${esc(task.id)}"' in script
-    assert "/capabilities`" in script
+    assert 'resolve?.("projects.list.read")' in script
+    assert "const service=projectList();if(!service?.capabilities)" in script
+    assert "const caps=await service.capabilities(state.projectId)" in script
+    assert 'event.detail?.contract==="projects.list.read"' in script
+    assert "/capabilities" not in script
     assert "caps?.actions?.edit===true" in script
     assert "if(!state.canEdit||!taskId||!statusId)return" in script
     assert "api(`/api/v1/tasks/${encodeURIComponent(taskId)}`" in script

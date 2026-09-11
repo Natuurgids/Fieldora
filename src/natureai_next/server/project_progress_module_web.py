@@ -21,6 +21,7 @@ _PROJECT_PROGRESS_MODULE_PATCH = bytes(
  const state={mounted:false,controller:null,projectId:"",view:"overview",canEdit:false,project:null,tasks:[],statuses:[]};
  const esc=value=>String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
  const projectContext=()=>window.FieldoraModuleContracts?.resolve?.("projects.context.select")||null;
+ const projectList=()=>window.FieldoraModuleContracts?.resolve?.("projects.list.read")||null;
  const notifications=()=>window.FieldoraModuleContracts?.resolve?.("notifications.publish")||null;
  function emitError(error,fallback){
   const text=error?.message||fallback;
@@ -82,7 +83,8 @@ _PROJECT_PROGRESS_MODULE_PATCH = bytes(
  }
  async function authority(){
   state.canEdit=false;if(!state.projectId){render();return}
-  try{const caps=await api(`/api/v1/projects/${encodeURIComponent(state.projectId)}/capabilities`,{purpose:"research"});state.canEdit=caps?.actions?.edit===true;render()}catch(error){state.canEdit=false;render();emitError(error,"Project permissions could not be loaded.")}
+  const service=projectList();if(!service?.capabilities){render();return}
+  try{const caps=await service.capabilities(state.projectId);state.canEdit=caps?.actions?.edit===true;render()}catch(error){state.canEdit=false;render();emitError(error,"Project permissions could not be loaded.")}
  }
  async function moveTask(taskId,statusId){
   if(!state.canEdit||!taskId||!statusId)return;
@@ -116,6 +118,7 @@ _PROJECT_PROGRESS_MODULE_PATCH = bytes(
  document.addEventListener("fieldora:project-context-changed",()=>{state.projectId=projectContext()?.current?.()||"";refresh()});
  document.addEventListener("fieldora:project-work-changed",event=>{if(event.detail?.project_id===state.projectId)refresh()});
  document.addEventListener("fieldora:project-lifecycle-changed",event=>{if(event.detail?.project_id===state.projectId)refresh()});
+ document.addEventListener("fieldora:contract-registered",event=>{if(event.detail?.contract==="projects.list.read"&&state.mounted)authority()});
  document.addEventListener("fieldora:module-mount",event=>{if(event.detail?.module?.module_id===moduleId)mount()});
  document.addEventListener("fieldora:module-unmount",event=>{if(event.detail?.module?.module_id===moduleId)unmount()});
  window.FieldoraProjectProgress=Object.freeze({mount,unmount,refresh,setView,moveTask});

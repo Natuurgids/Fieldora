@@ -8,7 +8,6 @@ from natureai_next.server.api import ApiResponse
 
 _PROJECT_LIST_PROVIDER_PATCH = bytes(
     r"""
-
 /* WEB-PROJECT-LIST-PROVIDER: Projects-owned accessible project snapshots. */
 (()=>{
  if(window.__fieldoraProjectListProviderWired)return;window.__fieldoraProjectListProviderWired=true;
@@ -27,7 +26,14 @@ _PROJECT_LIST_PROVIDER_PATCH = bytes(
   state.pending=pending;
   try{return await pending}finally{if(state.pending===pending)state.pending=null}
  }
- const implementation=Object.freeze({items:snapshot,refresh,ready:()=>state.loaded});
+ async function capabilities(projectId){
+  const id=String(projectId||"").trim();
+  if(!id)return Object.freeze({actions:Object.freeze({})});
+  const result=await api(`/api/v1/projects/${encodeURIComponent(id)}/capabilities`,{purpose:"research"});
+  const actions=Object.freeze({...((result&&typeof result.actions==="object")?result.actions:{})});
+  return Object.freeze({...result,actions});
+ }
+ const implementation=Object.freeze({items:snapshot,refresh,ready:()=>state.loaded,capabilities});
  function register(){
   const contracts=window.FieldoraModuleContracts;if(!contracts)return false;
   const current=contracts.resolve(contractName);

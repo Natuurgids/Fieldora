@@ -44,11 +44,25 @@ def test_project_list_provider_owns_and_deduplicates_refresh() -> None:
     assert "await api('/api/v1/projects',{purpose:'research'})" in script
     assert "state.loaded=true" in script
     assert (
-        "const implementation=Object.freeze({items:snapshot,refresh,ready:()=>state.loaded})"
+        "const implementation=Object.freeze({items:snapshot,refresh,ready:()=>state.loaded,capabilities})"
         in script
     )
     assert "state.pending===pending" in script
     assert "replace:" not in script
+
+
+def test_project_list_provider_owns_project_capability_projection() -> None:
+    shell = patch_modular_shell_response(
+        "/app.js", ApiResponse(200, b"", "text/javascript; charset=utf-8")
+    )
+    contracts = patch_runtime_contracts_response("/app.js", shell)
+    script = patch_project_list_provider_response("/app.js", contracts).body.decode(
+        "utf-8"
+    )
+
+    assert "async function capabilities(projectId)" in script
+    assert 'api(`/api/v1/projects/${encodeURIComponent(id)}/capabilities`,{purpose:"research"})' in script
+    assert "return Object.freeze({...result,actions})" in script
 
 
 def test_project_list_provider_bridges_legacy_create_refresh_to_canonical_list() -> None:

@@ -40,6 +40,7 @@ def test_work_actions_adapter_is_idempotent_and_module_owned() -> None:
     assert "window.FieldoraProjectWorkActions" in script
     assert 'moduleId="projects.core"' in script
     assert 'resolve?.("projects.work-data.service")' in script
+    assert 'resolve?.("projects.list.read")' in script
     assert 'resolve?.("notifications.publish")' in script
     assert 'notifications()?.publish?.(String(message),{level:"error",source_module:moduleId})' in script
     assert "fieldora:module-error" not in script
@@ -96,17 +97,21 @@ def test_task_creation_preserves_legacy_relationship_and_effort_inputs() -> None
     assert "Realized hours must be zero or greater." in script
 
 
-def test_capability_projection_only_controls_browser_discoverability() -> None:
+def test_capability_projection_uses_project_list_contract_without_raw_transport() -> None:
     patched = patch_project_work_actions_module_response(
         "/app.js", ApiResponse(200, b"", "text/javascript; charset=utf-8")
     )
     script = patched.body.decode("utf-8")
 
-    assert "/capabilities" in script
+    assert 'resolve?.("projects.list.read")' in script
+    assert "const caps=await service.capabilities(state.projectId)" in script
+    assert 'event.detail?.contract==="projects.list.read"' in script
     assert "fieldoraAuthorizationHidden" in script
     assert "caps?.actions?.edit===true" in script
-    # The presentation adapter calls the governed service contract; the service
-    # and server API independently retain persistence and authorization boundaries.
+    assert "/api/v1/projects/" not in script
+    assert "api(" not in script
+    # The presentation adapter calls governed service contracts; the providers
+    # and server APIs independently retain persistence and authorization boundaries.
     assert "service.create(kind,record)" in script
     assert 'method:"POST",purpose:"research"' not in script
 

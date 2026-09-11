@@ -14,7 +14,6 @@ from natureai_next.server.api import ApiResponse
 
 _PROJECT_WORK_ACTIONS_MODULE_PATCH = bytes(
     r"""
-
 /* WEB-PROJECT-WORK-ACTIONS-MODULE: Projects/Core creation actions. */
 (()=>{
  if(window.__fieldoraProjectWorkActionsWired)return;window.__fieldoraProjectWorkActionsWired=true;
@@ -22,6 +21,7 @@ _PROJECT_WORK_ACTIONS_MODULE_PATCH = bytes(
  const state={mounted:false,controller:null,projectId:"",selectedWork:{kind:"project",id:""},canEdit:false};
  const escWork=value=>String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
  const workData=()=>window.FieldoraModuleContracts?.resolve?.("projects.work-data.service")||null;
+ const projectList=()=>window.FieldoraModuleContracts?.resolve?.("projects.list.read")||null;
  const projectContext=()=>window.FieldoraModuleContracts?.resolve?.("projects.context.select")||null;
  const notifications=()=>window.FieldoraModuleContracts?.resolve?.("notifications.publish")||null;
  function emitError(error,fallback){
@@ -51,8 +51,9 @@ _PROJECT_WORK_ACTIONS_MODULE_PATCH = bytes(
  async function refreshAuthority(){
   const host=actions();if(host)host.dataset.fieldoraAuthorizationHidden="true";state.canEdit=false;
   if(!state.projectId)return;
+  const service=projectList();if(!service?.capabilities)return;
   try{
-   const caps=await api(`/api/v1/projects/${encodeURIComponent(state.projectId)}/capabilities`,{purpose:"research"});
+   const caps=await service.capabilities(state.projectId);
    state.canEdit=caps?.actions?.edit===true;if(host)host.dataset.fieldoraAuthorizationHidden=state.canEdit?"false":"true";
   }catch(error){if(host)host.dataset.fieldoraAuthorizationHidden="true";emitError(error,"Project permissions could not be loaded.")}
  }
@@ -107,6 +108,7 @@ _PROJECT_WORK_ACTIONS_MODULE_PATCH = bytes(
  }
  function unmount(){if(!state.mounted)return;state.controller?.abort();state.controller=null;state.mounted=false;const host=editor();if(host)host.hidden=true}
  document.addEventListener("fieldora:project-context-changed",event=>{state.projectId=event.detail?.project_id||"";setSelection("project",state.projectId);refreshAuthority()});
+ document.addEventListener("fieldora:contract-registered",event=>{if(event.detail?.contract==="projects.list.read"&&state.mounted)refreshAuthority()});
  document.addEventListener("fieldora:module-mount",event=>{if(event.detail?.module?.module_id===moduleId)mount()});
  document.addEventListener("fieldora:module-unmount",event=>{if(event.detail?.module?.module_id===moduleId)unmount()});
  window.FieldoraProjectWorkActions=Object.freeze({mount,unmount,refreshAuthority,openEditor,currentSelection:()=>({...state.selectedWork})});

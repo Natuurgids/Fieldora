@@ -48,13 +48,17 @@ def test_evidence_adapter_is_idempotent_and_uses_service_contract() -> None:
     assert "showPage=" not in script
 
 
-def test_evidence_link_discoverability_is_not_server_authorization() -> None:
+def test_evidence_link_discoverability_uses_project_list_contract() -> None:
     patched = patch_project_evidence_actions_module_response(
         "/app.js", ApiResponse(200, b"", "text/javascript; charset=utf-8")
     )
     script = patched.body.decode("utf-8")
 
-    assert "/capabilities" in script
+    assert 'resolve?.("projects.list.read")' in script
+    assert "const service=projectList();if(!service?.capabilities)return" in script
+    assert "const caps=await service.capabilities(state.projectId)" in script
+    assert 'event.detail?.contract==="projects.list.read"' in script
+    assert "/capabilities" not in script
     assert "fieldoraAuthorizationHidden" in script
     assert "caps?.actions?.edit===true" in script
     assert "Choose existing Library evidence." in script

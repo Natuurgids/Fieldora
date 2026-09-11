@@ -20,6 +20,7 @@ _PROJECT_EVIDENCE_ACTIONS_MODULE_PATCH = bytes(
  const moduleId="projects.core",q=id=>document.getElementById(id);
  const state={mounted:false,controller:null,projectId:"",canEdit:false};
  const projectContext=()=>window.FieldoraModuleContracts?.resolve?.("projects.context.select")||null;
+ const projectList=()=>window.FieldoraModuleContracts?.resolve?.("projects.list.read")||null;
  const evidenceData=()=>window.FieldoraModuleContracts?.resolve?.("projects.evidence.service")||null;
  const notifications=()=>window.FieldoraModuleContracts?.resolve?.("notifications.publish")||null;
  function message(text,error=false){const node=q("project-core-evidence-link-message");if(node){node.textContent=text||"";node.classList.toggle("error",Boolean(error))}}
@@ -38,7 +39,8 @@ _PROJECT_EVIDENCE_ACTIONS_MODULE_PATCH = bytes(
  async function refreshAuthority(){
   const button=q("project-core-evidence-link");if(button)button.dataset.fieldoraAuthorizationHidden="true";state.canEdit=false;
   if(!state.projectId)return;
-  try{const caps=await api(`/api/v1/projects/${encodeURIComponent(state.projectId)}/capabilities`,{purpose:"research"});state.canEdit=caps?.actions?.edit===true;if(button)button.dataset.fieldoraAuthorizationHidden=state.canEdit?"false":"true"}catch(error){emitError(error,"Project permissions could not be loaded.")}
+  const service=projectList();if(!service?.capabilities)return;
+  try{const caps=await service.capabilities(state.projectId);state.canEdit=caps?.actions?.edit===true;if(button)button.dataset.fieldoraAuthorizationHidden=state.canEdit?"false":"true"}catch(error){emitError(error,"Project permissions could not be loaded.")}
  }
  async function loadOptions(){
   const select=q("project-core-evidence-select");if(!select)return;select.innerHTML='<option value="">Choose evidence…</option>';
@@ -68,6 +70,7 @@ _PROJECT_EVIDENCE_ACTIONS_MODULE_PATCH = bytes(
  }
  function unmount(){if(!state.mounted)return;state.controller?.abort();state.controller=null;state.mounted=false;closePanel()}
  document.addEventListener("fieldora:project-context-changed",()=>{state.projectId=projectContext()?.current?.()||"";closePanel();refreshAuthority()});
+ document.addEventListener("fieldora:contract-registered",event=>{if(event.detail?.contract==="projects.list.read"&&state.mounted)refreshAuthority()});
  document.addEventListener("fieldora:module-mount",event=>{if(event.detail?.module?.module_id===moduleId)mount()});
  document.addEventListener("fieldora:module-unmount",event=>{if(event.detail?.module?.module_id===moduleId)unmount()});
  window.FieldoraProjectEvidenceActions=Object.freeze({mount,unmount,openPanel,refreshAuthority});

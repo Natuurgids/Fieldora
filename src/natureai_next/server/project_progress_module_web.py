@@ -22,6 +22,7 @@ _PROJECT_PROGRESS_MODULE_PATCH = bytes(
  const esc=value=>String(value??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
  const projectContext=()=>window.FieldoraModuleContracts?.resolve?.("projects.context.select")||null;
  const projectList=()=>window.FieldoraModuleContracts?.resolve?.("projects.list.read")||null;
+ const workData=()=>window.FieldoraModuleContracts?.resolve?.("projects.work-data.service")||null;
  const notifications=()=>window.FieldoraModuleContracts?.resolve?.("notifications.publish")||null;
  function emitError(error,fallback){
   const text=error?.message||fallback;
@@ -96,10 +97,11 @@ _PROJECT_PROGRESS_MODULE_PATCH = bytes(
  async function refresh(){
   if(!ensureSurface())return;const pid=state.projectId||projectContext()?.current?.()||"";state.projectId=pid;
   if(!pid){state.project=null;state.tasks=[];state.statuses=[];render();return}
+  const service=workData();if(!service?.statuses){state.project=null;state.tasks=[];state.statuses=[];render();return}
   try{
    const encoded=encodeURIComponent(pid);
-   const [projectResult,taskResult,statusResult]=await Promise.all([api("/api/v1/projects",{purpose:"research"}),api(`/api/v1/tasks?project_id=${encoded}`,{purpose:"research"}),api(`/api/v1/project-statuses?project_id=${encoded}`,{purpose:"research"})]);
-   state.project=(projectResult.items||[]).find(item=>String(item.id)===String(pid))||null;state.tasks=taskResult.items||[];state.statuses=statusResult.items||[];render();await authority();
+   const [projectResult,taskResult,statuses]=await Promise.all([api("/api/v1/projects",{purpose:"research"}),api(`/api/v1/tasks?project_id=${encoded}`,{purpose:"research"}),service.statuses(pid)]);
+   state.project=(projectResult.items||[]).find(item=>String(item.id)===String(pid))||null;state.tasks=taskResult.items||[];state.statuses=statuses||[];render();await authority();
   }catch(error){state.project=null;state.tasks=[];state.statuses=[];render();emitError(error,"Project planning could not be loaded.")}
  }
  function setView(view){state.view=["overview","kanban","gantt"].includes(view)?view:"overview";render()}
@@ -118,7 +120,7 @@ _PROJECT_PROGRESS_MODULE_PATCH = bytes(
  document.addEventListener("fieldora:project-context-changed",()=>{state.projectId=projectContext()?.current?.()||"";refresh()});
  document.addEventListener("fieldora:project-work-changed",event=>{if(event.detail?.project_id===state.projectId)refresh()});
  document.addEventListener("fieldora:project-lifecycle-changed",event=>{if(event.detail?.project_id===state.projectId)refresh()});
- document.addEventListener("fieldora:contract-registered",event=>{if(event.detail?.contract==="projects.list.read"&&state.mounted)authority()});
+ document.addEventListener("fieldora:contract-registered",event=>{if(event.detail?.contract==="projects.list.read"&&state.mounted)authority();if(event.detail?.contract==="projects.work-data.service"&&state.mounted)refresh()});
  document.addEventListener("fieldora:module-mount",event=>{if(event.detail?.module?.module_id===moduleId)mount()});
  document.addEventListener("fieldora:module-unmount",event=>{if(event.detail?.module?.module_id===moduleId)unmount()});
  window.FieldoraProjectProgress=Object.freeze({mount,unmount,refresh,setView,moveTask});

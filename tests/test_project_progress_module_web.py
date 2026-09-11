@@ -34,7 +34,7 @@ def test_progress_adapter_is_idempotent_and_projects_owned() -> None:
     assert "showPage=" not in script
 
 
-def test_progress_projection_uses_governed_project_task_and_status_apis() -> None:
+def test_progress_projection_routes_statuses_through_work_data_service() -> None:
     patched = patch_project_progress_module_response(
         "/app.js", ApiResponse(200, b"", "text/javascript; charset=utf-8")
     )
@@ -42,7 +42,11 @@ def test_progress_projection_uses_governed_project_task_and_status_apis() -> Non
 
     assert 'api("/api/v1/projects",{purpose:"research"})' in script
     assert "api(`/api/v1/tasks?project_id=${encoded}`" in script
-    assert "api(`/api/v1/project-statuses?project_id=${encoded}`" in script
+    assert 'resolve?.("projects.work-data.service")' in script
+    assert "const service=workData();if(!service?.statuses)" in script
+    assert "service.statuses(pid)" in script
+    assert 'event.detail?.contract==="projects.work-data.service"' in script
+    assert "/api/v1/project-statuses?project_id=" not in script
     assert "Average task progress" in script
     assert "Blocked tasks" in script
     assert "Overdue tasks" in script

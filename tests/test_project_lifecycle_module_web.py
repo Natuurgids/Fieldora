@@ -91,7 +91,7 @@ def test_lifecycle_adapter_keeps_revision_conflict_and_visible_validation() -> N
     assert "Project name is required." in script
     assert "Budget must be zero or greater." in script
     assert "Due date must not be before start date." in script
-    assert '/status`' not in script
+    assert '/status`' in script
     assert '/archive`' in script
     assert "fieldora:project-lifecycle-changed" in script
 

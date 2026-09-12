@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from natureai_next.server import modular_shell_web as shell
 from natureai_next.server.api import ApiResponse
 from natureai_next.server.dossier_module_web import patch_dossier_module_response
 from natureai_next.server.http import patch_managed_web_response
-from natureai_next.server import modular_shell_web as shell
 
 
 def _legacy_dossier_response() -> ApiResponse:

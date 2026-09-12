@@ -42,8 +42,8 @@ def test_platform_workloads_keep_hardened_runtime_boundaries() -> None:
     assert "automountServiceAccountToken: false" in platform
     assert "secretName: fieldora-runtime" in platform
     assert "kind: Secret" not in platform
-    assert "stringData:" not in platform
-    assert "data:" not in platform
+    assert "\nstringData:" not in platform
+    assert "\ndata:" not in platform
     assert platform.count("allowPrivilegeEscalation: false") >= 2
     assert platform.count("readOnlyRootFilesystem: true") >= 2
     assert platform.count("runAsNonRoot: true") >= 2

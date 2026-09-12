@@ -41,6 +41,8 @@ class DossierLifecycleApiMixin:
         dossier_id, action = parsed
         if action == "edit" and method == "PATCH":
             return self._edit_dossier(dossier_id, headers, body)
+        if action == "reassign-owner" and method == "POST":
+            return self._reassign_dossier_owner(dossier_id, headers, body)
         if action == "defer" and method == "POST":
             return self._defer_dossier_review(dossier_id, headers, body)
         if action == "remark" and method == "POST":
@@ -59,6 +61,11 @@ class DossierLifecycleApiMixin:
             dossier_id = unquote(parts[0]).strip()
             if dossier_id and "/" not in dossier_id:
                 return dossier_id, "edit"
+            return None
+        if len(parts) == 3 and parts[1] == "owner" and parts[2] == "reassign":
+            dossier_id = unquote(parts[0]).strip()
+            if dossier_id and "/" not in dossier_id:
+                return dossier_id, "reassign-owner"
             return None
         if len(parts) == 3 and parts[1] == "review" and parts[2] in {
             "defer",
@@ -122,6 +129,23 @@ class DossierLifecycleApiMixin:
         purpose = headers.get("x-fieldora-purpose", "research")
         if not self._lifecycle_allowed(
             identity, "edit", dossier_id, project_id, purpose
+        ):
+            return identity, None, project_id
+        return identity, dossier, project_id
+
+    def _administrator_context(
+        self, dossier_id: str, headers: dict[str, str]
+    ) -> tuple[object | None, dict[str, object] | None, str]:
+        identity = self._lifecycle_identity(headers)
+        if identity is None:
+            return None, None, ""
+        dossier = self._lifecycle_record(identity.organization_id, dossier_id)
+        if dossier is None:
+            return identity, None, ""
+        project_id = str(dossier.get("project_id", "")).strip()
+        purpose = headers.get("x-fieldora-purpose", "research")
+        if not self._lifecycle_allowed(
+            identity, "reassign_owner", dossier_id, project_id, purpose
         ):
             return identity, None, project_id
         return identity, dossier, project_id
@@ -201,6 +225,31 @@ class DossierLifecycleApiMixin:
         for key, value in updates.items():
             dossier[key] = str(value).strip() if isinstance(value, str) else value
         dossier["updated_by"] = identity.identity_id
+        return self._save_dossier(dossier, headers)
+
+    def _reassign_dossier_owner(
+        self, dossier_id: str, headers: dict[str, str], body: bytes
+    ) -> ApiResponse:
+        identity, dossier, _project_id = self._administrator_context(dossier_id, headers)
+        if identity is None:
+            return ApiResponse.json(401, {"error": "unauthorized"})
+        if dossier is None:
+            return ApiResponse.json(404, {"error": "not_found"})
+        payload = self._payload(body)
+        if payload is None:
+            return ApiResponse.json(400, {"error": "invalid_request"})
+        new_owner = str(payload.get("owner_id", "")).strip()
+        if not new_owner:
+            return ApiResponse.json(400, {"error": "owner_required"})
+        previous = str(dossier.get("owner_id", dossier.get("created_by", ""))).strip()
+        dossier["owner_id"] = new_owner
+        dossier["updated_by"] = identity.identity_id
+        self._append_review_history(
+            dossier,
+            actor_id=identity.identity_id,
+            action="owner_reassigned",
+            remark=f"{previous} → {new_owner}",
+        )
         return self._save_dossier(dossier, headers)
 
     def _defer_dossier_review(

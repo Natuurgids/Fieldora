@@ -132,6 +132,55 @@ def test_dossier_edit_reports_revision_conflict() -> None:
     assert _json(response)["error"] == "revision_conflict"
 
 
+def test_dossier_administrator_can_reassign_owner_with_provenance() -> None:
+    api = _Api(identity_id="administrator-1")
+
+    response = api.dispatch(
+        "POST",
+        "/api/v1/dossiers/dossier-1/owner/reassign",
+        {"x-fieldora-purpose": "research"},
+        b'{"owner_id":"owner-2"}',
+    )
+
+    assert response.status == 200
+    item = _json(response)["item"]
+    assert item["owner_id"] == "owner-2"
+    assert item["updated_by"] == "administrator-1"
+    assert item["review_history"][-1]["action"] == "owner_reassigned"
+    assert item["review_history"][-1]["actor_id"] == "administrator-1"
+    assert item["review_history"][-1]["remark"] == "owner-1 → owner-2"
+    assert api._decisions.requests[-1].action == "reassign_owner"
+
+
+def test_dossier_owner_reassignment_fails_closed_without_admin_authority() -> None:
+    api = _Api({"reassign_owner"}, identity_id="owner-1")
+
+    response = api.dispatch(
+        "POST",
+        "/api/v1/dossiers/dossier-1/owner/reassign",
+        {},
+        b'{"owner_id":"owner-2"}',
+    )
+
+    assert response.status == 404
+    assert api._science.put_calls == []
+
+
+def test_dossier_owner_reassignment_requires_owner_identity() -> None:
+    api = _Api(identity_id="administrator-1")
+
+    response = api.dispatch(
+        "POST",
+        "/api/v1/dossiers/dossier-1/owner/reassign",
+        {},
+        b'{"owner_id":""}',
+    )
+
+    assert response.status == 400
+    assert _json(response)["error"] == "owner_required"
+    assert api._science.put_calls == []
+
+
 def test_dossier_owner_can_defer_to_named_reviewer_with_provenance() -> None:
     api = _Api()
 

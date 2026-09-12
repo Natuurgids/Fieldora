@@ -121,26 +121,37 @@ def test_dossier_evidence_and_lifecycle_controls_reach_final_dom(tmp_path: Path)
             dossier["description"] = body["description"]
             dossier["updated_by"] = "user-1"
             payload = {"item": dict(dossier), "revision": 4}
+        elif path_only == "dossiers/dossier-1/owner/reassign" and method == "POST":
+            assert isinstance(body, dict)
+            previous = str(dossier["owner_id"])
+            dossier["owner_id"] = body["owner_id"]
+            dossier["updated_by"] = "user-1"
+            payload = {
+                "item": lifecycle_item(
+                    "owner_reassigned", f"{previous} → {body['owner_id']}"
+                ),
+                "revision": 5,
+            }
         elif path_only == "dossiers/dossier-1/review/defer" and method == "POST":
             assert isinstance(body, dict)
             dossier["reviewer_id"] = body["reviewer_id"]
             dossier["review_status"] = "in_review"
             payload = {
                 "item": lifecycle_item("deferred_for_review", str(body.get("remark", ""))),
-                "revision": 5,
+                "revision": 6,
             }
         elif path_only == "dossiers/dossier-1/review/remark" and method == "POST":
             assert isinstance(body, dict)
             payload = {
                 "item": lifecycle_item("review_remark", str(body["remark"])),
-                "revision": 6,
+                "revision": 7,
             }
         elif path_only == "dossiers/dossier-1/review/return" and method == "POST":
             assert isinstance(body, dict)
             dossier["review_status"] = "returned"
             payload = {
                 "item": lifecycle_item("returned_to_observer", str(body.get("remark", ""))),
-                "revision": 7,
+                "revision": 8,
             }
         elif path_only == "media":
             payload = {"items": [library_item], "count": 1}
@@ -204,6 +215,12 @@ def test_dossier_evidence_and_lifecycle_controls_reach_final_dom(tmp_path: Path)
             "() => document.querySelector('#dossier-workspace-detail')?.textContent.includes('Research dossier revised')"
         )
 
+        page.locator("#dossier-lifecycle-owner").fill("owner-2")
+        page.locator("#dossier-lifecycle-reassign-owner").click()
+        page.wait_for_function(
+            "() => document.querySelector('#dossier-workspace-detail')?.textContent.includes('owner-2') && document.querySelector('#dossier-workspace-detail')?.textContent.includes('owner_reassigned')"
+        )
+
         page.locator("#dossier-lifecycle-reviewer").fill("reviewer-1")
         page.locator("#dossier-lifecycle-remark").fill("Please check taxonomy")
         page.locator("#dossier-lifecycle-defer").click()
@@ -241,6 +258,12 @@ def test_dossier_evidence_and_lifecycle_controls_reach_final_dom(tmp_path: Path)
         assert library_item["sha256"] == "abc123"
 
         assert any(method == "PATCH" and path == "dossiers/dossier-1" for method, path, _body in requests)
+        assert any(
+            method == "POST"
+            and path == "dossiers/dossier-1/owner/reassign"
+            and body == {"owner_id": "owner-2"}
+            for method, path, body in requests
+        )
         assert any(
             method == "POST" and path == "dossiers/dossier-1/review/defer"
             for method, path, _body in requests

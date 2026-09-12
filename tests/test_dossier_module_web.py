@@ -26,6 +26,7 @@ def test_dossier_module_is_idempotent_and_owns_workspace_behavior() -> None:
     assert 'api("/api/v1/dossiers")' in provider
     assert 'api("/api/v1/dossier-reviews")' in provider
     assert 'async function updateDossier(dossierId,record)' in provider
+    assert '/owner/reassign' in provider
     assert '/review/defer' in provider
     assert '/review/remark' in provider
     assert '/review/return' in provider
@@ -42,10 +43,13 @@ def test_dossier_module_exposes_governed_lifecycle_controls() -> None:
 
     assert 'id="dossier-lifecycle-panel"' in presentation
     assert 'id="dossier-lifecycle-update"' in presentation
+    assert 'id="dossier-lifecycle-owner"' in presentation
+    assert 'id="dossier-lifecycle-reassign-owner"' in presentation
     assert 'id="dossier-lifecycle-defer"' in presentation
     assert 'id="dossier-lifecycle-remark-action"' in presentation
     assert 'id="dossier-lifecycle-return"' in presentation
     assert 'service.updateDossier(dossier.id' in presentation
+    assert 'service.reassignOwner(dossier.id' in presentation
     assert 'service.deferReview(dossier.id' in presentation
     assert 'service.remarkReview(dossier.id' in presentation
     assert 'service.returnReview(dossier.id' in presentation

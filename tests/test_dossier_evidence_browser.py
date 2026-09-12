@@ -202,6 +202,18 @@ def test_dossier_evidence_and_lifecycle_controls_reach_final_dom(tmp_path: Path)
         page.goto(url)
         page.wait_for_selector("#workspace:not([hidden])")
         page.evaluate(
+            """async () => {
+                const list = window.FieldoraModuleContracts?.resolve?.('projects.list.read');
+                const context = window.FieldoraModuleContracts?.resolve?.('projects.context.select');
+                if (!list?.refresh || !context?.select) throw new Error('Project contracts unavailable');
+                await list.refresh();
+                if (!context.select('project-1')) throw new Error('Project context selection failed');
+            }"""
+        )
+        page.wait_for_function(
+            "() => window.FieldoraModuleContracts?.resolve?.('projects.context.select')?.current?.() === 'project-1'"
+        )
+        page.evaluate(
             "window.FieldoraModules.navigate('/dossiers','dossier-evidence-browser-certification','push')"
         )
         page.wait_for_selector("#page-dossiers:not([hidden])")

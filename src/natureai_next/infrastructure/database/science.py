@@ -10,7 +10,6 @@ from pathlib import Path
 from natureai_next.domain.science import ScienceRevision, ScienceRevisionConflict
 from natureai_next.infrastructure.database.connection import SqliteConnectionFactory
 
-
 _COLLECTIONS = (
     "projects",
     "board",

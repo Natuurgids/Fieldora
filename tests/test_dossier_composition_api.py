@@ -6,8 +6,8 @@ from types import SimpleNamespace
 
 from natureai_next.domain.science import ScienceRevision, ScienceRevisionConflict
 from natureai_next.server.api import ApiResponse
-from natureai_next.server.dossier_delete_api import DossierDeleteApiMixin
 from natureai_next.server.dossier_composition_web import patch_dossier_composition_response
+from natureai_next.server.dossier_delete_api import DossierDeleteApiMixin
 
 
 class _BaseApi:

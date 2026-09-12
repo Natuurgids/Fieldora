@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from types import SimpleNamespace
 
+from natureai_next.domain.access_control import IdentityKind
 from natureai_next.server.api import ApiResponse
 from natureai_next.server.dossier_lifecycle_api import DossierLifecycleApiMixin
 from natureai_next.server.offline_first_api import OfflineFirstFieldoraApi
@@ -55,10 +56,50 @@ class _Science:
         return self.revision
 
 
+class _Access:
+    def __init__(self):
+        self.items = {
+            "owner-1": SimpleNamespace(
+                identity_id="owner-1",
+                organization_id="org-1",
+                kind=IdentityKind.USER,
+                enabled=True,
+            ),
+            "owner-2": SimpleNamespace(
+                identity_id="owner-2",
+                organization_id="org-1",
+                kind=IdentityKind.USER,
+                enabled=True,
+            ),
+            "disabled-owner": SimpleNamespace(
+                identity_id="disabled-owner",
+                organization_id="org-1",
+                kind=IdentityKind.USER,
+                enabled=False,
+            ),
+            "other-org-owner": SimpleNamespace(
+                identity_id="other-org-owner",
+                organization_id="org-2",
+                kind=IdentityKind.USER,
+                enabled=True,
+            ),
+            "service-owner": SimpleNamespace(
+                identity_id="service-owner",
+                organization_id="org-1",
+                kind=IdentityKind.SERVICE,
+                enabled=True,
+            ),
+        }
+
+    def identity(self, identity_id):
+        return self.items.get(identity_id)
+
+
 class _Api(DossierLifecycleApiMixin, _BaseApi):
     def __init__(self, denied_actions=(), identity_id="owner-1"):
         self._science = _Science()
         self._decisions = _Decisions(denied_actions)
+        self._access_repository = _Access()
         self.identity_id = identity_id
 
     def _identity(self, headers):
@@ -179,6 +220,27 @@ def test_dossier_owner_reassignment_requires_owner_identity() -> None:
     assert response.status == 400
     assert _json(response)["error"] == "owner_required"
     assert api._science.put_calls == []
+
+
+def test_dossier_owner_reassignment_rejects_ineligible_target_identities() -> None:
+    for owner_id in (
+        "missing-owner",
+        "disabled-owner",
+        "other-org-owner",
+        "service-owner",
+    ):
+        api = _Api(identity_id="administrator-1")
+
+        response = api.dispatch(
+            "POST",
+            "/api/v1/dossiers/dossier-1/owner/reassign",
+            {},
+            json.dumps({"owner_id": owner_id}).encode(),
+        )
+
+        assert response.status == 404
+        assert _json(response)["error"] == "owner_not_found"
+        assert api._science.put_calls == []
 
 
 def test_dossier_owner_can_defer_to_named_reviewer_with_provenance() -> None:

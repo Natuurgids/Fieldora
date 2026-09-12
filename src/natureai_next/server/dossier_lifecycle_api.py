@@ -12,7 +12,7 @@ import time
 from urllib.parse import unquote, urlsplit
 
 from natureai_next.application.authentication import AuthenticationFailed
-from natureai_next.domain.access_control import AccessRequest
+from natureai_next.domain.access_control import AccessRequest, IdentityKind
 from natureai_next.server.api import ApiResponse
 
 
@@ -150,6 +150,18 @@ class DossierLifecycleApiMixin:
             return identity, None, project_id
         return identity, dossier, project_id
 
+    def _eligible_owner_identity(self, organization_id: str, owner_id: str) -> bool:
+        repository = getattr(self, "_access_repository", None)
+        if repository is None:
+            return False
+        target = repository.identity(owner_id)
+        return bool(
+            target is not None
+            and target.kind is IdentityKind.USER
+            and target.organization_id == organization_id
+            and target.enabled
+        )
+
     @staticmethod
     def _payload(body: bytes) -> dict[str, object] | None:
         if len(body) > 16_384:
@@ -241,6 +253,8 @@ class DossierLifecycleApiMixin:
         new_owner = str(payload.get("owner_id", "")).strip()
         if not new_owner:
             return ApiResponse.json(400, {"error": "owner_required"})
+        if not self._eligible_owner_identity(identity.organization_id, new_owner):
+            return ApiResponse.json(404, {"error": "owner_not_found"})
         previous = str(dossier.get("owner_id", dossier.get("created_by", ""))).strip()
         dossier["owner_id"] = new_owner
         dossier["updated_by"] = identity.identity_id

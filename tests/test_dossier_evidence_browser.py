@@ -81,7 +81,11 @@ def test_dossier_evidence_controls_preserve_library_identity_in_final_dom(tmp_pa
                 "backends": {},
             }
         elif path_only == "web/capabilities":
-            payload = {"pages": {"dossiers": True}}
+            payload = {
+                "pages": {"dossiers": True},
+                "actions": {},
+                "default_deny": True,
+            }
         elif path_only == "dossiers":
             payload = {
                 "items": [

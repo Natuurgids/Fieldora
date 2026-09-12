@@ -151,11 +151,11 @@ class DossierLifecycleApiMixin:
             return identity, None, project_id
         return identity, dossier, project_id
 
-    def _eligible_owner_identity(self, organization_id: str, owner_id: str) -> bool:
+    def _eligible_user_identity(self, organization_id: str, identity_id: str) -> bool:
         repository = getattr(self, "_access_repository", None)
         if repository is None:
             return False
-        target = repository.identity(owner_id)
+        target = repository.identity(identity_id)
         return bool(
             target is not None
             and target.kind is IdentityKind.USER
@@ -259,7 +259,7 @@ class DossierLifecycleApiMixin:
         new_owner = str(payload.get("owner_id", "")).strip()
         if not new_owner:
             return ApiResponse.json(400, {"error": "owner_required"})
-        if not self._eligible_owner_identity(identity.organization_id, new_owner):
+        if not self._eligible_user_identity(identity.organization_id, new_owner):
             return ApiResponse.json(404, {"error": "owner_not_found"})
         previous = str(dossier.get("owner_id", dossier.get("created_by", ""))).strip()
         dossier["owner_id"] = new_owner
@@ -286,6 +286,11 @@ class DossierLifecycleApiMixin:
         reviewer_id = str(payload.get("reviewer_id", "")).strip()
         if not reviewer_id:
             return ApiResponse.json(400, {"error": "reviewer_required"})
+        if (
+            reviewer_id == identity.identity_id
+            or not self._eligible_user_identity(identity.organization_id, reviewer_id)
+        ):
+            return ApiResponse.json(404, {"error": "reviewer_not_found"})
         dossier.setdefault("owner_id", identity.identity_id)
         dossier["reviewer_id"] = reviewer_id
         dossier["review_status"] = "in_review"

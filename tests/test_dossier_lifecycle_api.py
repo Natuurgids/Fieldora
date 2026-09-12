@@ -71,6 +71,12 @@ class _Access:
                 kind=IdentityKind.USER,
                 enabled=True,
             ),
+            "reviewer-1": SimpleNamespace(
+                identity_id="reviewer-1",
+                organization_id="org-1",
+                kind=IdentityKind.USER,
+                enabled=True,
+            ),
             "disabled-owner": SimpleNamespace(
                 identity_id="disabled-owner",
                 organization_id="org-1",
@@ -278,6 +284,28 @@ def test_dossier_owner_can_defer_to_named_reviewer_with_provenance() -> None:
     assert item["review_history"][-1]["action"] == "deferred_for_review"
     assert item["review_history"][-1]["actor_id"] == "owner-1"
     assert item["review_history"][-1]["remark"] == "Please check taxonomy"
+
+
+def test_dossier_review_deferral_rejects_ineligible_target_identities() -> None:
+    for reviewer_id in (
+        "owner-1",
+        "missing-owner",
+        "disabled-owner",
+        "other-org-owner",
+        "service-owner",
+    ):
+        api = _Api(identity_id="owner-1")
+
+        response = api.dispatch(
+            "POST",
+            "/api/v1/dossiers/dossier-1/review/defer",
+            {},
+            json.dumps({"reviewer_id": reviewer_id}).encode(),
+        )
+
+        assert response.status == 404
+        assert _json(response)["error"] == "reviewer_not_found"
+        assert api._science.put_calls == []
 
 
 def test_assigned_reviewer_can_remark_and_return_dossier() -> None:

@@ -26,10 +26,13 @@ from natureai_next.application.device_authorization import (
 )
 from natureai_next.application.oidc import OidcAuthenticationService
 from natureai_next.application.platform_features import parity_payload, registry_payload
+from natureai_next.application.science import default_science_snapshot
 from natureai_next.domain.access_control import AccessRequest, Identity
+from natureai_next.domain.science import ScienceRevision
 from natureai_next.infrastructure.database.access_control import (
     SqliteAccessControlRepository,
 )
+from natureai_next.infrastructure.database.science import SqliteScienceRepository
 from natureai_next.server.exports import GovernedExportStore
 from natureai_next.server.help import help_catalogue, help_topic
 from natureai_next.server.jobs import ServerJobRepository
@@ -60,6 +63,10 @@ class ScienceProjection(Protocol):
     def put(
         self, collection: str, record: dict, expected_revision: int | None
     ) -> int: ...
+    def load_snapshot(self) -> tuple[dict, ScienceRevision]: ...
+    def save_snapshot(
+        self, snapshot: dict, *, expected_revision: ScienceRevision
+    ) -> ScienceRevision: ...
 
 
 class ScienceReadProjection:
@@ -67,6 +74,19 @@ class ScienceReadProjection:
 
     def __init__(self, database_path: Path) -> None:
         self._database_path = database_path
+
+    def _snapshot_repository(self) -> SqliteScienceRepository:
+        return SqliteScienceRepository(self._database_path, default_science_snapshot)
+
+    def load_snapshot(self) -> tuple[dict, ScienceRevision]:
+        return self._snapshot_repository().load_snapshot()
+
+    def save_snapshot(
+        self, snapshot: dict, *, expected_revision: ScienceRevision
+    ) -> ScienceRevision:
+        return self._snapshot_repository().save_snapshot(
+            snapshot, expected_revision=expected_revision
+        )
 
     def records(self, collection: str) -> tuple[dict, ...]:
         if not self._database_path.is_file():

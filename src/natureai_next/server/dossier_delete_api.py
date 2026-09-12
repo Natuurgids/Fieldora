@@ -12,9 +12,10 @@ from natureai_next.application.authentication import AuthenticationFailed
 from natureai_next.domain.access_control import AccessRequest
 from natureai_next.domain.science import ScienceRevisionConflict
 from natureai_next.server.api import ApiResponse
+from natureai_next.server.dossier_duplicate_api import DossierDuplicateApiMixin
 
 
-class DossierDeleteApiMixin:
+class DossierDeleteApiMixin(DossierDuplicateApiMixin):
     """Delete one Dossier and only its Dossier-owned Science associations."""
 
     def dispatch(

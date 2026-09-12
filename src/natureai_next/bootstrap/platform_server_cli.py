@@ -30,8 +30,8 @@ from natureai_next.server.operator_control import (
 from natureai_next.server.postgres_linked_preview import PostgresLinkedPreviewLeases
 from natureai_next.server.postgres_linked_storage import PostgresLinkedStorageRepository
 from natureai_next.server.postgres_offline_sync import PostgresOfflineSyncStore
-from natureai_next.server.postgres_project_management import (
-    PostgresProjectManagementService,
+from natureai_next.server.postgres_project_capacity import (
+    PostgresCapacityProjectManagementService,
 )
 from natureai_next.server.service_runtime import ServiceRuntimeSupervisor
 from natureai_next.server.staged_library_publication import (
@@ -147,14 +147,14 @@ def _science_postgres_connect(
 
 def _project_management_factory(
     arguments: list[str], command: str
-) -> Callable[[], PostgresProjectManagementService] | None:
+) -> Callable[[], PostgresCapacityProjectManagementService] | None:
     if command != "serve":
         return None
     science_backend = _argument_value(arguments, "--science-backend") or "sqlite"
     if science_backend != "postgresql":
         return None
     connect = _science_postgres_connect(arguments, capability="project management")
-    return lambda: PostgresProjectManagementService(connect)
+    return lambda: PostgresCapacityProjectManagementService(connect)
 
 
 def _offline_sync_factory(

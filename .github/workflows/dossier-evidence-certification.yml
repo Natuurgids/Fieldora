@@ -3,12 +3,14 @@ name: Fieldora Dossier evidence and lifecycle certification
 on:
   pull_request:
     paths:
+      - "src/natureai_next/server/dossier_delete_api.py"
       - "src/natureai_next/server/dossier_evidence_api.py"
       - "src/natureai_next/server/dossier_lifecycle_api.py"
       - "src/natureai_next/server/dossier_module_web.py"
       - "src/natureai_next/server/media_links.py"
       - "src/natureai_next/server/modular_shell_web.py"
       - "src/natureai_next/server/offline_first_api.py"
+      - "tests/test_dossier_delete_api.py"
       - "tests/test_dossier_evidence_api.py"
       - "tests/test_dossier_evidence_browser.py"
       - "tests/test_dossier_lifecycle_api.py"
@@ -47,11 +49,13 @@ jobs:
       - name: Ruff Dossier evidence and lifecycle boundaries
         run: >-
           python -m ruff check
+          src/natureai_next/server/dossier_delete_api.py
           src/natureai_next/server/dossier_evidence_api.py
           src/natureai_next/server/dossier_lifecycle_api.py
           src/natureai_next/server/dossier_module_web.py
           src/natureai_next/server/modular_shell_web.py
           src/natureai_next/server/offline_first_api.py
+          tests/test_dossier_delete_api.py
           tests/test_dossier_evidence_api.py
           tests/test_dossier_evidence_browser.py
           tests/test_dossier_lifecycle_api.py
@@ -60,6 +64,7 @@ jobs:
       - name: Dossier evidence and lifecycle tests
         run: >-
           pytest -q
+          tests/test_dossier_delete_api.py
           tests/test_dossier_evidence_api.py
           tests/test_dossier_evidence_browser.py
           tests/test_dossier_lifecycle_api.py

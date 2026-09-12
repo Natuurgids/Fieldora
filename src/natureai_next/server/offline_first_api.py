@@ -15,6 +15,7 @@ from natureai_next.server.capacity_legacy_retirement_web import (
 )
 from natureai_next.server.capacity_module_web import CapacityModuleWebApiMixin
 from natureai_next.server.dossier_evidence_api import DossierEvidenceApiMixin
+from natureai_next.server.dossier_lifecycle_api import DossierLifecycleApiMixin
 from natureai_next.server.dossier_module_web import DossierModuleWebApiMixin
 from natureai_next.server.facility_actions_api import FacilityActionsApiMixin
 from natureai_next.server.facility_module_runtime import (
@@ -79,6 +80,7 @@ class OfflineFirstFieldoraApi(
     ProjectResearchIntegrationWebApiMixin,
     ProjectCapacityIntegrationWebApiMixin,
     DossierModuleWebApiMixin,
+    DossierLifecycleApiMixin,
     DossierEvidenceApiMixin,
     CapacityLegacyRetirementWebApiMixin,
     CapacityAvailabilityModuleWebApiMixin,

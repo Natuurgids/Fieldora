@@ -124,6 +124,7 @@ def test_dossier_edit_is_revisioned_and_preserves_governed_identity_fields() -> 
             {
                 "name": "Wetland dossier revised",
                 "description": "Updated description",
+                "dossier_type": "master",
                 "owner_id": "attacker",
                 "reviewer_id": "attacker",
                 "organization_id": "other-org",
@@ -141,8 +142,24 @@ def test_dossier_edit_is_revisioned_and_preserves_governed_identity_fields() -> 
     assert item["reviewer_id"] == ""
     assert item["name"] == "Wetland dossier revised"
     assert item["description"] == "Updated description"
+    assert item["dossier_type"] == "master"
     assert item["updated_by"] == "owner-1"
     assert api._science.put_calls[0][1] == 3
+
+
+def test_dossier_edit_rejects_unsupported_dossier_type() -> None:
+    api = _Api()
+
+    response = api.dispatch(
+        "PATCH",
+        "/api/v1/dossiers/dossier-1",
+        {},
+        b'{"dossier_type":"project"}',
+    )
+
+    assert response.status == 400
+    assert _json(response)["error"] == "invalid_dossier_type"
+    assert api._science.put_calls == []
 
 
 def test_dossier_edit_fails_closed_without_edit_authority() -> None:

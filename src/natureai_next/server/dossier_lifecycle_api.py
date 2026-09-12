@@ -30,6 +30,7 @@ class DossierLifecycleApiMixin:
             "parent_dossier_id",
         }
     )
+    _DOSSIER_TYPES = frozenset({"dossier", "master"})
 
     def dispatch(
         self, method: str, target: str, headers: dict[str, str], body: bytes
@@ -234,6 +235,11 @@ class DossierLifecycleApiMixin:
         for key in ("name", "title"):
             if key in updates and not str(updates[key]).strip():
                 return ApiResponse.json(400, {"error": "invalid_request"})
+        if (
+            "dossier_type" in updates
+            and str(updates["dossier_type"]).strip() not in self._DOSSIER_TYPES
+        ):
+            return ApiResponse.json(400, {"error": "invalid_dossier_type"})
         for key, value in updates.items():
             dossier[key] = str(value).strip() if isinstance(value, str) else value
         dossier["updated_by"] = identity.identity_id

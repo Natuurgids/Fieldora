@@ -25,9 +25,33 @@ def test_dossier_module_is_idempotent_and_owns_workspace_behavior() -> None:
     assert 'q("dossier-workspace-list")?.addEventListener("click"' in presentation
     assert 'api("/api/v1/dossiers")' in provider
     assert 'api("/api/v1/dossier-reviews")' in provider
+    assert 'async function updateDossier(dossierId,record)' in provider
+    assert '/review/defer' in provider
+    assert '/review/remark' in provider
+    assert '/review/return' in provider
     assert 'resolve?.("dossiers.data.service")' in presentation
     assert "api(" not in presentation
     assert 'fieldora:dossier-workspace-changed' in presentation
+
+
+def test_dossier_module_exposes_governed_lifecycle_controls() -> None:
+    original = ApiResponse(200, b"const baseApp=true;", "text/javascript; charset=utf-8")
+    script = patch_dossier_module_response("/app.js", original).body.decode("utf-8")
+    provider = script.split("WEB-DOSSIER-DATA-SERVICE", 1)[1].split("WEB-DOSSIER-MODULE", 1)[0]
+    presentation = script.split("WEB-DOSSIER-MODULE", 1)[1]
+
+    assert 'id="dossier-lifecycle-panel"' in presentation
+    assert 'id="dossier-lifecycle-update"' in presentation
+    assert 'id="dossier-lifecycle-defer"' in presentation
+    assert 'id="dossier-lifecycle-remark-action"' in presentation
+    assert 'id="dossier-lifecycle-return"' in presentation
+    assert 'service.updateDossier(dossier.id' in presentation
+    assert 'service.deferReview(dossier.id' in presentation
+    assert 'service.remarkReview(dossier.id' in presentation
+    assert 'service.returnReview(dossier.id' in presentation
+    assert 'method:"PATCH"' in provider
+    assert 'method:"POST"' in provider
+    assert "api(" not in presentation
 
 
 def test_dossier_registry_declares_data_service_provider() -> None:

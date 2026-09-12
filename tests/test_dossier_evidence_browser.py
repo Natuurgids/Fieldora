@@ -46,9 +46,21 @@ def _web_fixture(tmp_path: Path):
         thread.join(timeout=5)
 
 
-def test_dossier_evidence_controls_preserve_library_identity_in_final_dom(tmp_path: Path) -> None:
+def test_dossier_evidence_and_lifecycle_controls_reach_final_dom(tmp_path: Path) -> None:
     linked: list[dict[str, object]] = []
     requests: list[tuple[str, str, object | None]] = []
+    dossier: dict[str, object] = {
+        "id": "dossier-1",
+        "project_id": "project-1",
+        "name": "Research dossier",
+        "description": "Initial description",
+        "dossier_type": "project",
+        "owner_id": "user-1",
+        "reviewer_id": "",
+        "review_status": "draft",
+        "review_history": [],
+        "status": "active",
+    }
     library_item = {
         "media_id": "media-1",
         "project_id": "project-source",
@@ -57,6 +69,19 @@ def test_dossier_evidence_controls_preserve_library_identity_in_final_dom(tmp_pa
         "sha256": "abc123",
         "filename": "voucher.jpg",
     }
+
+    def lifecycle_item(action: str, remark: str = "") -> dict[str, object]:
+        history = [dict(item) for item in dossier.get("review_history", [])]
+        history.append(
+            {
+                "action": action,
+                "actor_id": "user-1",
+                "remark": remark,
+                "recorded_at_epoch": 1234,
+            }
+        )
+        dossier["review_history"] = history
+        return dict(dossier)
 
     def route_api(route: Route) -> None:
         request = route.request
@@ -86,21 +111,37 @@ def test_dossier_evidence_controls_preserve_library_identity_in_final_dom(tmp_pa
                 "actions": {},
                 "default_deny": True,
             }
-        elif path_only == "dossiers":
-            payload = {
-                "items": [
-                    {
-                        "id": "dossier-1",
-                        "project_id": "project-1",
-                        "name": "Research dossier",
-                        "dossier_type": "project",
-                        "review_status": "draft",
-                        "status": "active",
-                    }
-                ]
-            }
+        elif path_only == "dossiers" and method == "GET":
+            payload = {"items": [dict(dossier)]}
         elif path_only == "dossier-reviews":
             payload = {"items": []}
+        elif path_only == "dossiers/dossier-1" and method == "PATCH":
+            assert isinstance(body, dict)
+            dossier["name"] = body["name"]
+            dossier["description"] = body["description"]
+            dossier["updated_by"] = "user-1"
+            payload = {"item": dict(dossier), "revision": 4}
+        elif path_only == "dossiers/dossier-1/review/defer" and method == "POST":
+            assert isinstance(body, dict)
+            dossier["reviewer_id"] = body["reviewer_id"]
+            dossier["review_status"] = "in_review"
+            payload = {
+                "item": lifecycle_item("deferred_for_review", str(body.get("remark", ""))),
+                "revision": 5,
+            }
+        elif path_only == "dossiers/dossier-1/review/remark" and method == "POST":
+            assert isinstance(body, dict)
+            payload = {
+                "item": lifecycle_item("review_remark", str(body["remark"])),
+                "revision": 6,
+            }
+        elif path_only == "dossiers/dossier-1/review/return" and method == "POST":
+            assert isinstance(body, dict)
+            dossier["review_status"] = "returned"
+            payload = {
+                "item": lifecycle_item("returned_to_observer", str(body.get("remark", ""))),
+                "revision": 7,
+            }
         elif path_only == "media":
             payload = {"items": [library_item], "count": 1}
         elif path_only == "dossiers/dossier-1/media-links" and method == "GET":
@@ -155,6 +196,33 @@ def test_dossier_evidence_controls_preserve_library_identity_in_final_dom(tmp_pa
         page.wait_for_selector('[data-dossier-workspace="dossier-1"]')
         page.locator('[data-dossier-workspace="dossier-1"]').click()
 
+        page.wait_for_selector("#dossier-lifecycle-panel:not([hidden])")
+        page.locator("#dossier-lifecycle-name").fill("Research dossier revised")
+        page.locator("#dossier-lifecycle-description").fill("Revised description")
+        page.locator("#dossier-lifecycle-update").click()
+        page.wait_for_function(
+            "() => document.querySelector('#dossier-workspace-detail')?.textContent.includes('Research dossier revised')"
+        )
+
+        page.locator("#dossier-lifecycle-reviewer").fill("reviewer-1")
+        page.locator("#dossier-lifecycle-remark").fill("Please check taxonomy")
+        page.locator("#dossier-lifecycle-defer").click()
+        page.wait_for_function(
+            "() => document.querySelector('#dossier-workspace-detail')?.textContent.includes('in_review')"
+        )
+
+        page.locator("#dossier-lifecycle-remark").fill("Add location evidence")
+        page.locator("#dossier-lifecycle-remark-action").click()
+        page.wait_for_function(
+            "() => document.querySelector('#dossier-workspace-detail')?.textContent.includes('review_remark')"
+        )
+
+        page.locator("#dossier-lifecycle-remark").fill("Please revise")
+        page.locator("#dossier-lifecycle-return").click()
+        page.wait_for_function(
+            "() => document.querySelector('#dossier-workspace-detail')?.textContent.includes('returned')"
+        )
+
         page.wait_for_selector("#dossier-evidence-panel:not([hidden])")
         page.locator("#dossier-evidence-select").select_option("media-1")
         page.locator("#dossier-evidence-link").click()
@@ -172,6 +240,19 @@ def test_dossier_evidence_controls_preserve_library_identity_in_final_dom(tmp_pa
         assert library_item["media_id"] == "media-1"
         assert library_item["sha256"] == "abc123"
 
+        assert any(method == "PATCH" and path == "dossiers/dossier-1" for method, path, _body in requests)
+        assert any(
+            method == "POST" and path == "dossiers/dossier-1/review/defer"
+            for method, path, _body in requests
+        )
+        assert any(
+            method == "POST" and path == "dossiers/dossier-1/review/remark"
+            for method, path, _body in requests
+        )
+        assert any(
+            method == "POST" and path == "dossiers/dossier-1/review/return"
+            for method, path, _body in requests
+        )
         assert any(
             method == "POST" and path.startswith("dossiers/dossier-1/media-links")
             for method, path, _body in requests

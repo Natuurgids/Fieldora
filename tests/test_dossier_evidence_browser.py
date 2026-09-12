@@ -144,7 +144,9 @@ def test_dossier_evidence_controls_preserve_library_identity_in_final_dom(tmp_pa
         )
         page.goto(url)
         page.wait_for_selector("#workspace:not([hidden])")
-        page.locator('.sidebar .nav[data-page="dossiers"]').click()
+        page.evaluate(
+            "window.FieldoraModules.navigate('/dossiers','dossier-evidence-browser-certification','push')"
+        )
         page.wait_for_selector("#page-dossiers:not([hidden])")
         page.wait_for_selector('[data-dossier-workspace="dossier-1"]')
         page.locator('[data-dossier-workspace="dossier-1"]').click()

@@ -46,6 +46,11 @@ def test_dossier_module_exposes_governed_lifecycle_controls() -> None:
     assert 'id="dossier-lifecycle-type"' in presentation
     assert 'q("dossier-lifecycle-type").value=dossier.dossier_type==="master"?"master":"dossier"' in presentation
     assert 'dossier_type:q("dossier-lifecycle-type")?.value||"dossier"' in presentation
+    assert 'id="dossier-lifecycle-project"' in presentation
+    assert 'id="dossier-lifecycle-use-project"' in presentation
+    assert 'id="dossier-lifecycle-independent"' in presentation
+    assert 'service.updateDossier(dossier.id,{project_id:String(projectId||"")})' in presentation
+    assert 'const projectId=syncProjectContext();if(!projectId)' in presentation
     assert 'id="dossier-lifecycle-owner"' in presentation
     assert 'id="dossier-lifecycle-reassign-owner"' in presentation
     assert 'id="dossier-lifecycle-defer"' in presentation
@@ -97,6 +102,7 @@ def test_dossier_module_uses_only_canonical_project_context_and_fails_closed() -
     assert 'resolve?.("projects.context.select")' in script
     assert 'function currentProject(){return String(context()?.current?.()||"")}' in script
     assert 'Select a Project before creating a dossier.' in script
+    assert 'Select a Project before moving the dossier.' in script
     assert 'project_id:projectId' in script
     assert 'resolve?.("projects.list.read")' not in script
     assert "projects[0]" not in script

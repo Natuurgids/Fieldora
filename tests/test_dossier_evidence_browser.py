@@ -117,9 +117,9 @@ def test_dossier_evidence_and_lifecycle_controls_reach_final_dom(tmp_path: Path)
             payload = {"items": []}
         elif path_only == "dossiers/dossier-1" and method == "PATCH":
             assert isinstance(body, dict)
-            dossier["name"] = body["name"]
-            dossier["description"] = body["description"]
-            dossier["dossier_type"] = body["dossier_type"]
+            for field in ("name", "description", "dossier_type", "project_id"):
+                if field in body:
+                    dossier[field] = body[field]
             dossier["updated_by"] = "user-1"
             payload = {"item": dict(dossier), "revision": 4}
         elif path_only == "dossiers/dossier-1/owner/reassign" and method == "POST":
@@ -217,6 +217,15 @@ def test_dossier_evidence_and_lifecycle_controls_reach_final_dom(tmp_path: Path)
             "() => document.querySelector('#dossier-workspace-detail')?.textContent.includes('Research dossier revised') && document.querySelector('#dossier-workspace-detail')?.textContent.includes('\"dossier_type\": \"master\"')"
         )
 
+        page.locator("#dossier-lifecycle-independent").click()
+        page.wait_for_function(
+            "() => document.querySelector('#dossier-lifecycle-project')?.textContent.includes('Independent') && document.querySelector('#dossier-workspace-detail')?.textContent.includes('\"project_id\": \"\"')"
+        )
+        page.locator("#dossier-lifecycle-use-project").click()
+        page.wait_for_function(
+            "() => document.querySelector('#dossier-lifecycle-project')?.textContent.includes('project-1') && document.querySelector('#dossier-workspace-detail')?.textContent.includes('\"project_id\": \"project-1\"')"
+        )
+
         page.locator("#dossier-lifecycle-owner").fill("owner-2")
         page.locator("#dossier-lifecycle-reassign-owner").click()
         page.wait_for_function(
@@ -267,6 +276,18 @@ def test_dossier_evidence_and_lifecycle_controls_reach_final_dom(tmp_path: Path)
                 "description": "Revised description",
                 "dossier_type": "master",
             }
+            for method, path, body in requests
+        )
+        assert any(
+            method == "PATCH"
+            and path == "dossiers/dossier-1"
+            and body == {"project_id": ""}
+            for method, path, body in requests
+        )
+        assert any(
+            method == "PATCH"
+            and path == "dossiers/dossier-1"
+            and body == {"project_id": "project-1"}
             for method, path, body in requests
         )
         assert any(

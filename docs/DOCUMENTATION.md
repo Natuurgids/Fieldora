@@ -1,46 +1,41 @@
-# Fieldora Documentation Map
+# Fieldora documentation
 
-This is the canonical documentation index for Fieldora.
+This is the canonical documentation map for the current Fieldora platform.
 
-## Product governance
+## Current product truth
 
-- [`../VISION.md`](../VISION.md) — enduring product purpose and boundaries.
-- [`../PHILOSOPHY.md`](../PHILOSOPHY.md) — development and design principles.
-- [`../ARCHITECTURE.md`](../ARCHITECTURE.md) — current system architecture.
-- [`../ARCHITECTURE_DECISIONS.md`](../ARCHITECTURE_DECISIONS.md) — accepted decisions.
-- [`../ROADMAP.md`](../ROADMAP.md) — future direction and delivery sequence.
-- [`../CODING_STANDARD.md`](../CODING_STANDARD.md) — implementation rules.
-- [`../DATABASE.md`](../DATABASE.md) — data ownership and schema overview.
-- [`SCIENCE_ARCHITECTURE.md`](SCIENCE_ARCHITECTURE.md) — Science-specific boundaries.
-- [`AUDIT_0.05.md`](AUDIT_0.05.md) — current Science persistence audit and freeze gate.
-- [`PORTABLE_PROJECT_PACKAGES.md`](PORTABLE_PROJECT_PACKAGES.md) — offline project exchange format and limits.
-- [`ACCESS_CONTROL_ARCHITECTURE.md`](ACCESS_CONTROL_ARCHITECTURE.md) — identity, contracts, PBAC decisions, and audit boundaries.
-- [`SERVER_ARCHITECTURE.md`](SERVER_ARCHITECTURE.md) — reference server, session, API, web-client, and security boundaries.
+- [Vision](VISION.md) — what Fieldora is for and where it is going.
+- [Philosophy](PHILOSOPHY.md) — principles that constrain product and engineering decisions.
+- [Architecture](ARCHITECTURE.md) — current domain, application, adapter, persistence, and deployment architecture.
+- [Security](SECURITY.md) — authorization, organization isolation, service trust, transport security, and secret handling.
+- [Development](DEVELOPMENT.md) — repository rules, parity requirements, certification, and change workflow.
+- [Installation](installation/README.md) — choose the correct desktop, Docker, Kubernetes, or offline deployment path.
 
-## User, operator, and developer documentation
+## Installation paths
 
-- [`getting-started/`](getting-started/) — installation and first use.
-- [`user-guide/`](user-guide/) — feature guidance.
-- [`operations/`](operations/) — backup, recovery, updates, and troubleshooting.
-- [`developer/`](developer/) — implementation and release guidance.
-- [`accessibility/`](accessibility/) — accessibility and keyboard operation.
+- [Windows Desktop](installation/WINDOWS-DESKTOP.md)
+- [Windows Docker](installation/WINDOWS-DOCKER.md)
+- [Linux Docker](installation/LINUX-DOCKER.md)
+- [Kubernetes](installation/KUBERNETES.md)
+- [Offline deployment](installation/OFFLINE.md)
 
-## Generated runtime help
+The Windows Desktop and Windows Docker paths are deliberately separate. Desktop is the native Qt application. Docker is the governed Fieldora server/web stack with PostgreSQL and service infrastructure.
 
-`src/natureai_next/resources/help/` is the packaged runtime mirror used by the
-integrated Help browser. It is not a second authoring location. Run
-`python scripts/sync_help_docs.py` after changing canonical documentation.
+## Detailed reference documentation
 
-## Historical evidence
+Existing specialist documents remain useful where they describe a bounded subject, including access control, server architecture, Science persistence, portable project packages, storage, deployment, and user workflows. When specialist documentation conflicts with the current documents above, the current documents define intended platform-level behavior and the implementation/tests determine actual behavior.
 
-Historical build notes, repair reports, and validation snapshots are retained in
-[`archive/`](archive/). They provide provenance but do not describe the current
-product.
+## Historical documentation
 
-## Maintenance rules
+Fieldora evolved from Aperture and NatureAI Next. Root-level files and `docs/archive/` contain important design provenance, field-validation notes, old release procedures, audits, and migration history. They are retained intentionally, but version-specific historical instructions must not be presented as current installation or deployment guidance.
 
-1. Put current truth in one canonical document.
-2. Link to canonical material rather than copying it.
-3. Move superseded build evidence to `docs/archive/`.
-4. Regenerate runtime help and the release manifest before packaging.
-5. Record architecture deviations in the current audit until corrected.
+## Documentation maintenance rules
+
+1. Maintain one current entry point per subject and link to it rather than copying instructions.
+2. Use **Fieldora** for current platform documentation; preserve former product names only when discussing history or filenames that still use them.
+3. Keep domain rules independent of desktop/web presentation details.
+4. Document both native desktop and server/web deployment paths explicitly.
+5. State destructive installer behavior prominently.
+6. Keep credentials, private keys, tokens, and environment-specific secrets out of documentation and source control.
+7. Move superseded release evidence to `docs/archive/` rather than rewriting history.
+8. Update documentation in the same change that changes an architectural or operational contract.

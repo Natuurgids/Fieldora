@@ -189,6 +189,9 @@ def test_dossier_edit_is_revisioned_and_preserves_governed_identity_fields() -> 
     assert item["description"] == "Updated description"
     assert item["dossier_type"] == "master"
     assert item["updated_by"] == "owner-1"
+    assert item["review_history"][-1]["action"] == "dossier_edited"
+    assert item["review_history"][-1]["actor_id"] == "owner-1"
+    assert item["review_history"][-1]["remark"] == ""
     assert api._science.put_calls[0][1] == 3
 
 

@@ -284,6 +284,11 @@ class DossierLifecycleApiMixin:
         for key, value in updates.items():
             dossier[key] = str(value).strip() if isinstance(value, str) else value
         dossier["updated_by"] = identity.identity_id
+        self._append_review_history(
+            dossier,
+            actor_id=identity.identity_id,
+            action="dossier_edited",
+        )
         return self._save_dossier(dossier, headers)
 
     def _reassign_dossier_owner(

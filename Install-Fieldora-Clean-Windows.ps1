@@ -10,7 +10,7 @@ HTTPS using the Windows trust store.
 [CmdletBinding()]
 param(
     [string]$InstallRoot = "D:\FDTEST",
-    [string]$FieldoraRef = "feature/versioned-facility-floorplans",
+    [string]$FieldoraRef = "main",
     [string]$AdminUsername = "admin",
     [string]$AdminName = "Administrator",
     [string]$Organization = "local",

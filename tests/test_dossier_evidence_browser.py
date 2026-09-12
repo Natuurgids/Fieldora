@@ -54,7 +54,7 @@ def test_dossier_evidence_and_lifecycle_controls_reach_final_dom(tmp_path: Path)
         "project_id": "project-1",
         "name": "Research dossier",
         "description": "Initial description",
-        "dossier_type": "project",
+        "dossier_type": "dossier",
         "owner_id": "user-1",
         "reviewer_id": "",
         "review_status": "draft",
@@ -119,6 +119,7 @@ def test_dossier_evidence_and_lifecycle_controls_reach_final_dom(tmp_path: Path)
             assert isinstance(body, dict)
             dossier["name"] = body["name"]
             dossier["description"] = body["description"]
+            dossier["dossier_type"] = body["dossier_type"]
             dossier["updated_by"] = "user-1"
             payload = {"item": dict(dossier), "revision": 4}
         elif path_only == "dossiers/dossier-1/owner/reassign" and method == "POST":
@@ -210,9 +211,10 @@ def test_dossier_evidence_and_lifecycle_controls_reach_final_dom(tmp_path: Path)
         page.wait_for_selector("#dossier-lifecycle-panel:not([hidden])")
         page.locator("#dossier-lifecycle-name").fill("Research dossier revised")
         page.locator("#dossier-lifecycle-description").fill("Revised description")
+        page.locator("#dossier-lifecycle-type").select_option("master")
         page.locator("#dossier-lifecycle-update").click()
         page.wait_for_function(
-            "() => document.querySelector('#dossier-workspace-detail')?.textContent.includes('Research dossier revised')"
+            "() => document.querySelector('#dossier-workspace-detail')?.textContent.includes('Research dossier revised') && document.querySelector('#dossier-workspace-detail')?.textContent.includes('\"dossier_type\": \"master\"')"
         )
 
         page.locator("#dossier-lifecycle-owner").fill("owner-2")
@@ -257,7 +259,16 @@ def test_dossier_evidence_and_lifecycle_controls_reach_final_dom(tmp_path: Path)
         assert library_item["media_id"] == "media-1"
         assert library_item["sha256"] == "abc123"
 
-        assert any(method == "PATCH" and path == "dossiers/dossier-1" for method, path, _body in requests)
+        assert any(
+            method == "PATCH"
+            and path == "dossiers/dossier-1"
+            and body == {
+                "name": "Research dossier revised",
+                "description": "Revised description",
+                "dossier_type": "master",
+            }
+            for method, path, body in requests
+        )
         assert any(
             method == "POST"
             and path == "dossiers/dossier-1/owner/reassign"

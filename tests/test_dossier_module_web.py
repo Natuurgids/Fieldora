@@ -43,6 +43,9 @@ def test_dossier_module_exposes_governed_lifecycle_controls() -> None:
 
     assert 'id="dossier-lifecycle-panel"' in presentation
     assert 'id="dossier-lifecycle-update"' in presentation
+    assert 'id="dossier-lifecycle-type"' in presentation
+    assert 'q("dossier-lifecycle-type").value=dossier.dossier_type==="master"?"master":"dossier"' in presentation
+    assert 'dossier_type:q("dossier-lifecycle-type")?.value||"dossier"' in presentation
     assert 'id="dossier-lifecycle-owner"' in presentation
     assert 'id="dossier-lifecycle-reassign-owner"' in presentation
     assert 'id="dossier-lifecycle-defer"' in presentation

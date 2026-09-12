@@ -17,9 +17,10 @@ from natureai_next.application.authentication import AuthenticationFailed
 from natureai_next.domain.access_control import AccessRequest
 from natureai_next.domain.science import ScienceRevisionConflict
 from natureai_next.server.api import ApiResponse
+from natureai_next.server.dossier_composition_api import DossierCompositionApiMixin
 
 
-class DossierDuplicateApiMixin:
+class DossierDuplicateApiMixin(DossierCompositionApiMixin):
     """Duplicate one Dossier without cloning Library-owned evidence."""
 
     def dispatch(

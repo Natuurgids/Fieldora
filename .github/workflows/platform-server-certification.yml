@@ -11,6 +11,8 @@ on:
       - "src/natureai_next/bootstrap/operator_cli.py"
       - "src/natureai_next/bootstrap/service_trust_cli.py"
       - "src/natureai_next/bootstrap/certificate_renewer_cli.py"
+      - "src/natureai_next/infrastructure/database/science.py"
+      - "src/natureai_next/server/api.py"
       - "src/natureai_next/server/access_audit_events.py"
       - "src/natureai_next/server/access_contracts.py"
       - "src/natureai_next/server/access_barriers.py"
@@ -39,6 +41,7 @@ on:
       - "tests/test_contract_audit_postgres.py"
       - "tests/test_postgres_jobs_worker.py"
       - "tests/test_postgres_science_concurrency.py"
+      - "tests/test_science_projection_snapshots.py"
       - "tests/test_recipient_contract_api.py"
       - "tests/test_linked_storage_operator_api.py"
       - "tests/test_platform_server_extensions.py"
@@ -92,6 +95,8 @@ jobs:
           src/natureai_next/bootstrap/operator_cli.py
           src/natureai_next/bootstrap/service_trust_cli.py
           src/natureai_next/bootstrap/certificate_renewer_cli.py
+          src/natureai_next/infrastructure/database/science.py
+          src/natureai_next/server/api.py
           src/natureai_next/server/access_audit_events.py
           src/natureai_next/server/access_contracts.py
           src/natureai_next/server/access_barriers.py
@@ -120,6 +125,7 @@ jobs:
           tests/test_contract_audit_postgres.py
           tests/test_postgres_jobs_worker.py
           tests/test_postgres_science_concurrency.py
+          tests/test_science_projection_snapshots.py
           tests/test_recipient_contract_api.py
           tests/test_linked_storage_operator_api.py
           tests/test_platform_server_extensions.py
@@ -228,6 +234,7 @@ jobs:
           tests/test_contract_audit_postgres.py
           tests/test_postgres_jobs_worker.py
           tests/test_postgres_science_concurrency.py
+          tests/test_science_projection_snapshots.py
           tests/test_recipient_contract_api.py
           tests/test_linked_storage_operator_api.py
           tests/test_platform_server_extensions.py

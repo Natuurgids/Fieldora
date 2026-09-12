@@ -185,8 +185,11 @@ class PostgresScienceRepository:
         snapshot = deepcopy(default_science_snapshot())
         with self._connect() as connection:
             with connection.cursor() as cursor:
+                # Hold a shared lock on the state row until the record set is read.
+                # Writers lock or update this row in the same transaction as record
+                # changes, so revision and records always come from one commit.
                 cursor.execute(
-                    "SELECT revision FROM science_state WHERE singleton=TRUE"
+                    "SELECT revision FROM science_state WHERE singleton=TRUE FOR SHARE"
                 )
                 revision = ScienceRevision(int(cursor.fetchone()[0]))
                 cursor.execute(

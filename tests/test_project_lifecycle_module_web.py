@@ -96,7 +96,6 @@ def test_lifecycle_adapter_keeps_revision_conflict_and_visible_validation() -> N
     assert "fieldora:project-lifecycle-changed" in script
 
 
-
 def test_lifecycle_details_edit_uses_action_contract() -> None:
     patched = patch_project_lifecycle_module_response(
         "/app.js", ApiResponse(200, b"", "text/javascript; charset=utf-8")
@@ -107,10 +106,26 @@ def test_lifecycle_details_edit_uses_action_contract() -> None:
     assert 'resolveAction?.(name)' in module
     assert "await action(state.editingId,body)" in module
     assert '"projects.details.edit"' in module
-    assert 'await mutate("",{expected_revision:project.revision' in module
+    assert 'await mutate({expected_revision:project.revision' in module
     assert '`/api/v1/projects/${encodeURIComponent(state.editingId)}`' not in module
     assert '/status`' not in module
-    assert '/archive`' in module
+    assert '/archive`' not in module
+
+
+def test_lifecycle_archive_uses_action_contract() -> None:
+    patched = patch_project_lifecycle_module_response(
+        "/app.js", ApiResponse(200, b"", "text/javascript; charset=utf-8")
+    )
+    script = patched.body.decode("utf-8")
+    module = script.split("WEB-PROJECT-LIFECYCLE-MODULE", 1)[1]
+
+    assert '"projects.archive"' in module
+    assert 'actionName==="projects.archive"' in module
+    assert "await action(state.editingId,body.expected_revision)" in module
+    assert 'await mutate({expected_revision:project.revision},"Project archived.","projects.archive")' in module
+    assert '/archive`' not in module
+    assert "await api(" not in module
+
 
 def test_lifecycle_capability_projection_uses_project_list_contract() -> None:
     patched = patch_project_lifecycle_module_response(

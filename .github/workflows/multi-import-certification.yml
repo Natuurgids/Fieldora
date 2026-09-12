@@ -1,0 +1,43 @@
+name: Fieldora browser multi import certification
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  browser-multi-import-certification:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Verify exact PR head
+        if: ${{ github.event_name == 'pull_request' }}
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install certification dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -e '.[dev]'
+      - name: Install Chromium
+        run: python -m playwright install --with-deps chromium
+      - name: Ruff browser multi import boundary
+        run: >-
+          python -m ruff check
+          tests/test_browser_multi_import_http.py
+          tests/test_directory_intake_background_web.py
+          tests/test_staged_library_publication.py
+          src/natureai_next/server/browser_functionality_web.py
+          src/natureai_next/server/directory_intake_web.py
+          src/natureai_next/server/staged_library_publication.py
+          src/natureai_next/bootstrap/platform_server_cli.py
+          src/natureai_next/server/http.py
+      - name: Browser multi import over real HTTP
+        run: python -m pytest -q tests/test_browser_multi_import_http.py
+      - name: Durable background folder import observability
+        run: python -m pytest -q tests/test_directory_intake_background_web.py
+      - name: Staged folder publishes into governed Library
+        run: python -m pytest -q tests/test_staged_library_publication.py

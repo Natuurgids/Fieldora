@@ -1,0 +1,111 @@
+name: Fieldora zero trust web certification
+
+on:
+  pull_request:
+    paths:
+      - "src/natureai_next/server/http.py"
+      - "src/natureai_next/server/help.py"
+      - "src/natureai_next/server/browser_functionality_api.py"
+      - "src/natureai_next/server/web_capabilities.py"
+      - "src/natureai_next/server/pagination.py"
+      - "src/natureai_next/server/pagination_api.py"
+      - "src/natureai_next/server/filtering.py"
+      - "src/natureai_next/server/project_idempotency.py"
+      - "src/natureai_next/server/project_idempotency_web.py"
+      - "src/natureai_next/server/project_runtime_web.py"
+      - "src/natureai_next/server/optimistic_concurrency_web.py"
+      - "src/natureai_next/server/structured_errors.py"
+      - "src/natureai_next/server/bounded_upload_web.py"
+      - "src/natureai_next/server/offline_first_api.py"
+      - "src/natureai_next/resources/help/**"
+      - "tests/test_web046_contextual_help.py"
+      - "tests/test_web047_pagination.py"
+      - "tests/test_web048_server_filters.py"
+      - "tests/test_web049_project_idempotency.py"
+      - "tests/test_web050_optimistic_concurrency.py"
+      - "tests/test_web051_structured_errors.py"
+      - "tests/test_web052_bounded_upload_memory.py"
+      - "tests/test_web_capabilities.py"
+      - "tests/test_zero_trust_web.py"
+      - ".github/workflows/zero-trust-web-certification.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  zero-trust-web-certification:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Verify exact PR head
+        if: ${{ github.event_name == 'pull_request' }}
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install certification dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -e ".[dev]"
+      - name: Install browser engines
+        run: python -m playwright install --with-deps chromium firefox webkit
+      - name: Ruff zero trust web boundary
+        run: >-
+          python -m ruff check
+          src/natureai_next/server/http.py
+          src/natureai_next/server/help.py
+          src/natureai_next/server/browser_functionality_api.py
+          src/natureai_next/server/web_capabilities.py
+          src/natureai_next/server/pagination.py
+          src/natureai_next/server/pagination_api.py
+          src/natureai_next/server/filtering.py
+          src/natureai_next/server/project_idempotency.py
+          src/natureai_next/server/project_idempotency_web.py
+          src/natureai_next/server/project_runtime_web.py
+          src/natureai_next/server/optimistic_concurrency_web.py
+          src/natureai_next/server/structured_errors.py
+          src/natureai_next/server/bounded_upload_web.py
+          src/natureai_next/server/offline_first_api.py
+          tests/test_web046_contextual_help.py
+          tests/test_web047_pagination.py
+          tests/test_web048_server_filters.py
+          tests/test_web049_project_idempotency.py
+          tests/test_web050_optimistic_concurrency.py
+          tests/test_web051_structured_errors.py
+          tests/test_web052_bounded_upload_memory.py
+          tests/test_web_capabilities.py
+          tests/test_zero_trust_web.py
+      - name: WEB-046 Help PBAC regression
+        run: python -m pytest -q tests/test_web046_contextual_help.py -k "catalogue or denied_workspace"
+      - name: WEB-047 pagination opacity regression
+        run: python -m pytest -q tests/test_web047_pagination.py
+      - name: WEB-048 governed filter opacity regression
+        run: python -m pytest -q tests/test_web048_server_filters.py
+      - name: WEB-049 Project replay opacity regression
+        run: python -m pytest -q tests/test_web049_project_idempotency.py
+      - name: WEB-050 revision conflict opacity across browser engines
+        run: python -m pytest -q tests/test_web050_optimistic_concurrency.py
+      - name: WEB-051 structured error opacity across browser engines
+        run: python -m pytest -q tests/test_web051_structured_errors.py
+      - name: WEB-052 bounded upload opacity across browser engines
+        run: python -m pytest -q tests/test_web052_bounded_upload_memory.py
+      - name: WEB-059 Project runtime zero-trust regression
+        run: python -m pytest -q tests/test_zero_trust_web.py -k "web059"
+      - name: PBAC capability and HTTP runtime tests
+        run: python -m pytest -q tests/test_web_capabilities.py
+      - name: Browser zero trust tests across engines
+        run: python -m pytest -q tests/test_zero_trust_web.py
+      - name: Certify no authorization metadata disclosure
+        shell: pwsh
+        run: |
+          $text = Get-Content -LiteralPath ./src/natureai_next/server/web_capabilities.py -Raw
+          foreach ($needle in @('default_deny','data-fieldora-authorization-hidden','/api/v1/web/capabilities','secret-project-id')) {
+            if (-not $text.Contains($needle) -and $needle -ne 'secret-project-id') { throw "Missing zero-trust marker: $needle" }
+          }
+          foreach ($forbidden in @('matched_policy_ids','decision.reason','policy.name')) {
+            if ($text.Contains($forbidden)) { throw "Browser capability projection must not disclose PBAC internals: $forbidden" }
+          }

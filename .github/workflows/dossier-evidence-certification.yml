@@ -1,0 +1,84 @@
+name: Fieldora Dossier evidence and lifecycle certification
+
+on:
+  pull_request:
+    paths:
+      - "src/natureai_next/server/dossier_composition_api.py"
+      - "src/natureai_next/server/dossier_composition_web.py"
+      - "src/natureai_next/server/dossier_delete_api.py"
+      - "src/natureai_next/server/dossier_duplicate_api.py"
+      - "src/natureai_next/server/dossier_evidence_api.py"
+      - "src/natureai_next/server/dossier_lifecycle_api.py"
+      - "src/natureai_next/server/dossier_module_web.py"
+      - "src/natureai_next/server/media_links.py"
+      - "src/natureai_next/server/modular_shell_web.py"
+      - "src/natureai_next/server/offline_first_api.py"
+      - "tests/test_dossier_composition_api.py"
+      - "tests/test_dossier_delete_api.py"
+      - "tests/test_dossier_duplicate_api.py"
+      - "tests/test_dossier_evidence_api.py"
+      - "tests/test_dossier_evidence_browser.py"
+      - "tests/test_dossier_lifecycle_api.py"
+      - "tests/test_dossier_modular_shell_retirement.py"
+      - ".github/workflows/dossier-evidence-certification.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dossier-evidence-certification:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Verify exact PR head
+        if: ${{ github.event_name == 'pull_request' }}
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install certification dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -e ".[dev]"
+
+      - name: Install Chromium certification engine
+        run: python -m playwright install --with-deps chromium
+
+      - name: Ruff Dossier evidence and lifecycle boundaries
+        run: >-
+          python -m ruff check
+          src/natureai_next/server/dossier_composition_api.py
+          src/natureai_next/server/dossier_composition_web.py
+          src/natureai_next/server/dossier_delete_api.py
+          src/natureai_next/server/dossier_duplicate_api.py
+          src/natureai_next/server/dossier_evidence_api.py
+          src/natureai_next/server/dossier_lifecycle_api.py
+          src/natureai_next/server/dossier_module_web.py
+          src/natureai_next/server/modular_shell_web.py
+          src/natureai_next/server/offline_first_api.py
+          tests/test_dossier_composition_api.py
+          tests/test_dossier_delete_api.py
+          tests/test_dossier_duplicate_api.py
+          tests/test_dossier_evidence_api.py
+          tests/test_dossier_evidence_browser.py
+          tests/test_dossier_lifecycle_api.py
+          tests/test_dossier_modular_shell_retirement.py
+
+      - name: Dossier evidence and lifecycle tests
+        run: >-
+          pytest -q
+          tests/test_dossier_composition_api.py
+          tests/test_dossier_delete_api.py
+          tests/test_dossier_duplicate_api.py
+          tests/test_dossier_evidence_api.py
+          tests/test_dossier_evidence_browser.py
+          tests/test_dossier_lifecycle_api.py
+          tests/test_dossier_module_web.py
+          tests/test_dossier_modular_shell_retirement.py

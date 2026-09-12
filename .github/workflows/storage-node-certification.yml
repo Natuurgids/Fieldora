@@ -1,0 +1,83 @@
+name: Fieldora storage node certification
+
+on:
+  pull_request:
+    paths:
+      - "deployment/storage-node/**"
+      - "src/natureai_next/bootstrap/storage_service_cli.py"
+      - "src/natureai_next/server/storage_exchange.py"
+      - "src/natureai_next/server/storage_service_agent.py"
+      - "tests/test_storage_exchange.py"
+      - "tests/test_storage_source_read_only_api.py"
+      - ".github/workflows/storage-node-certification.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  storage-node-contract:
+    runs-on: ubuntu-24.04
+    env:
+      FIELDORA_STORAGE_ENDPOINT: https://fieldora-server.private.example:8766
+      FIELDORA_STORAGE_SERVICE_ID: storage-service-certification
+      FIELDORA_STORAGE_ORGANIZATION: certification
+      FIELDORA_STORAGE_ID: archive-certification
+      FIELDORA_STORAGE_DISPLAY_NAME: Certification archive
+      FIELDORA_STORAGE_ROOT_ALIAS: certification-archive
+      FIELDORA_STORAGE_ROOT: /tmp/fieldora-storage-certification/archive
+      FIELDORA_STORAGE_TRUST_DIR: /tmp/fieldora-storage-certification/trust
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install certification dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -e ".[dev]"
+
+      - name: Validate storage-node Compose
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$FIELDORA_STORAGE_ROOT" "$FIELDORA_STORAGE_TRUST_DIR"
+          docker compose -f deployment/storage-node/compose.yaml config -q
+
+      - name: Certify storage-node isolation contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          compose=deployment/storage-node/compose.yaml
+          grep -F '/mnt/fieldora-storage:ro' "$compose"
+          grep -F '/run/fieldora-trust:ro' "$compose"
+          grep -F 'read_only: true' "$compose"
+          grep -F 'no-new-privileges:true' "$compose"
+          grep -F -- '- ALL' "$compose"
+          if grep -Eq '^[[:space:]]+ports:' "$compose"; then
+            echo 'External storage service must not publish inbound ports.' >&2
+            exit 1
+          fi
+          rendered="$(docker compose -f "$compose" config)"
+          grep -F 'fieldora-storage-service' <<<"$rendered"
+          grep -F '/mnt/fieldora-storage' <<<"$rendered"
+          grep -F '/run/fieldora-trust' <<<"$rendered"
+
+      - name: Certify storage-node image entry point
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -F 'USER fieldora' deployment/storage-node/Dockerfile
+          grep -F 'fieldora-storage-service' deployment/storage-node/Dockerfile
+          if grep -Eq '^EXPOSE[[:space:]]' deployment/storage-node/Dockerfile; then
+            echo 'Storage-node image must not expose an inbound application port.' >&2
+            exit 1
+          fi
+
+      - name: Certify read-only linked storage exchange contract
+        run: >-
+          python -m pytest -q
+          tests/test_storage_exchange.py
+          tests/test_storage_source_read_only_api.py

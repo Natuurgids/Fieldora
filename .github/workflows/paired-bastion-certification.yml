@@ -1,0 +1,97 @@
+name: Fieldora paired Bastion and map certification
+
+on:
+  pull_request:
+    paths:
+      - "Install-Fieldora-Paired.ps1"
+      - "Install-Fieldora-Offline-Map.ps1"
+      - "Install-Fieldora-Offline-Media.ps1"
+      - "src/natureai_next/bootstrap/map_bundle_cli.py"
+      - "src/natureai_next/server/offline_map_store_api.py"
+      - "src/natureai_next/server/offline_maps_web.py"
+      - "src/natureai_next/server/offline_first_api.py"
+      - "src/natureai_next/server/http.py"
+      - "tests/test_offline_map_bundle.py"
+      - "tests/test_offline_map_store_api.py"
+      - ".github/workflows/paired-bastion-certification.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  paired-bastion-map-certification:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install test dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -e ".[dev]"
+      - name: Ruff map and paired-install boundary
+        run: >-
+          python -m ruff check
+          src/natureai_next/bootstrap/map_bundle_cli.py
+          src/natureai_next/server/offline_map_store_api.py
+          src/natureai_next/server/offline_maps_web.py
+          src/natureai_next/server/offline_first_api.py
+          src/natureai_next/server/http.py
+          tests/test_offline_map_bundle.py
+          tests/test_offline_map_store_api.py
+      - name: Trusted map bundle and PBAC tests
+        run: python -m pytest -q tests/test_offline_map_bundle.py tests/test_offline_map_store_api.py
+      - name: Parse paired, map, and removable-media installers
+        shell: pwsh
+        run: |
+          foreach ($path in @('./Install-Fieldora-Paired.ps1','./Install-Fieldora-Offline-Map.ps1','./Install-Fieldora-Offline-Media.ps1')) {
+            [void][scriptblock]::Create((Get-Content -LiteralPath $path -Raw))
+            Write-Host "$path syntax: OK"
+          }
+      - name: Certify pinned paired Bastion boundary
+        shell: pwsh
+        run: |
+          $text = Get-Content -LiteralPath ./Install-Fieldora-Paired.ps1 -Raw
+          if ($text -notmatch '\[string\]\$BastionRef = "([0-9a-f]{40})"') { throw 'Paired installer must pin Bastion to an immutable 40-character commit SHA.' }
+          foreach ($needle in @(
+            'fieldora-bastion:paired',
+            'build-model-bundle --help',
+            'build-map-bundle --help',
+            'auto_started = $false',
+            'separate-quarantine-scan-sign-import',
+            'PAIRING.json',
+            'OfflineMapBundle',
+            'Install-Fieldora-Offline-Map.ps1'
+          )) {
+            if (-not $text.Contains($needle)) { throw "Paired Bastion contract missing: $needle" }
+          }
+          foreach ($forbidden in @('docker compose up -d bastion','network_mode: host','docker.sock')) {
+            if ($text.Contains($forbidden)) { throw "Paired installer weakens Bastion boundary: $forbidden" }
+          }
+      - name: Certify trusted-side map isolation
+        shell: pwsh
+        run: |
+          $text = Get-Content -LiteralPath ./Install-Fieldora-Offline-Map.ps1 -Raw
+          foreach ($needle in @('--network','none','--read-only','--cap-drop','ALL','no-new-privileges:true','FIELDORA_MAP_STORE','fieldora-maps:/var/lib/fieldora-maps:ro','--require-signature','--require-clean-scan')) {
+            if (-not $text.Contains($needle)) { throw "Map installer trust contract missing: $needle" }
+          }
+      - name: Certify organization-admin removable-media trust path
+        shell: pwsh
+        run: |
+          $text = Get-Content -LiteralPath ./Install-Fieldora-Offline-Media.ps1 -Raw
+          foreach ($needle in @(
+            '[Parameter(Mandatory)][string]$BundlePath',
+            '[Parameter(Mandatory)][string]$TrustedSigningKey',
+            'Install-Fieldora-Offline-Model.ps1',
+            'Install-Fieldora-Offline-Map.ps1',
+            '-RequireSignature',
+            '-RequireCleanScan',
+            'no package download is performed'
+          )) {
+            if (-not $text.Contains($needle)) { throw "Removable-media trust contract missing: $needle" }
+          }
+          foreach ($forbidden in @('Invoke-WebRequest','Start-BitsTransfer','curl ','wget ')) {
+            if ($text.Contains($forbidden)) { throw "Removable-media installer must not acquire package content from a network: $forbidden" }
+          }

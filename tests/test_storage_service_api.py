@@ -1,0 +1,309 @@
+from __future__ import annotations
+
+import hashlib
+import json
+from dataclasses import replace
+
+from natureai_next.server.operator_control import ServiceRecord, ServiceState
+from natureai_next.server.postgres_linked_preview_store import LinkedPreviewObject
+from natureai_next.server.storage_exchange import (
+    PreviewState,
+    StorageCatalogueBatch,
+    StorageCatalogueItem,
+    StorageObjectState,
+    StorageSourceRegistration,
+)
+from natureai_next.server.storage_service_api import LinkedStorageServiceApi
+
+
+class _Operators:
+    def __init__(self, service: ServiceRecord | None) -> None:
+        self._service = service
+        self.heartbeats: list[dict] = []
+
+    def service(self, service_id: str):
+        if self._service is None or self._service.service_id != service_id:
+            return None
+        return self._service
+
+    def heartbeat(self, service_id: str, **kwargs):
+        if self._service is None or self._service.service_id != service_id:
+            raise KeyError(service_id)
+        if ServiceState(self._service.state) is ServiceState.REVOKED:
+            raise PermissionError("revoked service cannot heartbeat")
+        self.heartbeats.append({"service_id": service_id, **kwargs})
+        self._service = replace(
+            self._service,
+            last_heartbeat_epoch=int(kwargs.get("now_epoch", self._service.last_heartbeat_epoch)),
+        )
+        return self._service
+
+
+class _Catalogue:
+    def __init__(self, source: StorageSourceRegistration) -> None:
+        self._source = source
+        self.applied: list[StorageCatalogueBatch] = []
+        self.registered: list[StorageSourceRegistration] = []
+
+    def source(self, storage_id: str):
+        return self._source if self._source.storage_id == storage_id else None
+
+    def register_source(self, source: StorageSourceRegistration) -> None:
+        self.registered.append(source)
+        self._source = source
+
+    def apply_catalogue_batch(self, batch: StorageCatalogueBatch):
+        if not batch.verify():
+            raise ValueError("catalogue batch digest is invalid")
+        self.applied.append(batch)
+        return 1, 0
+
+
+class _Leases:
+    def __init__(self) -> None:
+        self.claims: list[dict] = []
+        self.completions: list[dict] = []
+
+    def claim(self, **kwargs):
+        self.claims.append(kwargs)
+        return ()
+
+    def complete(self, **kwargs):
+        self.completions.append(kwargs)
+        return True
+
+
+class _PreviewStore:
+    def __init__(self) -> None:
+        self.puts: list[dict] = []
+
+    def put_leased_preview(self, **kwargs):
+        self.puts.append(kwargs)
+        return LinkedPreviewObject(
+            kwargs["media_id"], kwargs["mime_type"], kwargs["sha256"], kwargs["payload"]
+        )
+
+
+def _service(*, state: ServiceState = ServiceState.ACTIVE, serial: str = "ABCD") -> ServiceRecord:
+    return ServiceRecord(
+        service_id="storage-service-1",
+        organization_id="org-1",
+        name="Archive service",
+        service_type="linked-storage",
+        node_name="storage-node-1",
+        state=state.value,
+        software_version="5.4.0",
+        configuration_sha256="",
+        certificate_serial=serial,
+        certificate_not_after_epoch=2_000_000_000,
+        enrolled_at_epoch=1,
+        last_heartbeat_epoch=1,
+        drain_requested_epoch=0,
+        stopped_at_epoch=0,
+        revoked_at_epoch=0,
+    )
+
+
+def _source() -> StorageSourceRegistration:
+    return StorageSourceRegistration(
+        "archive-1", "org-1", "storage-service-1", "Archive", "primary-archive"
+    )
+
+
+def _api(service: ServiceRecord | None = None):
+    catalogue = _Catalogue(_source())
+    leases = _Leases()
+    operators = _Operators(service or _service())
+    previews = _PreviewStore()
+    api = LinkedStorageServiceApi(catalogue, leases, operators, preview_store=previews)
+    return api, catalogue, leases, operators, previews
+
+
+def _headers(serial: str = "ABCD") -> dict[str, str]:
+    return {"fieldora-peer-certificate-serial": serial}
+
+
+def _upload_headers(payload: bytes, serial: str = "ABCD") -> dict[str, str]:
+    return {
+        **_headers(serial),
+        "fieldora-service-id": "storage-service-1",
+        "fieldora-organization-id": "org-1",
+        "fieldora-storage-id": "archive-1",
+        "fieldora-worker-id": "preview-worker-1",
+        "fieldora-media-id": "linked:archive-1:obj-1",
+        "fieldora-preview-sha256": hashlib.sha256(payload).hexdigest(),
+        "content-type": "image/jpeg",
+    }
+
+
+def _catalogue_payload() -> dict:
+    item = StorageCatalogueItem(
+        object_id="obj-1",
+        relative_path="Amazon/day-01/image.jpg",
+        filename="image.jpg",
+        mime_type="image/jpeg",
+        size_bytes=123,
+        modified_ns=456,
+        state=StorageObjectState.AVAILABLE,
+        project_id="project-1",
+    )
+    batch = StorageCatalogueBatch(
+        batch_id="batch-1",
+        storage_id="archive-1",
+        organization_id="org-1",
+        service_id="storage-service-1",
+        scan_id="scan-1",
+        sequence=1,
+        final=True,
+        checkpoint="",
+        items=(item,),
+    )
+    batch = replace(batch, batch_sha256=batch.calculated_sha256())
+    return {
+        "batch_id": batch.batch_id,
+        "storage_id": batch.storage_id,
+        "organization_id": batch.organization_id,
+        "service_id": batch.service_id,
+        "scan_id": batch.scan_id,
+        "sequence": batch.sequence,
+        "final": batch.final,
+        "checkpoint": batch.checkpoint,
+        "previous_batch_sha256": batch.previous_batch_sha256,
+        "batch_sha256": batch.batch_sha256,
+        "items": [
+            {
+                "object_id": item.object_id,
+                "relative_path": item.relative_path,
+                "filename": item.filename,
+                "mime_type": item.mime_type,
+                "size_bytes": item.size_bytes,
+                "modified_ns": item.modified_ns,
+                "state": item.state.value,
+                "project_id": item.project_id,
+            }
+        ],
+    }
+
+
+def _claim_payload() -> bytes:
+    return json.dumps(
+        {
+            "service_id": "storage-service-1",
+            "organization_id": "org-1",
+            "storage_id": "archive-1",
+            "worker_id": "preview-worker-1",
+            "limit": 20,
+            "lease_seconds": 120,
+        }
+    ).encode()
+
+
+def test_source_registration_requires_matching_active_storage_service() -> None:
+    api, catalogue, _leases, _operators, _previews = _api()
+    payload = json.dumps(
+        {
+            "storage_id": "archive-2",
+            "organization_id": "org-1",
+            "service_id": "storage-service-1",
+            "display_name": "Secondary archive",
+            "root_alias": "secondary-archive",
+            "read_only": True,
+        }
+    ).encode()
+    denied = api.dispatch("POST", "/internal/v1/storage/sources", _headers("FFFF"), payload)
+    assert denied.status == 403
+    assert catalogue.registered == []
+    accepted = api.dispatch("POST", "/internal/v1/storage/sources", _headers(), payload)
+    assert accepted.status == 200
+    assert len(catalogue.registered) == 1
+    assert catalogue.registered[0].root_alias == "secondary-archive"
+    assert "root_path" not in json.loads(accepted.body)
+
+
+def test_authenticated_storage_traffic_throttles_operator_heartbeat() -> None:
+    api, _catalogue, _leases, operators, _previews = _api()
+    first = api.dispatch("POST", "/internal/v1/storage/previews/claim", _headers(), _claim_payload())
+    assert first.status == 200
+    assert len(operators.heartbeats) == 1
+    second = api.dispatch("POST", "/internal/v1/storage/previews/claim", _headers(), _claim_payload())
+    assert second.status == 200
+    assert len(operators.heartbeats) == 1
+
+
+def test_catalogue_requires_matching_active_service_certificate() -> None:
+    api, catalogue, _leases, _operators, _previews = _api()
+    payload = json.dumps(_catalogue_payload()).encode()
+    assert api.dispatch("POST", "/internal/v1/storage/catalogue", {}, payload).status == 401
+    mismatch = api.dispatch("POST", "/internal/v1/storage/catalogue", _headers("FFFF"), payload)
+    assert mismatch.status == 403
+    assert json.loads(mismatch.body)["error"] == "service_certificate_mismatch"
+    assert catalogue.applied == []
+
+
+def test_inactive_service_cannot_catalogue_or_claim_work() -> None:
+    api, catalogue, leases, _operators, _previews = _api(_service(state=ServiceState.REVOKED))
+    response = api.dispatch(
+        "POST", "/internal/v1/storage/catalogue", _headers(), json.dumps(_catalogue_payload()).encode()
+    )
+    assert response.status == 403
+    assert json.loads(response.body)["error"] == "service_not_active"
+    assert catalogue.applied == []
+    claim = api.dispatch("POST", "/internal/v1/storage/previews/claim", _headers(), _claim_payload())
+    assert claim.status == 403
+    assert leases.claims == []
+
+
+def test_valid_service_catalogue_preserves_project_scope() -> None:
+    api, catalogue, _leases, _operators, _previews = _api()
+    response = api.dispatch(
+        "POST", "/internal/v1/storage/catalogue", _headers(), json.dumps(_catalogue_payload()).encode()
+    )
+    assert response.status == 200
+    assert len(catalogue.applied) == 1
+    assert catalogue.applied[0].items[0].project_id == "project-1"
+
+
+def test_preview_upload_requires_matching_certificate_and_passes_exact_bytes() -> None:
+    api, _catalogue, _leases, _operators, previews = _api()
+    payload = b"\xff\xd8governed-preview\xff\xd9"
+    denied = api.dispatch(
+        "PUT", "/internal/v1/storage/previews/upload", _upload_headers(payload, "FFFF"), payload
+    )
+    assert denied.status == 403
+    assert previews.puts == []
+
+    accepted = api.dispatch(
+        "PUT", "/internal/v1/storage/previews/upload", _upload_headers(payload), payload
+    )
+    assert accepted.status == 200
+    assert len(previews.puts) == 1
+    stored = previews.puts[0]
+    assert stored["payload"] == payload
+    assert stored["mime_type"] == "image/jpeg"
+    assert stored["sha256"] == hashlib.sha256(payload).hexdigest()
+    assert stored["worker_id"] == "preview-worker-1"
+
+
+def test_valid_service_can_claim_and_complete_failed_preview_lease() -> None:
+    api, _catalogue, leases, _operators, _previews = _api()
+    claim = api.dispatch("POST", "/internal/v1/storage/previews/claim", _headers(), _claim_payload())
+    assert claim.status == 200
+    assert leases.claims[0]["worker_id"] == "preview-worker-1"
+    complete = api.dispatch(
+        "POST",
+        "/internal/v1/storage/previews/complete",
+        _headers(),
+        json.dumps(
+            {
+                "service_id": "storage-service-1",
+                "organization_id": "org-1",
+                "storage_id": "archive-1",
+                "worker_id": "preview-worker-1",
+                "media_id": "linked:archive-1:obj-1",
+                "state": PreviewState.FAILED.value,
+                "thumbnail_etag": "",
+            }
+        ).encode(),
+    )
+    assert complete.status == 200
+    assert leases.completions[0]["state"] is PreviewState.FAILED

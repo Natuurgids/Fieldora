@@ -1,0 +1,73 @@
+name: Fieldora install profile certification
+
+on:
+  pull_request:
+    paths:
+      - "Install-Fieldora.ps1"
+      - "Install-Fieldora-Paired.ps1"
+      - "Install-Fieldora-Clean-Windows.ps1"
+      - "Install-Fieldora-Clean-Linux.ps1"
+      - ".github/workflows/install-profile-certification.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  install-profile-contract:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Parse canonical selector
+        shell: pwsh
+        run: |
+          $text = Get-Content -LiteralPath ./Install-Fieldora.ps1 -Raw
+          [void][scriptblock]::Create($text)
+          Write-Host "Install-Fieldora.ps1 syntax: OK"
+
+      - name: Certify Fieldora-only profile
+        shell: pwsh
+        run: |
+          $text = Get-Content -LiteralPath ./Install-Fieldora.ps1 -Raw
+          foreach ($needle in @(
+            '[ValidateSet("Fieldora","FieldoraBastion")]',
+            '[string]$InstallProfile = "Fieldora"',
+            'Fieldora-only profile selected; FieldoraBastion will not be installed.',
+            'Install-Fieldora-Clean-Windows.ps1',
+            'Install-Fieldora-Clean-Linux.ps1'
+          )) {
+            if (-not $text.Contains($needle)) { throw "Fieldora-only profile contract missing: $needle" }
+          }
+          Write-Host "Fieldora-only profile delegates to the certified platform clean installer: OK"
+
+      - name: Certify FieldoraBastion full profile
+        shell: pwsh
+        run: |
+          $text = Get-Content -LiteralPath ./Install-Fieldora.ps1 -Raw
+          foreach ($needle in @(
+            'if ($InstallProfile -eq "FieldoraBastion")',
+            'Full profile selected: Fieldora will be installed first, then FieldoraBastion.',
+            'Install-Fieldora-Paired.ps1',
+            'BastionRef = $BastionRef',
+            'OfflineModelBundle',
+            'OfflineMapBundle'
+          )) {
+            if (-not $text.Contains($needle)) { throw "FieldoraBastion full profile contract missing: $needle" }
+          }
+          $paired = Get-Content -LiteralPath ./Install-Fieldora-Paired.ps1 -Raw
+          if (-not $paired.Contains('Installing Fieldora trusted server layer')) {
+            throw 'Paired installer must install Fieldora before the Bastion boundary.'
+          }
+          if (-not $paired.Contains('auto_started = $false')) {
+            throw 'FieldoraBastion must remain dormant after paired installation.'
+          }
+          Write-Host "FieldoraBastion full profile includes Fieldora first and preserves Bastion isolation: OK"
+
+      - name: Certify no Bastion-only installation state
+        shell: pwsh
+        run: |
+          $text = Get-Content -LiteralPath ./Install-Fieldora.ps1 -Raw
+          if ($text.Contains('ValidateSet("Bastion"')) { throw 'Standalone Bastion profile is not allowed.' }
+          if ($text.Contains('InstallProfile = "Bastion"')) { throw 'Standalone Bastion profile is not allowed.' }
+          Write-Host "No Bastion-without-Fieldora installation state: OK"

@@ -1,0 +1,36 @@
+name: WEB-034 file instance vs evidence certification
+
+on:
+  pull_request:
+    paths:
+      - 'src/natureai_next/server/linked_storage_browser_api.py'
+      - 'src/natureai_next/server/media_detail_web.py'
+      - 'tests/test_browser_media_detail_http.py'
+      - '.github/workflows/web034-file-instance-evidence.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  web034-file-instance-evidence:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Verify exact PR head
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install certification dependencies
+        run: python -m pip install -e ".[dev]"
+      - name: Install Chromium
+        run: python -m playwright install --with-deps chromium
+      - name: Ruff WEB-034 evidence-instance seam
+        run: python -m ruff check src/natureai_next/server/linked_storage_browser_api.py src/natureai_next/server/media_detail_web.py tests/test_browser_media_detail_http.py
+      - name: Evidence identity remains distinct from file instances
+        run: pytest -q tests/test_browser_media_detail_http.py

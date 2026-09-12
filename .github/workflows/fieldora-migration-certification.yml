@@ -1,0 +1,38 @@
+name: Fieldora facility migration certification
+
+on:
+  pull_request:
+    paths:
+      - "src/natureai_next/application/operations_assets.py"
+      - "src/natureai_next/application/facility_*.py"
+      - "tests/test_versioned_facility_floorplans.py"
+      - "tests/test_facility_*.py"
+      - ".github/workflows/fieldora-migration-certification.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  migration-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      QT_QPA_PLATFORM: offscreen
+      FIELDORA_IDENTITY_ID: local-user
+      FIELDORA_PROFILE_ROLE: administrator
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: sudo apt-get update && sudo apt-get install -y libegl1 libgl1 libxkbcommon0 libxkbcommon-x11-0 libxcb-cursor0
+      - run: python -m pip install --upgrade pip && python -m pip install -e ".[dev,gui]"
+      - name: Facility schema upgrade and compatibility tests
+        run: >-
+          python -m pytest -q
+          tests/test_versioned_facility_floorplans.py
+          tests/test_facility_floorplan_contract.py
+          tests/test_facility_planning_workflow.py
+          tests/test_facility_library_bridge.py

@@ -1,0 +1,41 @@
+name: WEB-030 Project owner immediate access certification
+
+on:
+  pull_request:
+    paths:
+      - "src/natureai_next/application/access_control.py"
+      - "src/natureai_next/domain/access_control.py"
+      - "src/natureai_next/infrastructure/database/access_control.py"
+      - "src/natureai_next/server/browser_functionality_api.py"
+      - "tests/test_web030_project_owner_access.py"
+      - ".github/workflows/web030-project-owner-access.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  web030-project-owner-access:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install certification dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -e ".[dev]"
+
+      - name: Ruff WEB-030 owner authority seam
+        run: >-
+          python -m ruff check
+          src/natureai_next/server/browser_functionality_api.py
+          tests/test_web030_project_owner_access.py
+
+      - name: Creator immediate Project authority
+        run: pytest -q tests/test_web030_project_owner_access.py

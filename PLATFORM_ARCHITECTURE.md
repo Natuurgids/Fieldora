@@ -1,0 +1,154 @@
+# Fieldora Platform Architecture
+
+This document records the durable server/platform decisions that complement `VISION.md`, `ARCHITECTURE.md`, and `ARCHITECTURE_DECISIONS.md`. The desktop application and the managed platform share scientific meaning and stable public identifiers, while deployment technology may differ.
+
+## Scientific evidence is not owned by projects
+
+The governed Library is the durable evidence boundary. An asset belongs to an organization/library first. Project context is optional and is represented as a relationship rather than as the reason an asset exists.
+
+A Library asset may independently participate in:
+
+- zero, one, or many projects;
+- zero, one, or many collections/datasets;
+- observations and dossiers;
+- external/citizen/institutional submissions;
+- expert review cases and determinations;
+- exports and publications.
+
+Projects organize work. They do not own or duplicate the scientific evidence they reference.
+
+## Contract-derived information barriers
+
+Library-first ownership does not mean unrestricted access. Every intake receives an access contract from the authenticated intake identity before the data becomes generally usable. Access widening is a new or amended contract, never an informal ACL shortcut.
+
+Default intake rules are:
+
+- administrator or installation-wide generic service import: unrestricted/all-access unless the administrator explicitly supplies a narrower contract;
+- organization service import: automatically restricted to that organization;
+- phone, Aperture client, field device, or other contracted client: inherits the supplied contract;
+- project member upload: the member must choose one project from their actual memberships, and the project contract becomes the governing context for that intake;
+- uncontracted ordinary user intake outside a project: organization-scoped by default rather than globally visible.
+
+The normal user/supervisor sharing choices are explicit contract targets: another project, the entire current organization, another organization, or a specific project in another organization. Administrative/bulk import tooling may construct contracts containing multiple organizations and projects in one governed operation.
+
+Project information barriers are fail-closed. A project member may request wider sharing, but that request does not itself grant access. Widening a project-governed contract requires project-owner approval. When the project owner authorizes the widening, Fieldora requires two separate owner attestations/signatures for the same contract amendment before it becomes effective. The two attestations are independently recorded and must have distinct signature/attestation identifiers.
+
+A project owner may not bypass this rule by initiating the sharing request personally; approval of project-data sharing still uses the same two-step owner confirmation. Administrator-created unrestricted data is different because it did not originate under a project information barrier.
+
+Cross-organization and cross-project grants are additive views over the same governed Library evidence. They do not copy the scientific asset into another project or organization, and revoking a grant removes that access path without rewriting the evidence or its provenance.
+
+## Submission and expert review are first-class domains
+
+Fieldora accepts governed evidence without forcing a project. A Submission records intake provenance such as contributor/source, rights, consent, collection/project context, and receipt state.
+
+Expert interpretation is represented by Review Cases and immutable Determinations. Review cases are scoped to the evidence required for the review and may route by scientific domain, specialty, geography, or other capability. Experts do not require access to an unrelated project merely to evaluate permitted evidence.
+
+AI remains advisory. Accepted scientific conclusions are explicit human/governed actions and preserve the history of earlier or competing determinations.
+
+## Single-node convenience, multi-node correctness
+
+A small installation may run on one host using Docker/Podman and one PostgreSQL instance. The same authoritative contracts must remain correct when the installation grows to many API nodes, workers, database clusters, object stores, search nodes, or physical sites.
+
+No authoritative scientific meaning may depend on a particular container, process, or host. Stable identifiers, durable job state, leases/fencing, storage contracts, access policy, and service identity are designed for horizontal growth from the beginning.
+
+This does **not** mean anonymous or ungoverned stateless services.
+
+## Durable service identity
+
+Every Fieldora service has a durable enrolled identity independent of its process/container lifetime. Typical identities include API nodes, job workers, database services, trust/renewal services, search nodes, and future storage/ingest services.
+
+A service lifecycle is governed explicitly:
+
+`enrolled -> active -> draining -> stopped -> revoked`
+
+Revocation is authoritative even when cryptographic material has not yet expired. Unknown, unenrolled, disappeared, or revoked worker identities fail closed.
+
+Planned maintenance drains a service before shutdown. Healthy services are not casually destroyed and recreated merely because a queue is temporarily empty.
+
+## Mandatory internal mutual TLS
+
+Fieldora service-to-service network communication uses mutual TLS at every installation size, including a single Docker host.
+
+The clean reference deployment therefore requires PostgreSQL network clients to provide a trusted service certificate and rejects non-TLS network connections. Browser/user access uses HTTPS and the ordinary user authentication/PBAC boundary; internal service identity is separate from human identity.
+
+Certificate identity does not replace authorization. A valid service certificate proves enrolled cryptographic identity; the Operator registry determines whether that identity is currently permitted to operate.
+
+## Root trust and certificate renewal
+
+The installation root CA is long lived and is not mounted into continuously running services.
+
+A constrained service issuer is signed by that root and is the only signing material made available to the online renewal controller. Short-lived leaf certificates may be renewed in place without changing durable service IDs.
+
+The reference platform supports renewal without routine process churn:
+
+- the Fieldora HTTPS server detects replacement certificate/key material and loads it for subsequent connections;
+- PostgreSQL certificate replacement is followed by `pg_reload_conf()` so its TLS identity changes without a container restart;
+- worker and database clients use certificate paths in their PostgreSQL DSNs so subsequent connections use the renewed material;
+- Operator certificate serial/expiry metadata is updated as renewal occurs.
+
+Production installations may replace the local constrained issuer with institutional PKI, HSM, Vault, OpenShift certificate management, or another approved issuer while preserving the same service-identity and Operator contracts.
+
+## Long-lived workers, short-lived leases
+
+Worker process lifetime, certificate lifetime, and job-lease lifetime are deliberately different:
+
+- service identity: durable;
+- healthy process: long lived;
+- certificate: short lived and renewable;
+- job lease: short lived;
+- fencing token: specific to one claim generation.
+
+Workers remain warm while healthy and wait efficiently for work. A draining worker stops taking new jobs while allowing current work to finish or be safely relinquished. Fencing prevents a stale worker from committing after a replacement has acquired the job.
+
+## Operator control plane
+
+The Operator workspace is a separate infrastructure/governance surface, not ordinary scientific administration. It is API-backed and separately permissioned.
+
+The Operator surface is responsible for progressively exposing:
+
+- enrolled nodes and services;
+- active/draining/stopped/revoked state;
+- heartbeat/staleness and software/configuration identity;
+- certificate serials, expiry, and renewal state;
+- database, object-storage, search, worker, and queue health;
+- storage used/free/allocated capacity;
+- job queue depth, leases, retries, and oldest work;
+- logs and correlation/diagnostic views;
+- backup/restore state and recovery evidence;
+- maintenance, drain, revocation, and upgrade readiness.
+
+Optional subsystem degradation must not be presented as loss of authoritative Library/Science state. Fieldora distinguishes healthy, degraded, and unavailable capabilities.
+
+## Database and storage topology
+
+Logical database ownership is independent from physical topology. A small installation may place all logical PostgreSQL databases on one PostgreSQL service. A larger installation may move logical domains to different clusters without changing public IDs or domain ownership.
+
+Likewise, the contained filesystem object adapter is suitable for a small installation, while larger installations may use shared S3-compatible object storage. The Library contract, checksums, provenance, and authorization boundary remain stable.
+
+## Organisation-controlled linked archives
+
+Fieldora may catalogue scientific originals that remain on organisation-controlled external storage. The storage node owns the actual mount, path, and credentials and presents the archive to its Fieldora worker read-only. That worker is outbound-only: it authenticates to the server with its enrolled mTLS service identity and does not expose an inbound storage protocol to browsers or API nodes.
+
+The server persists opaque storage/object identities, relative catalogue metadata, governed derivatives, and short-lived transfer state. Browser clients never receive storage-node filesystem paths, root aliases, mount credentials, or service trust material. Managed previews are bounded derivatives; original access is a PBAC-authorized bounded byte range that the owning storage service reads from its read-only archive and uploads against a short-lived lease. PostgreSQL row locking and leases keep the same contract correct with multiple API and storage-worker nodes.
+
+Linked archive lifecycle is separate from transient service health. An archive may be online, stale, or temporarily unavailable without rewriting its Library evidence. Explicit archive disablement is instead a PBAC-authorized Operator action scoped to the owning organization. Disablement immediately prevents Library discovery, preview work, original-range creation/claim/upload, and cached derivative delivery while preserving catalogue/provenance records. Disabled archives remain visible only to the protected Operator surface so an authorized operator can explicitly re-enable them.
+
+Storage-service registration cannot silently override an operator disablement. Initial registration, material registration-metadata changes, disablement, and re-enablement are durably actor-attributed in PostgreSQL. Repeated no-op registration or lifecycle requests do not manufacture audit history. This preserves single-node convenience without making source availability or authority depend on one process or host.
+
+## Bulk ingest
+
+Human browser upload is not the architecture for institutional-scale migration. Large imports use durable manifests/jobs, resumable processing, checksums, deduplication, backpressure, exception reporting, and parallel workers. A 200-million or billion-asset import must be restartable and idempotent rather than tied to one HTTP request or process lifetime.
+
+## Facilities planning preserves reality
+
+Current physical placement remains authoritative. Future layouts and relocation campaigns are planning/execution records and do not alter live placement merely because a plan exists.
+
+Only an explicit final relocation/placement action may change authoritative physical location. Intermediate states such as removed, in-transit, staging, stored, placed, and displayed remain auditable workflow state.
+
+Architectural PDFs, CAD/BIM material, and operational drawings remain governed Library assets rather than forming an independent document repository.
+
+## Deployment portability
+
+Docker Compose is the clean reference test deployment, not an architectural dependency. The same images/contracts should remain deployable through Docker, Podman, RHEL/UBI, OpenShift/Kubernetes, institutional VMs, or managed infrastructure.
+
+Deployment tooling may become more sophisticated as scale grows. Scientific identity, provenance, policy, service identity, mTLS, lifecycle, and recovery semantics must not change because the orchestrator changes.

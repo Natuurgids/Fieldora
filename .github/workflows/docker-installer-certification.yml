@@ -1,0 +1,215 @@
+name: Fieldora Docker installer certification
+
+on:
+  pull_request:
+    paths:
+      - "Install-Fieldora-Clean.ps1"
+      - "Install-Fieldora-Clean-Windows.ps1"
+      - "Install-Fieldora-Clean-Linux.ps1"
+      - "Install-Fieldora-Bootstrap-Handoff.ps1"
+      - "Install-Fieldora-Offline-Model.ps1"
+      - "src/natureai_next/server/service_trust.py"
+      - "src/natureai_next/bootstrap/service_trust_cli.py"
+      - "src/natureai_next/bootstrap/certificate_renewer_cli.py"
+      - "src/natureai_next/bootstrap/operator_cli.py"
+      - ".github/workflows/docker-installer-certification.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  installer-contract:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Parse PowerShell installers
+        shell: pwsh
+        run: |
+          foreach ($path in @('./Install-Fieldora-Clean.ps1','./Install-Fieldora-Clean-Windows.ps1','./Install-Fieldora-Clean-Linux.ps1','./Install-Fieldora-Bootstrap-Handoff.ps1','./Install-Fieldora-Offline-Model.ps1')) {
+            $text = Get-Content -LiteralPath $path -Raw
+            [void][scriptblock]::Create($text)
+            Write-Host "$path syntax: OK"
+          }
+
+      - name: Certify clean-install trust contract
+        shell: pwsh
+        run: |
+          $text = Get-Content -LiteralPath ./Install-Fieldora-Clean.ps1 -Raw
+          $required = @(
+            'FIELDORA_SERVICE_ID: fieldora-api-local',
+            'FIELDORA_SERVICE_ID: fieldora-worker-local',
+            'fieldora-postgres-local',
+            'fieldora-cert-renewer-local',
+            'sslmode=verify-full',
+            'clientcert=verify-full',
+            'fieldora-service-trust',
+            'fieldora-certificate-renewer',
+            'fieldora-operator',
+            '--tls-certificate',
+            '--tls-private-key',
+            'restart: unless-stopped',
+            'fieldora-postgres-trust',
+            'fieldora-worker-trust',
+            'fieldora-api-trust',
+            'fieldora-renewer-trust',
+            'fieldora-issuer-authority',
+            'issuer-private.pem',
+            'pg_reload_conf()',
+            'Running live no-restart certificate renewal test'
+          )
+          foreach ($needle in $required) {
+            if (-not $text.Contains($needle)) { throw "Installer trust contract is missing: $needle" }
+          }
+          if ($text.Contains('--allow-insecure-http')) { throw 'Clean installer must not enable insecure HTTP.' }
+          Write-Host "Service enrollment, HTTPS, mTLS and live renewal contract: OK"
+
+      - name: Certify automatic bootstrap credential handoff
+        shell: pwsh
+        run: |
+          $text = Get-Content -LiteralPath ./Install-Fieldora-Clean-Windows.ps1 -Raw
+          foreach ($needle in @('[ValidateRange(1,90)][int]$CredentialHandoffRetentionDays = 7','Install-Fieldora-Bootstrap-Handoff.ps1','-RetentionDays $CredentialHandoffRetentionDays','bootstrap-handoff\ADMIN-CREDENTIALS.txt','Credential handoff retention:')) {
+            if (-not $text.Contains($needle)) { throw "Windows clean install does not automatically configure expiring credential handoff: $needle" }
+          }
+          Write-Host "Automatic temporary administrator credential handoff: OK"
+
+      - name: Certify optional offline model provisioning
+        shell: pwsh
+        run: |
+          $text = Get-Content -LiteralPath ./Install-Fieldora-Clean-Windows.ps1 -Raw
+          foreach ($needle in @('[string]$OfflineModelBundle = ""','[string]$OfflineModelTrustedSigningKey = ""','[switch]$RequireOfflineModelSignature','[switch]$RequireOfflineModelCleanScan','Install-Fieldora-Offline-Model.ps1','FIELDORA_MODEL_STORE: "/var/lib/fieldora-models"','./fieldora-models:/var/lib/fieldora-models:ro','Offline model desired state: VERIFIED and preserved in compose.override.yaml','Offline models: optional; use Install-Fieldora-Offline-Model.ps1')) {
+            if (-not $text.Contains($needle)) { throw "Windows clean install is missing optional offline model provisioning: $needle" }
+          }
+          foreach ($forbidden in @('huggingface.co','--network host','artifact_store_path')) {
+            if ($text.Contains($forbidden)) { throw "Clean-install offline model path violates local-only or opacity contract: $forbidden" }
+          }
+          Write-Host "Optional local offline model provisioning and desired-state preservation: OK"
+
+      - name: Certify Linux clean install compatibility layer
+        shell: pwsh
+        run: |
+          $linux = Get-Content -LiteralPath ./Install-Fieldora-Clean-Linux.ps1 -Raw
+          $core = Get-Content -LiteralPath ./Install-Fieldora-Clean.ps1 -Raw
+          foreach ($needle in @('if (-not $IsLinux)','Get-Command docker','Get-Command curl','Install-Fieldora-Clean.ps1','Install-Fieldora-Bootstrap-Handoff.ps1','Install-Fieldora-Offline-Model.ps1','Require-Marker','$core = $core.Replace($windowsDocker, $linuxDocker)','$curlStartMarker =','--node linux-docker','FIELDORA_STORAGE_SERVICE_ENABLED: "true"','FIELDORA_STORAGE_SERVICE_CLIENT_CA:','FIELDORA_MODEL_STORE: "/var/lib/fieldora-models"','./fieldora-models:/var/lib/fieldora-models:ro','bootstrap-handoff/ADMIN-CREDENTIALS.txt','FIELDORA LINUX CLEAN INSTALL PASSED')) {
+            if (-not $linux.Contains($needle)) { throw "Linux clean installer is missing: $needle" }
+          }
+          foreach ($forbidden in @('Cert:\CurrentUser','--network host','artifact_store_path','huggingface.co')) {
+            if ($linux.Contains($forbidden)) { throw "Linux clean installer contains a forbidden shortcut: $forbidden" }
+          }
+          foreach ($coreMarker in @('Step "Checking Docker Desktop"','Get-Command docker.exe -ErrorAction SilentlyContinue','Step "Trusting the local Fieldora HTTPS certificate for the current Windows user"','$curl = Get-Command curl.exe -ErrorAction SilentlyContinue','Step "Starting complete Fieldora stack"','$servicesJson = Docker-Output')) {
+            if (-not $core.Contains($coreMarker)) { throw "Linux compatibility layer no longer matches the certified core installer marker: $coreMarker" }
+          }
+          Write-Host "Linux compatibility adaptation markers and security contract: OK"
+
+      - name: Dry-run Linux core transformation and parse
+        shell: pwsh
+        run: |
+          $core = Get-Content -LiteralPath ./Install-Fieldora-Clean.ps1 -Raw
+          $windowsDocker = @'
+          Step "Checking Docker Desktop"
+          if (-not (Get-Command docker.exe -ErrorAction SilentlyContinue)) { throw "docker.exe was not found." }
+          try { & docker info *> $null } catch { }
+          if ($LASTEXITCODE -ne 0) { throw "Docker Desktop Linux engine is not running." }
+          $dockerOs = (@(& docker info --format '{{.OSType}}') -join "").Trim()
+          Assert-Exit "Unable to inspect Docker"
+          if ($dockerOs -ne "linux") { throw "Docker Desktop must use Linux containers." }
+          '@
+          $linuxDocker = @'
+          Step "Checking Docker Engine"
+          if (-not (Get-Command docker -ErrorAction SilentlyContinue)) { throw "docker was not found." }
+          try { & docker info *> $null } catch { }
+          if ($LASTEXITCODE -ne 0) { throw "Docker Linux engine is not running or is not accessible." }
+          $dockerOs = (@(& docker info --format '{{.OSType}}') -join "").Trim()
+          Assert-Exit "Unable to inspect Docker"
+          if ($dockerOs -ne "linux") { throw "Fieldora requires Linux containers." }
+          '@
+          if (-not $core.Contains($windowsDocker)) { throw 'Linux dry-run cannot locate Docker adaptation marker.' }
+          $core = $core.Replace($windowsDocker, $linuxDocker).Replace('--node docker-desktop', '--node linux-docker')
+          $trustStartMarker = '    Step "Trusting the local Fieldora HTTPS certificate for the current Windows user"'
+          $trustEndMarker = '    Step "Starting complete Fieldora stack"'
+          $trustStart = $core.IndexOf($trustStartMarker, [StringComparison]::Ordinal)
+          $trustEnd = $core.IndexOf($trustEndMarker, $trustStart, [StringComparison]::Ordinal)
+          if ($trustStart -lt 0 -or $trustEnd -le $trustStart) { throw 'Linux dry-run cannot isolate Windows trust block.' }
+          $linuxTrust = @'
+              Step "Preparing Linux host trust guidance"
+              Write-Host "Fieldora uses its private CA for HTTPS. The installer will verify TLS with that CA explicitly."
+          
+          '@
+          $core = $core.Substring(0, $trustStart) + $linuxTrust + $core.Substring($trustEnd)
+          $curlStartMarker = '    $curl = Get-Command curl.exe -ErrorAction SilentlyContinue'
+          $curlEndMarker = '    $servicesJson = Docker-Output'
+          $curlStart = $core.IndexOf($curlStartMarker, [StringComparison]::Ordinal)
+          $curlEnd = $core.IndexOf($curlEndMarker, $curlStart, [StringComparison]::Ordinal)
+          if ($curlStart -lt 0 -or $curlEnd -le $curlStart) { throw 'Linux dry-run cannot isolate Windows curl block.' }
+          $linuxCurl = @'
+              $curl = Get-Command curl -ErrorAction SilentlyContinue
+              if (-not $curl) { throw "curl is required for TLS smoke testing on Linux." }
+              $curlBinary = $curl.Source
+              $caFile = Join-Path $TrustRoot "ca-certificate.pem"
+              $curlTrust = @("--fail","--silent","--show-error","--cacert",$caFile)
+              & $curlBinary @curlTrust https://127.0.0.1:8765/ -o /dev/null
+          
+          '@
+          $core = $core.Substring(0, $curlStart) + $linuxCurl + $core.Substring($curlEnd)
+          $core = $core.Replace('Internal root CA: $TrustRoot\ca-certificate.pem', 'Internal root CA: $(Join-Path $TrustRoot "ca-certificate.pem")')
+          $core = $core.Replace('Credentials: $InstallRoot\ADMIN-CREDENTIALS.txt', 'Credentials: $(Join-Path $InstallRoot "ADMIN-CREDENTIALS.txt")')
+          [void][scriptblock]::Create($core)
+          foreach ($needle in @('Step "Checking Docker Engine"','Get-Command docker -ErrorAction SilentlyContinue','--node linux-docker','Preparing Linux host trust guidance','Get-Command curl -ErrorAction SilentlyContinue','--cacert','/dev/null')) {
+            if (-not $core.Contains($needle)) { throw "Transformed Linux core is missing: $needle" }
+          }
+          foreach ($forbidden in @('Step "Checking Docker Desktop"','Step "Trusting the local Fieldora HTTPS certificate for the current Windows user"','$curl = Get-Command curl.exe -ErrorAction SilentlyContinue')) {
+            if ($core.Contains($forbidden)) { throw "Transformed Linux core still contains active Windows block: $forbidden" }
+          }
+          Write-Host "Linux core transformation dry-run and PowerShell parse: OK"
+
+      - name: Certify Windows CurrentUser root trust
+        shell: pwsh
+        run: |
+          $text = Get-Content -LiteralPath ./Install-Fieldora-Clean-Windows.ps1 -Raw
+          foreach ($needle in @('X509Store','StoreName]::Root','StoreLocation]::CurrentUser','CreateFromPemFile','Thumbprint','Windows CurrentUser Fieldora CA trust: VERIFIED','--ssl-revoke-best-effort')) {
+            if (-not $text.Contains($needle)) { throw "Windows trust wrapper is missing: $needle" }
+          }
+          if ($text.Contains('--cacert') -or $text.Contains('--insecure')) { throw 'Final Windows browser-trust probe must use the OS trust store, not bypass or explicit CA arguments.' }
+          Write-Host "Windows CurrentUser root trust contract: OK"
+
+      - name: Certify Windows curl handling
+        shell: pwsh
+        run: |
+          $text = Get-Content -LiteralPath ./Install-Fieldora-Clean.ps1 -Raw
+          if ($text.Contains('-o $null')) { throw 'curl.exe -o $null drops the native argument in PowerShell; use -o NUL.' }
+          if (-not $text.Contains('-o NUL')) { throw 'Windows curl smoke tests must discard bodies with -o NUL.' }
+          if (-not $text.Contains('--ssl-revoke-best-effort')) { throw 'Windows Schannel private-CA smoke tests must use best-effort revocation while retaining certificate validation.' }
+          if ($text.Contains('--insecure') -or $text.Contains('-k ')) { throw 'Installer TLS smoke tests must never disable certificate verification.' }
+          Write-Host "Windows curl private-CA handling: OK"
+
+      - name: Certify clean runtime stability
+        shell: pwsh
+        run: |
+          $text = Get-Content -LiteralPath ./Install-Fieldora-Clean.ps1 -Raw
+          foreach ($needle in @('{{.RestartCount}}','restarted $restartCount time(s) during clean installation',"expected 'active'")) {
+            if (-not $text.Contains($needle)) { throw "Installer does not certify clean runtime stability: $needle" }
+          }
+          Write-Host "Zero-restart and active-service certification: OK"
+
+      - name: Ensure root CA is not mounted into running renewal service
+        shell: pwsh
+        run: |
+          $text = Get-Content -LiteralPath ./Install-Fieldora-Clean.ps1 -Raw
+          if (-not $text.Contains('Root CA private key: offline from running containers')) { throw 'Installer does not certify offline root-key separation.' }
+          $renewerStart = $text.IndexOf('fieldora-cert-renewer:')
+          $volumesStart = $text.IndexOf("`nvolumes:", $renewerStart)
+          if ($renewerStart -lt 0 -or $volumesStart -lt 0) { throw 'Cannot locate renewal-service Compose section.' }
+          $renewerSection = $text.Substring($renewerStart, $volumesStart - $renewerStart)
+          if ($renewerSection.Contains('./service-trust:')) { throw 'Renewal service must not mount the offline root CA directory.' }
+          if (-not $renewerSection.Contains('fieldora-issuer-authority:/run/fieldora-authority:ro')) { throw 'Renewal service must use the constrained issuer volume.' }
+          Write-Host "Offline root / constrained online issuer separation: OK"
+
+      - name: Ensure plaintext PostgreSQL network access is rejected
+        shell: pwsh
+        run: |
+          $text = Get-Content -LiteralPath ./Install-Fieldora-Clean.ps1 -Raw
+          foreach ($needle in @('hostnossl all all   0.0.0.0/0   reject','hostnossl all all   ::/0        reject')) {
+            if (-not $text.Contains($needle)) { throw "PostgreSQL plaintext rejection rule is missing: $needle" }
+          }
+          Write-Host "PostgreSQL plaintext rejection: OK"

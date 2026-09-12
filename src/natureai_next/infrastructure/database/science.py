@@ -3,14 +3,12 @@
 from __future__ import annotations
 
 import json
-import sqlite3
 from collections.abc import Callable
 from copy import deepcopy
 from pathlib import Path
 
 from natureai_next.domain.science import ScienceRevision, ScienceRevisionConflict
 from natureai_next.infrastructure.database.connection import SqliteConnectionFactory
-
 
 _COLLECTIONS = (
     "projects",
@@ -91,6 +89,10 @@ class SqliteScienceRepository:
         snapshot = deepcopy(self._default_snapshot())
         connection = self._factory.connect(read_only=True)
         try:
+            # Connections run in autocommit mode. Pin both reads to one SQLite
+            # snapshot so the revision and records can never come from different
+            # committed states while another process saves concurrently.
+            connection.execute("BEGIN")
             revision = ScienceRevision(
                 int(
                     connection.execute(
@@ -102,6 +104,10 @@ class SqliteScienceRepository:
                 "SELECT collection_name,payload_json FROM science_records "
                 "ORDER BY collection_name,updated_at_us,record_id"
             ).fetchall()
+            connection.commit()
+        except BaseException:
+            connection.rollback()
+            raise
         finally:
             connection.close()
         for row in rows:

@@ -6,9 +6,11 @@ on:
       - "src/natureai_next/server/dossier_evidence_api.py"
       - "src/natureai_next/server/dossier_module_web.py"
       - "src/natureai_next/server/media_links.py"
+      - "src/natureai_next/server/modular_shell_web.py"
       - "src/natureai_next/server/offline_first_api.py"
       - "tests/test_dossier_evidence_api.py"
       - "tests/test_dossier_evidence_browser.py"
+      - "tests/test_dossier_modular_shell_retirement.py"
       - ".github/workflows/dossier-evidence-certification.yml"
   workflow_dispatch:
 
@@ -45,9 +47,11 @@ jobs:
           python -m ruff check
           src/natureai_next/server/dossier_evidence_api.py
           src/natureai_next/server/dossier_module_web.py
+          src/natureai_next/server/modular_shell_web.py
           src/natureai_next/server/offline_first_api.py
           tests/test_dossier_evidence_api.py
           tests/test_dossier_evidence_browser.py
+          tests/test_dossier_modular_shell_retirement.py
 
       - name: Dossier evidence stable-ID tests
         run: >-
@@ -55,3 +59,4 @@ jobs:
           tests/test_dossier_evidence_api.py
           tests/test_dossier_evidence_browser.py
           tests/test_dossier_module_web.py
+          tests/test_dossier_modular_shell_retirement.py

@@ -67,6 +67,7 @@ _LEGACY_RESEARCH_PROJECT_LIST_WIRING = (
     b'q("project-list").onclick=e=>{const row=e.target.closest("[data-project]");if(row)openProject(row.dataset.project)};'
 )
 _LEGACY_RESEARCH_SELECTED_PROJECT_WRITE = b"function openProject(id){selectedProject=id;"
+_LEGACY_DOSSIER_SHOWPAGE_LOAD = b'if(name==="dossiers")loadDossierWorkspace();'
 _LEGACY_DOSSIER_LOADER_START = b"async function loadDossierWorkspace(){"
 _LEGACY_DOSSIER_LOADER_END = b"async function loadResearchDomain(){"
 _LEGACY_DOSSIER_REFRESH_WIRING = b'q("dossier-refresh").onclick=loadDossierWorkspace;'
@@ -220,6 +221,7 @@ def _rewrite_owned_browser_response(body: bytes) -> bytes:
         _DOSSIER_OWNER_MARKER in body
         and _DOSSIER_REGISTRY_MARKER in _MODULAR_SHELL_BOOTSTRAP
     ):
+        body = body.replace(_LEGACY_DOSSIER_SHOWPAGE_LOAD, b"", 1)
         body = _strip_legacy_range(
             body, _LEGACY_DOSSIER_LOADER_START, _LEGACY_DOSSIER_LOADER_END
         )

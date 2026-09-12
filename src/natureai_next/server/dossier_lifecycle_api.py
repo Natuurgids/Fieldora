@@ -163,6 +163,38 @@ class DossierLifecycleApiMixin:
             and target.enabled
         )
 
+    def _eligible_project(
+        self, identity, project_id: str, purpose: str
+    ) -> bool:
+        if not project_id:
+            return True
+        management = getattr(self, "_project_management", None)
+        if management is not None:
+            exists = any(
+                project.project_id == project_id
+                for project in management.projects(identity.organization_id)
+            )
+        else:
+            exists = any(
+                str(project.get("id", "")).strip() == project_id
+                and str(project.get("organization_id", "")).strip()
+                in {"", identity.organization_id}
+                for project in self._science.records("projects")
+            )
+        if not exists:
+            return False
+        return self._decisions.decide(
+            AccessRequest(
+                identity.identity_id,
+                "view",
+                "project",
+                project_id,
+                identity.organization_id,
+                project_id,
+                purpose,
+            )
+        ).allowed
+
     @staticmethod
     def _payload(body: bytes) -> dict[str, object] | None:
         if len(body) > 16_384:
@@ -240,6 +272,15 @@ class DossierLifecycleApiMixin:
             and str(updates["dossier_type"]).strip() not in self._DOSSIER_TYPES
         ):
             return ApiResponse.json(400, {"error": "invalid_dossier_type"})
+        if "project_id" in updates:
+            target_project_id = str(updates["project_id"]).strip()
+            if not self._eligible_project(
+                identity,
+                target_project_id,
+                headers.get("x-fieldora-purpose", "research"),
+            ):
+                return ApiResponse.json(404, {"error": "project_not_found"})
+            updates["project_id"] = target_project_id
         for key, value in updates.items():
             dossier[key] = str(value).strip() if isinstance(value, str) else value
         dossier["updated_by"] = identity.identity_id

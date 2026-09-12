@@ -39,12 +39,27 @@ class _Science:
                 "review_history": [],
             }
         }
+        self.projects = {
+            "project-1": {
+                "id": "project-1",
+                "organization_id": "org-1",
+                "name": "Current project",
+            },
+            "project-2": {
+                "id": "project-2",
+                "organization_id": "org-1",
+                "name": "Target project",
+            },
+        }
         self.revision = 3
         self.put_calls = []
 
     def records(self, collection):
-        assert collection == "dossiers"
-        return tuple(dict(item) for item in self.items.values())
+        if collection == "dossiers":
+            return tuple(dict(item) for item in self.items.values())
+        if collection == "projects":
+            return tuple(dict(item) for item in self.projects.values())
+        raise AssertionError(collection)
 
     def put(self, collection, record, expected_revision):
         assert collection == "dossiers"
@@ -54,6 +69,29 @@ class _Science:
         self.revision += 1
         self.items[str(record["id"])] = dict(record)
         return self.revision
+
+
+class _ProjectManagement:
+    def __init__(self):
+        self.items = {
+            "project-1": SimpleNamespace(
+                project_id="project-1",
+                organization_id="org-1",
+                name="Current project",
+            ),
+            "project-2": SimpleNamespace(
+                project_id="project-2",
+                organization_id="org-1",
+                name="Target project",
+            ),
+        }
+
+    def projects(self, organization_id):
+        return tuple(
+            project
+            for project in self.items.values()
+            if project.organization_id == organization_id
+        )
 
 
 class _Access:
@@ -104,6 +142,7 @@ class _Access:
 class _Api(DossierLifecycleApiMixin, _BaseApi):
     def __init__(self, denied_actions=(), identity_id="owner-1"):
         self._science = _Science()
+        self._project_management = _ProjectManagement()
         self._decisions = _Decisions(denied_actions)
         self._access_repository = _Access()
         self.identity_id = identity_id
@@ -166,6 +205,79 @@ def test_dossier_edit_rejects_unsupported_dossier_type() -> None:
     assert response.status == 400
     assert _json(response)["error"] == "invalid_dossier_type"
     assert api._science.put_calls == []
+
+
+def test_dossier_edit_can_move_to_accessible_project() -> None:
+    api = _Api()
+
+    response = api.dispatch(
+        "PATCH",
+        "/api/v1/dossiers/dossier-1",
+        {"x-fieldora-purpose": "research"},
+        b'{"project_id":"project-2"}',
+    )
+
+    assert response.status == 200
+    assert _json(response)["item"]["project_id"] == "project-2"
+    assert [request.action for request in api._decisions.requests] == ["edit", "view"]
+    assert api._decisions.requests[-1].resource_type == "project"
+    assert api._decisions.requests[-1].resource_id == "project-2"
+
+
+def test_dossier_edit_can_become_independent_without_project_lookup() -> None:
+    api = _Api()
+
+    response = api.dispatch(
+        "PATCH",
+        "/api/v1/dossiers/dossier-1",
+        {},
+        b'{"project_id":""}',
+    )
+
+    assert response.status == 200
+    assert _json(response)["item"]["project_id"] == ""
+    assert [request.action for request in api._decisions.requests] == ["edit"]
+
+
+def test_dossier_edit_rejects_unknown_or_inaccessible_project() -> None:
+    unknown = _Api()
+    unknown_response = unknown.dispatch(
+        "PATCH",
+        "/api/v1/dossiers/dossier-1",
+        {},
+        b'{"project_id":"missing-project"}',
+    )
+
+    assert unknown_response.status == 404
+    assert _json(unknown_response)["error"] == "project_not_found"
+    assert unknown._science.put_calls == []
+
+    inaccessible = _Api({"view"})
+    inaccessible_response = inaccessible.dispatch(
+        "PATCH",
+        "/api/v1/dossiers/dossier-1",
+        {},
+        b'{"project_id":"project-2"}',
+    )
+
+    assert inaccessible_response.status == 404
+    assert _json(inaccessible_response)["error"] == "project_not_found"
+    assert inaccessible._science.put_calls == []
+
+
+def test_dossier_edit_validates_project_from_science_projection_without_managed_service() -> None:
+    api = _Api()
+    api._project_management = None
+
+    response = api.dispatch(
+        "PATCH",
+        "/api/v1/dossiers/dossier-1",
+        {},
+        b'{"project_id":"project-2"}',
+    )
+
+    assert response.status == 200
+    assert _json(response)["item"]["project_id"] == "project-2"
 
 
 def test_dossier_edit_fails_closed_without_edit_authority() -> None:

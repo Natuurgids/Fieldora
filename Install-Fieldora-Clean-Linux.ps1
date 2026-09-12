@@ -11,7 +11,7 @@ model installation.
 [CmdletBinding()]
 param(
     [string]$InstallRoot = (Join-Path $HOME "fieldora-server"),
-    [string]$FieldoraRef = "feature/versioned-facility-floorplans",
+    [string]$FieldoraRef = "main",
     [string]$AdminUsername = "admin",
     [string]$AdminName = "Administrator",
     [string]$Organization = "local",

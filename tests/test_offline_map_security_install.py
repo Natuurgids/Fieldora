@@ -5,9 +5,18 @@ import hashlib
 import pytest
 
 from natureai_next import __version__
-from natureai_next.domain.access_control import Identity, IdentityKind, Policy, PolicyEffect, PolicySource
+from natureai_next.domain.access_control import (
+    Identity,
+    IdentityKind,
+    Policy,
+    PolicyEffect,
+    PolicySource,
+)
 from natureai_next.domain.maps import OfflineMapPackage
-from natureai_next.domain.security_install import SecurityInstallAcceptanceError, canonical_sha256
+from natureai_next.domain.security_install import (
+    SecurityInstallAcceptanceError,
+    canonical_sha256,
+)
 from natureai_next.infrastructure.database.access_control import SqliteAccessControlRepository
 from natureai_next.infrastructure.subsystems.maps import OfflineMapCatalog
 

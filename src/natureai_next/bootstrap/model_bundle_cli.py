@@ -8,13 +8,19 @@ import hashlib
 import json
 import os
 import shutil
+import stat
 import tempfile
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
+from zipfile import BadZipFile, ZipFile, ZipInfo
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+
+from natureai_next.application.security_install import require_security_install
+from natureai_next.domain.security_install import SecurityInstallAcceptanceError
 
 _MODEL_EXTENSIONS = {".safetensors", ".onnx", ".gguf"}
 _SUPPORT_EXTENSIONS = {
@@ -359,10 +365,138 @@ def verify_model_bundle(
     )
 
 
+def _zip_member_is_symlink(info: ZipInfo) -> bool:
+    return ((info.external_attr >> 16) & 0o170000) == 0o120000
+
+
+def _zip_member_sha256(archive: ZipFile, info: ZipInfo) -> str:
+    digest = hashlib.sha256()
+    with archive.open(info, "r") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _verify_security_install_archive(
+    artifact_path: Path,
+    bundle_dir: Path,
+    verified: VerifiedModelBundle,
+) -> None:
+    """Bind the authenticated transfer ZIP to the exact unpacked payload to install."""
+    expected_payload = {
+        str(entry["path"]): (int(entry["size_bytes"]), str(entry["sha256"]))
+        for entry in verified.files
+    }
+    manifest_path = bundle_dir.resolve() / "manifest.json"
+    signature_path = bundle_dir.resolve() / "manifest.sig"
+    expected_files = set(expected_payload) | {"manifest.json"}
+    if signature_path.is_file() and not signature_path.is_symlink():
+        expected_files.add("manifest.sig")
+
+    try:
+        with ZipFile(artifact_path, "r") as archive:
+            files: dict[str, ZipInfo] = {}
+            seen: set[str] = set()
+            for info in archive.infolist():
+                relative = _safe_relative_path(info.filename)
+                name = relative.as_posix()
+                if name in seen:
+                    raise ModelBundleError(f"duplicate Security Install ZIP path: {name}")
+                seen.add(name)
+                if _zip_member_is_symlink(info):
+                    raise ModelBundleError(f"Security Install ZIP contains a symlink: {name}")
+                if not info.is_dir():
+                    files[name] = info
+            if set(files) != expected_files:
+                raise ModelBundleError("Security Install ZIP payload does not match model bundle")
+
+            manifest_info = files["manifest.json"]
+            if manifest_info.file_size > _MAX_MANIFEST_BYTES:
+                raise ModelBundleError("Security Install ZIP manifest exceeds the size limit")
+            if archive.read(manifest_info) != manifest_path.read_bytes():
+                raise ModelBundleError("Security Install ZIP manifest does not match model bundle")
+
+            if "manifest.sig" in expected_files:
+                signature_info = files["manifest.sig"]
+                if signature_info.file_size > _MAX_SIGNATURE_BYTES:
+                    raise ModelBundleError("Security Install ZIP signature exceeds the size limit")
+                if archive.read(signature_info) != signature_path.read_bytes():
+                    raise ModelBundleError("Security Install ZIP signature does not match model bundle")
+
+            for name, (expected_size, expected_hash) in expected_payload.items():
+                info = files[name]
+                if info.file_size != expected_size:
+                    raise ModelBundleError(f"Security Install ZIP size mismatch for {name}")
+                if _zip_member_sha256(archive, info) != expected_hash:
+                    raise ModelBundleError(f"Security Install ZIP SHA-256 mismatch for {name}")
+    except ModelBundleError:
+        raise
+    except (BadZipFile, OSError, RuntimeError, ValueError) as exc:
+        raise ModelBundleError("Security Install artifact must be a readable ZIP") from exc
+
+
+def _require_model_security_install(
+    evidence: Mapping[str, object],
+    *,
+    artifact_path: Path,
+    access_control_database: Path,
+    subject_id: str,
+    actual_target_version: str,
+    verified: VerifiedModelBundle,
+) -> None:
+    try:
+        accepted = require_security_install(
+            evidence,
+            artifact_path=artifact_path,
+            access_control_database=access_control_database,
+            subject_id=subject_id,
+            expected_package_id=artifact_path.name,
+            expected_target_component=f"fieldora-model:{verified.model_id}",
+            actual_target_version=actual_target_version,
+        )
+    except SecurityInstallAcceptanceError as exc:
+        raise ModelBundleError(f"Security Install acceptance failed: {exc}") from exc
+    if accepted.target_version != verified.version:
+        raise ModelBundleError("Security Install target version does not match model bundle version")
+
+
+def _copy_verified_file(source: Path, target: Path, entry: Mapping[str, object]) -> None:
+    expected_size = int(entry["size_bytes"])
+    expected_hash = str(entry["sha256"])
+    if source.is_symlink():
+        raise ModelBundleError(f"bundle file changed into a symlink: {entry['path']}")
+    flags = os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        descriptor = os.open(source, flags)
+    except OSError as exc:
+        raise ModelBundleError(f"bundle file became unreadable: {entry['path']}") from exc
+    digest = hashlib.sha256()
+    copied = 0
+    try:
+        with os.fdopen(descriptor, "rb") as input_stream, target.open("xb") as output_stream:
+            if not stat.S_ISREG(os.fstat(input_stream.fileno()).st_mode):
+                raise ModelBundleError(f"bundle file is no longer regular: {entry['path']}")
+            for chunk in iter(lambda: input_stream.read(1024 * 1024), b""):
+                copied += len(chunk)
+                digest.update(chunk)
+                output_stream.write(chunk)
+    except BaseException:
+        target.unlink(missing_ok=True)
+        raise
+    if copied != expected_size or digest.hexdigest() != expected_hash:
+        target.unlink(missing_ok=True)
+        raise ModelBundleError(f"bundle file changed during install staging: {entry['path']}")
+
+
 def install_model_bundle(
     bundle_dir: Path,
     model_store: Path,
     *,
+    security_install_artifact: Path,
+    security_install_evidence: Mapping[str, object],
+    access_control_database: Path,
+    security_install_subject: str,
+    actual_target_version: str,
     max_total_bytes: int = _DEFAULT_MAX_BYTES,
     trusted_signing_key: Path | None = None,
     require_signature: bool = False,
@@ -375,7 +509,16 @@ def install_model_bundle(
         require_signature=require_signature,
         require_clean_scan=require_clean_scan,
     )
-    model_store.mkdir(parents=True, exist_ok=True)
+    _verify_security_install_archive(security_install_artifact, bundle_dir, verified)
+    _require_model_security_install(
+        security_install_evidence,
+        artifact_path=security_install_artifact,
+        access_control_database=access_control_database,
+        subject_id=security_install_subject,
+        actual_target_version=actual_target_version,
+        verified=verified,
+    )
+
     destination = model_store / verified.model_id / verified.version
     if destination.exists():
         raise ModelBundleError(f"model version is already installed: {verified.artifact_storage_id}")
@@ -383,22 +526,49 @@ def install_model_bundle(
     parent.mkdir(parents=True, exist_ok=True)
     temp_root = Path(tempfile.mkdtemp(prefix=".fieldora-model-", dir=parent))
     try:
+        bundle_root = bundle_dir.resolve()
         for entry in verified.files:
             relative = PurePosixPath(str(entry["path"]))
-            source = bundle_dir.resolve().joinpath(*relative.parts)
+            source = bundle_root.joinpath(*relative.parts)
             target = temp_root.joinpath(*relative.parts)
             target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(source, target, follow_symlinks=False)
+            _copy_verified_file(source, target, entry)
         (temp_root / "FIELDORA-INSTALL.json").write_text(
             json.dumps(verified.registry_record(), ensure_ascii=False, sort_keys=True, indent=2)
             + "\n",
             encoding="utf-8",
         )
+        _require_model_security_install(
+            security_install_evidence,
+            artifact_path=security_install_artifact,
+            access_control_database=access_control_database,
+            subject_id=security_install_subject,
+            actual_target_version=actual_target_version,
+            verified=verified,
+        )
+        if destination.exists():
+            raise ModelBundleError(f"model version is already installed: {verified.artifact_storage_id}")
         os.replace(temp_root, destination)
     except BaseException:
         shutil.rmtree(temp_root, ignore_errors=True)
         raise
     return verified, destination
+
+
+def _load_security_install_evidence(path: Path) -> Mapping[str, object]:
+    if path.is_symlink() or not path.is_file():
+        raise ModelBundleError("Security Install evidence must be a regular non-symlink JSON file")
+    try:
+        if path.stat().st_size > _MAX_MANIFEST_BYTES:
+            raise ModelBundleError("Security Install evidence exceeds the configured size limit")
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except ModelBundleError:
+        raise
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise ModelBundleError("Security Install evidence is unreadable or invalid JSON") from exc
+    if not isinstance(value, dict):
+        raise ModelBundleError("Security Install evidence must contain an object")
+    return value
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -416,6 +586,11 @@ def _parser() -> argparse.ArgumentParser:
         command.add_argument("--require-clean-scan", action="store_true")
         if name == "install":
             command.add_argument("--store", type=Path, required=True)
+            command.add_argument("--security-install-artifact", type=Path, required=True)
+            command.add_argument("--security-install-evidence", type=Path, required=True)
+            command.add_argument("--access-control-database", type=Path, required=True)
+            command.add_argument("--security-install-subject", required=True)
+            command.add_argument("--actual-target-version", required=True)
     return parser
 
 
@@ -445,6 +620,13 @@ def main(argv: list[str] | None = None) -> int:
             verified, _destination = install_model_bundle(
                 args.bundle,
                 args.store,
+                security_install_artifact=args.security_install_artifact,
+                security_install_evidence=_load_security_install_evidence(
+                    args.security_install_evidence
+                ),
+                access_control_database=args.access_control_database,
+                security_install_subject=args.security_install_subject,
+                actual_target_version=args.actual_target_version,
                 **kwargs,
             )
             output = verified.registry_record()

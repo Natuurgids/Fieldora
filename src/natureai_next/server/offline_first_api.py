@@ -18,6 +18,7 @@ from natureai_next.server.dossier_delete_api import DossierDeleteApiMixin
 from natureai_next.server.dossier_evidence_api import DossierEvidenceApiMixin
 from natureai_next.server.dossier_lifecycle_api import DossierLifecycleApiMixin
 from natureai_next.server.dossier_module_web import DossierModuleWebApiMixin
+from natureai_next.server.excalidraw_api import ExcalidrawApiMixin
 from natureai_next.server.facility_actions_api import FacilityActionsApiMixin
 from natureai_next.server.facility_module_runtime import (
     FacilityModuleCompositionApiMixin,
@@ -74,6 +75,7 @@ from natureai_next.server.visible_control_audit_api import VisibleControlAuditAp
 
 
 class OfflineFirstFieldoraApi(
+    ExcalidrawApiMixin,
     ModularShellWebApiMixin,
     BoundedUploadWebApiMixin,
     OperationsModuleCompositionApiMixin,

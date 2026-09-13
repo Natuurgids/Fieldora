@@ -28,6 +28,7 @@ class UpdateCandidate:
     sha256: str
     release_notes: str
     channel: str = "stable"
+    security_install_evidence: dict[str, object] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -87,10 +88,7 @@ class OfflineUpdateService:
         if not index_path.is_file():
             raise FileNotFoundError(f"update index not found: {index_path}")
         payload: dict[str, Any] = json.loads(index_path.read_text(encoding="utf-8"))
-        if (
-            payload.get("format") != "natureai-next.update-index"
-            or payload.get("format_version") != 1
-        ):
+        if payload.get("format") != "natureai-next.update-index" or payload.get("format_version") != 1:
             raise ValueError("unsupported update index format")
         if payload.get("product") != self._product:
             raise ValueError("update package is for a different product")
@@ -115,13 +113,12 @@ class OfflineUpdateService:
         actual = self._sha256(package_path)
         if actual != expected:
             raise ValueError("update package checksum does not match the update index")
+        security_install = payload.get("security_install")
+        if not isinstance(security_install, dict):
+            raise ValueError("trusted Security Install evidence is required for native updates")
         notes_value = payload.get("release_notes", "")
         notes_path = source / str(notes_value) if notes_value else None
-        release_notes = (
-            notes_path.read_text(encoding="utf-8")
-            if notes_path and notes_path.is_file()
-            else str(notes_value)
-        )
+        release_notes = notes_path.read_text(encoding="utf-8") if notes_path and notes_path.is_file() else str(notes_value)
         return UpdateCandidate(
             product=self._product,
             version=version,
@@ -130,9 +127,12 @@ class OfflineUpdateService:
             sha256=expected,
             release_notes=release_notes,
             channel=candidate_channel,
+            security_install_evidence=dict(security_install),
         )
 
     def stage(self, candidate: UpdateCandidate, staging_directory: Path) -> StagedUpdate:
+        if not isinstance(candidate.security_install_evidence, dict):
+            raise ValueError("trusted Security Install evidence is required for native updates")
         staging_directory.mkdir(parents=True, exist_ok=True)
         target = staging_directory / candidate.package_path.name
         if target.exists():
@@ -146,9 +146,11 @@ class OfflineUpdateService:
             "format": "natureai-next.pending-update",
             "format_version": 1,
             "product": candidate.product,
+            "from_version": self._current_version,
             "version": candidate.version,
             "package": target.name,
             "sha256": candidate.sha256,
+            "security_install": candidate.security_install_evidence,
             "status": "staged",
         }
         request.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")

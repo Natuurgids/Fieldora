@@ -1,15 +1,15 @@
 """Trusted application boundary for Security Install acceptance.
 
 This module is the only production bridge between provider-neutral Security
-Install evidence and Fieldora business authorization.  Callers provide the
-identity and release binding, never an ``AccessDecision``.  The decision is
-always made and audited by Fieldora's normal PBAC service.
+Install evidence and Fieldora business authorization. Callers provide identity
+and release binding, never an ``AccessDecision``. The decision is always made
+and audited by Fieldora's normal PBAC service.
 """
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Mapping
 
 from natureai_next.application.access_control import AccessDenied, PolicyDecisionService
 from natureai_next.domain.access_control import AccessRequest
@@ -18,9 +18,7 @@ from natureai_next.domain.security_install import (
     TrustedInstallAcceptance,
     accept_security_install_release,
 )
-from natureai_next.infrastructure.database.access_control import (
-    SqliteAccessControlRepository,
-)
+from natureai_next.infrastructure.database.access_control import SqliteAccessControlRepository
 
 SECURITY_INSTALL_ACTION = "install"
 SECURITY_INSTALL_RESOURCE_TYPE = "security_install_release"
@@ -37,13 +35,9 @@ def require_security_install(
     expected_target_component: str,
     actual_target_version: str,
 ) -> TrustedInstallAcceptance:
-    """Require audited PBAC and independently accept one local release artifact.
-
-    The access-control repository is opened here so callers cannot substitute a
-    precomputed allow decision.  The domain acceptance routine then re-reads the
-    artifact digest and size from ``artifact_path`` and binds that observation to
-    the release, package, target, transfer receipt, and verification evidence.
-    """
+    """Require audited PBAC and independently accept one local release artifact."""
+    if not isinstance(evidence, Mapping):
+        raise SecurityInstallAcceptanceError("trusted Security Install evidence must be an object")
 
     subject = subject_id.strip()
     if not subject:
@@ -62,10 +56,7 @@ def require_security_install(
         resource_type=SECURITY_INSTALL_RESOURCE_TYPE,
         resource_id=package_id,
         purpose=SECURITY_INSTALL_PURPOSE,
-        attributes={
-            "target_component": component,
-            "actual_target_version": target_version,
-        },
+        attributes={"target_component": component, "actual_target_version": target_version},
     )
     try:
         decision = policy.require(request)

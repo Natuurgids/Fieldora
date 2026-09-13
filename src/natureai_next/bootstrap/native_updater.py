@@ -13,8 +13,14 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
 
+from natureai_next.application.security_install import require_security_install
 from natureai_next.application.update_history import UpdateHistoryEntry, UpdateHistoryStore
+from natureai_next.bootstrap.paths import resolve_application_paths
+from natureai_next.domain.security_install import SecurityInstallAcceptanceError
 from natureai_next.infrastructure.filesystem.library_lock import recover_stale_library_lock
+
+_SECURITY_INSTALL_SUBJECT = "fieldora-native-updater"
+_SECURITY_INSTALL_COMPONENT = "fieldora"
 
 
 def _sha256(path: Path) -> str:
@@ -25,9 +31,7 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _wait_for_exit(
-    pid: int, timeout_seconds: float = 120.0, tick: Callable[[], None] | None = None
-) -> None:
+def _wait_for_exit(pid: int, timeout_seconds: float = 120.0, tick: Callable[[], None] | None = None) -> None:
     deadline = time.monotonic() + timeout_seconds
     while time.monotonic() < deadline:
         try:
@@ -40,9 +44,7 @@ def _wait_for_exit(
     raise TimeoutError("Aperture did not close in time to install the update")
 
 
-def _wait_for_library_unlock(
-    library: Path, timeout_seconds: float = 30.0, tick: Callable[[], None] | None = None
-) -> None:
+def _wait_for_library_unlock(library: Path, timeout_seconds: float = 30.0, tick: Callable[[], None] | None = None) -> None:
     lock_path = library / ".natureai-next.lock"
     deadline = time.monotonic() + timeout_seconds
     while time.monotonic() < deadline:
@@ -56,17 +58,33 @@ def _wait_for_library_unlock(
     raise TimeoutError("Aperture closed but the library lock was not released")
 
 
-def _write_status(
-    request_path: Path, payload: dict[str, Any], status: str, detail: str = ""
-) -> None:
+def _write_status(request_path: Path, payload: dict[str, Any], status: str, detail: str = "") -> None:
     payload["status"] = status
     payload["detail"] = detail
-    payload["updated_at_utc"] = (
-        __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()
-    )
+    payload["updated_at_utc"] = __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat()
     temp = request_path.with_suffix(request_path.suffix + ".tmp")
     temp.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     temp.replace(request_path)
+
+
+def _require_trusted_update(payload: dict[str, Any], package: Path) -> None:
+    evidence = payload.get("security_install")
+    if not isinstance(evidence, dict):
+        raise SecurityInstallAcceptanceError("trusted Security Install evidence is required")
+    package_id = str(payload.get("package") or "").strip()
+    current_version = str(payload.get("from_version") or "").strip()
+    if not package_id or not current_version:
+        raise SecurityInstallAcceptanceError("native update release binding is incomplete")
+    access_database = resolve_application_paths().subsystem_databases_dir / "access-control.sqlite3"
+    require_security_install(
+        evidence,
+        artifact_path=package,
+        access_control_database=access_database,
+        subject_id=_SECURITY_INSTALL_SUBJECT,
+        expected_package_id=package_id,
+        expected_target_component=_SECURITY_INSTALL_COMPONENT,
+        actual_target_version=current_version,
+    )
 
 
 class _ProgressUI:
@@ -118,11 +136,8 @@ class _ProgressUI:
         if self.window is None:
             return
         from PySide6.QtWidgets import QMessageBox
-
         self.stage("Update failed", 100)
-        QMessageBox.critical(
-            self.window, "Update failed", f"The previous installation remains available.\n\n{text}"
-        )
+        QMessageBox.critical(self.window, "Update failed", f"The previous installation remains available.\n\n{text}")
 
     def success(self, version: str) -> None:
         self.stage(f"Aperture {version} installed successfully. Launching Aperture…", 100)
@@ -142,10 +157,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     history_path = args.library.resolve() / "updates" / "update-history.jsonl"
     history = UpdateHistoryStore()
     payload: dict[str, Any] = json.loads(request_path.read_text(encoding="utf-8"))
-    if (
-        payload.get("format") != "natureai-next.pending-update"
-        or payload.get("format_version") != 1
-    ):
+    if payload.get("format") != "natureai-next.pending-update" or payload.get("format_version") != 1:
         raise ValueError("unsupported staged update request")
     package = request_path.parent / str(payload["package"])
     target_version = str(payload["version"])
@@ -154,6 +166,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not package.is_file() or _sha256(package) != str(payload["sha256"]).casefold():
         ui.failure("The staged update package failed checksum verification.")
         raise ValueError("staged update package verification failed")
+    if not isinstance(payload.get("security_install"), dict):
+        ui.failure("Trusted Security Install evidence is missing.")
+        raise ValueError("trusted Security Install evidence is required")
     try:
         ui.stage("Update package verified. Waiting for Aperture to close…", 15)
         _write_status(request_path, payload, "helper-ready")
@@ -162,18 +177,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         ui.stage("Aperture closed. Waiting for the library to be released…", 30)
         _write_status(request_path, payload, "waiting-for-library-unlock")
         _wait_for_library_unlock(args.library.resolve(), tick=ui.pump)
+        ui.stage("Authorizing trusted Security Install…", 45)
+        _write_status(request_path, payload, "authorizing-security-install")
+        _require_trusted_update(payload, package)
         ui.stage("Installing the new Aperture version…", 50)
         _write_status(request_path, payload, "installing")
         result = subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "pip",
-                "install",
-                "--no-deps",
-                "--force-reinstall",
-                str(package),
-            ],
+            [sys.executable, "-m", "pip", "install", "--no-deps", "--force-reinstall", str(package)],
             check=False,
             capture_output=True,
             text=True,
@@ -192,20 +202,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         if check.returncode != 0 or check.stdout.strip() != target_version:
             raise RuntimeError("installed version validation failed")
         _write_status(request_path, payload, "installed")
-        history.append(
-            history_path,
-            UpdateHistoryEntry(
-                version=target_version, status="installed", detail="Update installed and validated"
-            ),
-        )
+        history.append(history_path, UpdateHistoryEntry(version=target_version, status="installed", detail="Update installed and validated"))
         package.unlink(missing_ok=True)
         ui.success(target_version)
         aperture = Path(sys.prefix) / "Scripts" / "natureai-next.exe"
-        restart = (
-            [str(aperture)]
-            if aperture.is_file()
-            else [sys.executable, "-m", "natureai_next.bootstrap.cli"]
-        )
+        restart = [str(aperture)] if aperture.is_file() else [sys.executable, "-m", "natureai_next.bootstrap.cli"]
         subprocess.Popen(
             [*restart, "--library", str(args.library)],
             stdin=subprocess.DEVNULL,
@@ -216,12 +217,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
     except Exception as exc:
         _write_status(request_path, payload, "failed", str(exc))
-        history.append(
-            history_path,
-            UpdateHistoryEntry(
-                version=str(payload.get("version", "unknown")), status="failed", detail=str(exc)
-            ),
-        )
+        history.append(history_path, UpdateHistoryEntry(version=str(payload.get("version", "unknown")), status="failed", detail=str(exc)))
         ui.failure(str(exc))
         return 1
 

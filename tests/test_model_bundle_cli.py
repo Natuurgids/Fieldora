@@ -13,7 +13,13 @@ from natureai_next.bootstrap.model_bundle_cli import (
     install_model_bundle,
     verify_model_bundle,
 )
-from natureai_next.domain.access_control import Identity, IdentityKind, Policy, PolicyEffect, PolicySource
+from natureai_next.domain.access_control import (
+    Identity,
+    IdentityKind,
+    Policy,
+    PolicyEffect,
+    PolicySource,
+)
 from natureai_next.domain.security_install import canonical_sha256
 from natureai_next.infrastructure.database.access_control import SqliteAccessControlRepository
 
@@ -368,7 +374,10 @@ def test_install_rehashes_transfer_artifact_immediately_before_commit(
 
     monkeypatch.setattr(model_bundle_cli, "_copy_verified_file", copy_then_tamper)
 
-    with pytest.raises(ModelBundleError, match="Security Install acceptance failed: artifact size mismatch"):
+    with pytest.raises(
+        ModelBundleError,
+        match="Security Install acceptance failed: artifact size mismatch",
+    ):
         install_model_bundle(bundle, store, **kwargs)
 
     destination = store / "fieldora-test-model" / "1.0.0"

@@ -58,13 +58,17 @@ def _evidence(payload: bytes, *, provider_id: str = "fieldora-bastion") -> dict[
             "release_digest": release_digest,
         },
         "transfer_receipt": {
-            "status": "accepted",
-            "independently_verified": True,
             "package_id": "fieldora-5.5.0.whl",
-            "release_digest": release_digest,
+            "collector_id": "fieldora-device-17",
             "expected_sha256": sha256,
             "observed_sha256": sha256,
-            "observed_size": len(payload),
+            "status": "accepted",
+        },
+        "independent_verification": {
+            "verified": True,
+            "package_id": "fieldora-5.5.0.whl",
+            "release_digest": release_digest,
+            "sha256": sha256,
         },
     }
 
@@ -86,10 +90,11 @@ def _accept(tmp_path, evidence, payload: bytes = b"trusted release"):
     )
 
 
-def test_accepts_bastion_shaped_secure_transfer_evidence(tmp_path) -> None:
+def test_accepts_bastion_shaped_secure_transfer_receipt(tmp_path) -> None:
     payload = b"trusted release"
     accepted = _accept(tmp_path, _evidence(payload), payload)
     assert accepted.secure_transfer_provider == "fieldora-bastion"
+    assert accepted.collector_id == "fieldora-device-17"
     assert accepted.matched_policy_ids == ("install-fieldora",)
 
 
@@ -115,50 +120,32 @@ def test_fieldora_pbac_is_required_independently(tmp_path) -> None:
 
 
 @pytest.mark.parametrize(
-    ("mutate", "message"),
+    ("path", "value", "message"),
     [
-        (lambda item: item.update(protocol_version=2), "protocol version"),
-        (lambda item: item.update(package_id="other.whl"), "package identity mismatch"),
-        (lambda item: item["target"].update(component="other"), "target component mismatch"),
-        (lambda item: item["target"].update(compatible_from=["5.3.0"]), "not approved"),
-        (lambda item: item["artifact"].update(size=1), "artifact size mismatch"),
-        (lambda item: item["artifact"].update(sha256="b" * 64), "artifact digest mismatch"),
-        (
-            lambda item: item["compatibility_approval"].update(approval_digest="b" * 64),
-            "approval digest mismatch",
-        ),
-        (
-            lambda item: item["commercial_private_supply_chain"].update(approved=False),
-            "supply-chain",
-        ),
-        (
-            lambda item: item["provenance"].update(signature_verified=False),
-            "signature/provenance",
-        ),
-        (
-            lambda item: item["secure_transfer"].update(capability="something-else"),
-            "capability mismatch",
-        ),
-        (lambda item: item["secure_transfer"].update(approved=False), "not approved"),
-        (lambda item: item["transfer_receipt"].update(status="rejected"), "not accepted"),
-        (
-            lambda item: item["transfer_receipt"].update(independently_verified=False),
-            "independent verification",
-        ),
-        (
-            lambda item: item["transfer_receipt"].update(observed_sha256="b" * 64),
-            "artifact digest mismatch",
-        ),
-        (
-            lambda item: item["transfer_receipt"].update(release_digest="b" * 64),
-            "release digest mismatch",
-        ),
+        (("protocol_version",), 2, "protocol version"),
+        (("package_id",), "other.whl", "package identity mismatch"),
+        (("target", "component"), "other", "target component mismatch"),
+        (("target", "compatible_from"), ["5.3.0"], "not approved"),
+        (("artifact", "size"), 1, "artifact size mismatch"),
+        (("artifact", "sha256"), "b" * 64, "artifact digest mismatch"),
+        (("compatibility_approval", "approval_digest"), "b" * 64, "approval digest mismatch"),
+        (("commercial_private_supply_chain", "approved"), False, "supply-chain"),
+        (("provenance", "signature_verified"), False, "signature/provenance"),
+        (("secure_transfer", "capability"), "something-else", "capability mismatch"),
+        (("secure_transfer", "approved"), False, "not approved"),
+        (("transfer_receipt", "status"), "rejected", "not accepted"),
+        (("transfer_receipt", "observed_sha256"), "b" * 64, "artifact digest mismatch"),
+        (("independent_verification", "verified"), False, "not verified"),
+        (("independent_verification", "release_digest"), "b" * 64, "release digest mismatch"),
     ],
 )
-def test_acceptance_fails_closed_on_tampering(tmp_path, mutate, message) -> None:
+def test_acceptance_fails_closed_on_tampering(tmp_path, path, value, message) -> None:
     payload = b"trusted release"
     evidence = copy.deepcopy(_evidence(payload))
-    mutate(evidence)
+    target = evidence
+    for key in path[:-1]:
+        target = target[key]
+    target[path[-1]] = value
     with pytest.raises(SecurityInstallAcceptanceError, match=message):
         _accept(tmp_path, evidence, payload)
 
@@ -171,6 +158,7 @@ def test_acceptance_fails_closed_on_tampering(tmp_path, mutate, message) -> None
         "provenance",
         "secure_transfer",
         "transfer_receipt",
+        "independent_verification",
     ],
 )
 def test_required_evidence_cannot_be_omitted(tmp_path, field) -> None:

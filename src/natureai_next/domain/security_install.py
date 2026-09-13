@@ -35,6 +35,7 @@ class TrustedInstallAcceptance:
     artifact_sha256: str
     artifact_size: int
     secure_transfer_provider: str
+    collector_id: str
     matched_policy_ids: tuple[str, ...]
 
 
@@ -51,6 +52,8 @@ def canonical_sha256(value: object) -> str:
 
 
 def file_sha256(path: Path) -> str:
+    """Calculate SHA-256 from the artifact Fieldora is about to mutate from."""
+
     digest = hashlib.sha256()
     with path.open("rb") as stream:
         for block in iter(lambda: stream.read(1024 * 1024), b""):
@@ -78,6 +81,27 @@ def _sha256(value: object, name: str) -> str:
     return digest
 
 
+def _positive_int(value: object, name: str) -> int:
+    if isinstance(value, bool):
+        raise SecurityInstallAcceptanceError(f"invalid {name}")
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError) as exc:
+        raise SecurityInstallAcceptanceError(f"invalid {name}") from exc
+    if parsed < 0:
+        raise SecurityInstallAcceptanceError(f"invalid {name}")
+    return parsed
+
+
+def _protocol(value: object, name: str) -> int:
+    if isinstance(value, bool):
+        raise SecurityInstallAcceptanceError(f"invalid {name}")
+    try:
+        return int(value)
+    except (TypeError, ValueError) as exc:
+        raise SecurityInstallAcceptanceError(f"invalid {name}") from exc
+
+
 def _approved(evidence: Mapping[str, object], name: str) -> None:
     if evidence.get("approved") is not True:
         raise SecurityInstallAcceptanceError(f"{name} evidence is not approved")
@@ -96,7 +120,10 @@ def accept_security_install_release(
 
     The artifact digest and size are calculated from the local file. The
     secure-transfer provider is informational; authorization depends on the
-    capability/evidence semantics, not a specific provider id.
+    capability/evidence semantics, not a specific provider id. The transfer
+    receipt intentionally follows the current FieldoraBastion receipt shape;
+    release certification and independent verification stay separate concerns
+    in the Security Install envelope.
     """
 
     if not business_authorization.allowed:
@@ -104,10 +131,7 @@ def accept_security_install_release(
     if not artifact_path.is_file() or artifact_path.is_symlink():
         raise SecurityInstallAcceptanceError("artifact must be a regular non-symlink file")
 
-    try:
-        protocol_version = int(evidence.get("protocol_version"))
-    except (TypeError, ValueError) as exc:
-        raise SecurityInstallAcceptanceError("invalid Security Install protocol version") from exc
+    protocol_version = _protocol(evidence.get("protocol_version"), "Security Install protocol version")
     if protocol_version != SUPPORTED_SECURITY_INSTALL_PROTOCOL:
         raise SecurityInstallAcceptanceError("unsupported Security Install protocol version")
 
@@ -133,10 +157,7 @@ def accept_security_install_release(
     artifact = _object(evidence.get("artifact"), "artifact")
     artifact_package_id = _token(artifact.get("package_id"), "artifact package_id")
     artifact_sha256 = _sha256(artifact.get("sha256"), "artifact sha256")
-    try:
-        artifact_size = int(artifact.get("size"))
-    except (TypeError, ValueError) as exc:
-        raise SecurityInstallAcceptanceError("invalid artifact size") from exc
+    artifact_size = _positive_int(artifact.get("size"), "artifact size")
     if artifact_package_id != package_id:
         raise SecurityInstallAcceptanceError("artifact package identity mismatch")
     actual_size = artifact_path.stat().st_size
@@ -175,10 +196,7 @@ def accept_security_install_release(
         raise SecurityInstallAcceptanceError("secure-transfer capability mismatch")
     _approved(transfer, "secure-transfer")
     provider_id = _token(transfer.get("provider_id"), "secure-transfer provider_id")
-    try:
-        transfer_protocol = int(transfer.get("protocol_version"))
-    except (TypeError, ValueError) as exc:
-        raise SecurityInstallAcceptanceError("invalid secure-transfer protocol version") from exc
+    transfer_protocol = _protocol(transfer.get("protocol_version"), "secure-transfer protocol version")
     if transfer_protocol != protocol_version:
         raise SecurityInstallAcceptanceError("secure-transfer protocol version mismatch")
     if _sha256(transfer.get("release_digest"), "secure-transfer release_digest") != release_digest:
@@ -187,22 +205,23 @@ def accept_security_install_release(
     receipt = _object(evidence.get("transfer_receipt"), "transfer receipt")
     if str(receipt.get("status") or "").strip().lower() != "accepted":
         raise SecurityInstallAcceptanceError("transfer receipt is not accepted")
-    if receipt.get("independently_verified") is not True:
-        raise SecurityInstallAcceptanceError("transfer receipt lacks independent verification")
     if _token(receipt.get("package_id"), "receipt package_id") != package_id:
         raise SecurityInstallAcceptanceError("transfer receipt package identity mismatch")
-    if _sha256(receipt.get("release_digest"), "receipt release_digest") != release_digest:
-        raise SecurityInstallAcceptanceError("transfer receipt release digest mismatch")
+    collector_id = _token(receipt.get("collector_id"), "receipt collector_id")
     expected_sha256 = _sha256(receipt.get("expected_sha256"), "receipt expected_sha256")
     observed_sha256 = _sha256(receipt.get("observed_sha256"), "receipt observed_sha256")
     if expected_sha256 != observed_sha256 or observed_sha256 != actual_sha256:
         raise SecurityInstallAcceptanceError("transfer receipt artifact digest mismatch")
-    try:
-        observed_size = int(receipt.get("observed_size"))
-    except (TypeError, ValueError) as exc:
-        raise SecurityInstallAcceptanceError("invalid transfer receipt size") from exc
-    if observed_size != actual_size:
-        raise SecurityInstallAcceptanceError("transfer receipt artifact size mismatch")
+
+    verification = _object(evidence.get("independent_verification"), "independent verification")
+    if verification.get("verified") is not True:
+        raise SecurityInstallAcceptanceError("independent verification is not verified")
+    if _token(verification.get("package_id"), "verification package_id") != package_id:
+        raise SecurityInstallAcceptanceError("independent verification package identity mismatch")
+    if _sha256(verification.get("release_digest"), "verification release_digest") != release_digest:
+        raise SecurityInstallAcceptanceError("independent verification release digest mismatch")
+    if _sha256(verification.get("sha256"), "verification sha256") != actual_sha256:
+        raise SecurityInstallAcceptanceError("independent verification artifact digest mismatch")
 
     return TrustedInstallAcceptance(
         release_id=release_id,
@@ -213,5 +232,6 @@ def accept_security_install_release(
         artifact_sha256=actual_sha256,
         artifact_size=actual_size,
         secure_transfer_provider=provider_id,
+        collector_id=collector_id,
         matched_policy_ids=business_authorization.matched_policy_ids,
     )

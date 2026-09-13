@@ -3,6 +3,9 @@
 from urllib.parse import urlsplit
 
 from natureai_next.server.api import ApiResponse
+from natureai_next.server.secure_acquisition_web import (
+    patch_secure_acquisition_web_response,
+)
 
 _OFFLINE_MAPS_SERVICE_PROVIDER_PATCH = bytes(
     r"""
@@ -51,15 +54,13 @@ _OFFLINE_MAPS_WEB_PATCH = bytes(
 
 
 def patch_offline_maps_web_response(target: str, response: ApiResponse) -> ApiResponse:
-    if (
-        urlsplit(target).path != "/app.js"
-        or response.status != 200
-        or _OFFLINE_MAPS_WEB_PATCH in response.body
-    ):
+    if urlsplit(target).path != "/app.js" or response.status != 200:
         return response
-    return ApiResponse(
-        response.status,
-        response.body + _OFFLINE_MAPS_SERVICE_PROVIDER_PATCH + _OFFLINE_MAPS_WEB_PATCH,
-        response.content_type,
-        response.headers,
-    )
+    if _OFFLINE_MAPS_WEB_PATCH not in response.body:
+        response = ApiResponse(
+            response.status,
+            response.body + _OFFLINE_MAPS_SERVICE_PROVIDER_PATCH + _OFFLINE_MAPS_WEB_PATCH,
+            response.content_type,
+            response.headers,
+        )
+    return patch_secure_acquisition_web_response(target, response)

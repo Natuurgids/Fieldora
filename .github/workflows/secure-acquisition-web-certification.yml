@@ -1,0 +1,50 @@
+name: Fieldora secure acquisition web certification
+
+on:
+  pull_request:
+    paths:
+      - "src/natureai_next/server/secure_acquisition_web.py"
+      - "src/natureai_next/server/offline_maps_web.py"
+      - "tests/test_secure_acquisition_web.py"
+      - ".github/workflows/secure-acquisition-web-certification.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  secure-acquisition-web:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install test dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -e ".[dev]"
+      - name: Ruff secure acquisition web boundary
+        run: >-
+          python -m ruff check
+          src/natureai_next/server/secure_acquisition_web.py
+          src/natureai_next/server/offline_maps_web.py
+          tests/test_secure_acquisition_web.py
+      - name: Trusted-side secure acquisition web tests
+        run: python -m pytest -q tests/test_secure_acquisition_web.py
+      - name: Certify Bastion authority remains outside browser
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          text = Path("src/natureai_next/server/secure_acquisition_web.py").read_text()
+          for required in (
+              "FieldoraBastion",
+              "browser cannot mark content clean",
+              "only accepted trust metadata is shown here",
+          ):
+              if required not in text:
+                  raise SystemExit(f"missing secure acquisition contract: {required}")
+          for forbidden in ("mark-clean", "approve-scan", "quarantine-path"):
+              if forbidden in text:
+                  raise SystemExit(f"browser must not own Bastion trust decision: {forbidden}")
+          PY

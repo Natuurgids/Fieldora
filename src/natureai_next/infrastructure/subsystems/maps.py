@@ -6,11 +6,15 @@ import hashlib
 import json
 import sqlite3
 import time
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
+from natureai_next import __version__
+from natureai_next.application.security_install import require_security_install
 from natureai_next.domain.maps import OfflineMapPackage, OfflineRasterTile
+from natureai_next.domain.security_install import SecurityInstallAcceptanceError
 from natureai_next.infrastructure.database.connection import SqliteConnectionFactory
 from natureai_next.infrastructure.subsystems.migrations.maps_v001_catalog import MIGRATION as V001
 from natureai_next.infrastructure.subsystems.migrations.maps_v002_lifecycle import MIGRATION as V002
@@ -22,6 +26,7 @@ from natureai_next.infrastructure.subsystems.registry import SubsystemDatabaseDe
 
 MAPS_SUBSYSTEM_KEY = "maps.offline"
 MAPS_MIGRATIONS = (V001, V002, V003, V004)
+MAP_SECURITY_INSTALL_COMPONENT = "offline-maps"
 
 
 def maps_descriptor(database_path: Path) -> SubsystemDatabaseDescriptor:
@@ -32,14 +37,45 @@ class OfflineMapCatalog:
     def __init__(self, factory: SqliteConnectionFactory) -> None:
         self._factory = factory
 
-    def register(self, package: OfflineMapPackage) -> None:
-        """Register or atomically replace one installed map package.
+    def register(
+        self,
+        package: OfflineMapPackage,
+        *,
+        security_install_evidence: Mapping[str, object] | None = None,
+        access_control_database: Path | None = None,
+        subject_id: str = "",
+    ) -> None:
+        """Register one package only after trusted Security Install acceptance.
 
-        Provider downloads may be converted into another installed format.  The
-        catalog stores the final Aperture package, not the provider source file.
-        Upsert by public ID avoids masking schema/validation errors as an
-        unrelated missing-package failure during updates.
+        The exact installed file is independently hashed before the catalog is
+        opened for mutation. Catalog display metadata is deliberately not used
+        as transfer-receipt identity: the Security Install package id is the
+        concrete installed filename.
         """
+        if security_install_evidence is None:
+            raise SecurityInstallAcceptanceError(
+                "trusted Security Install evidence is required for offline maps"
+            )
+        if access_control_database is None:
+            raise SecurityInstallAcceptanceError(
+                "Fieldora access-control database is required for offline maps"
+            )
+        subject = subject_id.strip()
+        if not subject:
+            raise SecurityInstallAcceptanceError(
+                "Fieldora security-install subject is required for offline maps"
+            )
+        package_path = Path(package.package_path)
+        require_security_install(
+            security_install_evidence,
+            artifact_path=package_path,
+            access_control_database=access_control_database,
+            subject_id=subject,
+            expected_package_id=package_path.name,
+            expected_target_component=MAP_SECURITY_INSTALL_COMPONENT,
+            actual_target_version=__version__,
+        )
+
         connection = self._factory.connect()
         try:
             connection.execute(

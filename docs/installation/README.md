@@ -7,7 +7,8 @@ Fieldora has multiple supported installation/deployment paths. Choose based on h
 | Native Windows desktop application | [Windows Desktop](WINDOWS-DESKTOP.md) |
 | Fieldora web/server stack on Windows | [Windows Docker](WINDOWS-DOCKER.md) |
 | Fieldora web/server stack on Linux | [Linux Docker](LINUX-DOCKER.md) |
-| Cluster/orchestrated deployment | [Kubernetes](KUBERNETES.md) |
+| Generic cluster/orchestrated deployment | [Kubernetes](KUBERNETES.md) |
+| OpenShift cluster deployment | [OpenShift](OPENSHIFT.md) |
 | Restricted-network / offline deployment | [Offline](OFFLINE.md) |
 
 ## Desktop versus server
@@ -16,7 +17,9 @@ Fieldora has multiple supported installation/deployment paths. Choose based on h
 
 **Docker** installs the governed Fieldora server/web environment. The clean installer creates a server stack including PostgreSQL and Fieldora services. It is intentionally destructive inside the selected install root when performing a clean installation.
 
-Both paths belong to the same Fieldora platform. They should preserve the same domain semantics even though their deployment and presentation layers differ.
+**Kubernetes and OpenShift** are orchestrated deployment adapters for the same governed Fieldora server platform. OpenShift reuses the Kubernetes application baseline while keeping OpenShift-specific routing and certification explicit.
+
+All paths belong to the same Fieldora platform. They should preserve the same domain semantics even though their deployment and presentation layers differ.
 
 ## Current script locations
 

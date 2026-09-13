@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import json
+import os
 import re
 from dataclasses import asdict, dataclass
+from pathlib import Path
 from typing import Protocol
 
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -14,6 +17,24 @@ class SecurityMonitoringSink(Protocol):
 
     def emit_security_event(self, event: dict[str, str]) -> None:
         """Emit one bounded security event."""
+
+
+class WazuhJsonlSink:
+    """Append bounded Fieldora security events to a JSON log collected by Wazuh."""
+
+    def __init__(self, path: str | Path) -> None:
+        self.path = Path(path)
+
+    def emit_security_event(self, event: dict[str, str]) -> None:
+        """Write one single-line JSON event and durably flush it before returning."""
+        if not self.path.parent.is_dir():
+            raise FileNotFoundError(f"security event directory does not exist: {self.path.parent}")
+        payload = {"fieldora": {"component": "trusted-side", **event}}
+        with self.path.open("a", encoding="utf-8", newline="\n") as handle:
+            handle.write(json.dumps(payload, sort_keys=True, separators=(",", ":")))
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
 
 
 @dataclass(frozen=True, slots=True)

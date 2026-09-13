@@ -1,4 +1,11 @@
-from natureai_next.server.security_monitoring import verify_collected_package_integrity
+import json
+
+import pytest
+
+from natureai_next.server.security_monitoring import (
+    WazuhJsonlSink,
+    verify_collected_package_integrity,
+)
 
 
 class RecordingSink:
@@ -9,7 +16,7 @@ class RecordingSink:
         self.events.append(event)
 
 
-def _verify(observed: str, sink: RecordingSink | None = None) -> bool:
+def _verify(observed: str, sink: RecordingSink | WazuhJsonlSink | None = None) -> bool:
     return verify_collected_package_integrity(
         expected_sha256="a" * 64,
         observed_sha256=observed,
@@ -45,3 +52,22 @@ def test_digest_discrepancy_fails_closed_and_alerts_monitoring_sink() -> None:
     assert event["signing_key_id"] == "bastion-key-1"
     assert "path" not in event
     assert "content" not in event
+
+
+def test_wazuh_sink_writes_single_line_bounded_json(tmp_path) -> None:
+    log = tmp_path / "fieldora-security.jsonl"
+    assert not _verify("b" * 64, WazuhJsonlSink(log))
+    lines = log.read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 1
+    event = json.loads(lines[0])
+    assert event["fieldora"]["component"] == "trusted-side"
+    assert event["fieldora"]["event_type"] == "package_integrity_mismatch"
+    assert event["fieldora"]["expected_sha256"] == "a" * 64
+    assert "path" not in event["fieldora"]
+    assert "content" not in event["fieldora"]
+
+
+def test_wazuh_sink_requires_precreated_event_directory(tmp_path) -> None:
+    sink = WazuhJsonlSink(tmp_path / "missing" / "events.jsonl")
+    with pytest.raises(FileNotFoundError):
+        sink.emit_security_event({"event_type": "test"})

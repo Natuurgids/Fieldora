@@ -32,19 +32,26 @@ jobs:
           tests/test_secure_acquisition_web.py
       - name: Trusted-side secure acquisition web tests
         run: python -m pytest -q tests/test_secure_acquisition_web.py
-      - name: Certify Bastion authority remains outside browser
+      - name: Certify Bastion broker authority remains outside browser
         run: |
           python - <<'PY'
           from pathlib import Path
           text = Path("src/natureai_next/server/secure_acquisition_web.py").read_text()
           for required in (
-              "FieldoraBastion",
+              "secure transfer broker",
+              "collection requests",
+              "delivery requests",
+              "quarantined",
+              "scanning",
+              "verifying",
+              "broadcast",
+              "authenticated collector",
+              "receipt for the exact approved digest",
               "browser cannot mark content clean",
-              "only accepted trust metadata is shown here",
           ):
               if required not in text:
-                  raise SystemExit(f"missing secure acquisition contract: {required}")
-          for forbidden in ("mark-clean", "approve-scan", "quarantine-path"):
+                  raise SystemExit(f"missing secure transfer-broker contract: {required}")
+          for forbidden in ("mark-clean", "approve-scan", "quarantine-path", "/api/v1/bastion/approve"):
               if forbidden in text:
                   raise SystemExit(f"browser must not own Bastion trust decision: {forbidden}")
           PY

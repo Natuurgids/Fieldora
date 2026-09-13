@@ -15,19 +15,29 @@ def test_secure_acquisition_patch_is_app_js_only_and_idempotent() -> None:
     assert patch_secure_acquisition_web_response("/app.js", patched).body == patched.body
 
 
-def test_secure_acquisition_web_keeps_bastion_as_security_authority() -> None:
+def test_secure_acquisition_web_projects_transfer_broker_contract() -> None:
     text = patch_secure_acquisition_web_response("/app.js", _response()).body.decode()
 
     for required in (
         "Secure acquisition",
         "FieldoraBastion",
-        "quarantined and scanned",
-        "independently verifies signed manifests",
+        "secure transfer broker",
+        "collection requests",
+        "delivery requests",
+        "quarantined",
+        "scanning",
+        "verifying",
+        "approved",
+        "broadcast",
+        "claimed",
+        "collected",
+        "authenticated collector",
+        "receipt for the exact approved digest",
         "browser cannot mark content clean",
         "/api/v1/models/installed",
         "/api/v1/maps/installed",
         "Signed + clean scanned",
-        "only accepted trust metadata is shown here",
+        "connected broker protocol",
     ):
         assert required in text
 
@@ -36,5 +46,6 @@ def test_secure_acquisition_web_keeps_bastion_as_security_authority() -> None:
         "approve-scan",
         "quarantine-path",
         "filesystem-path",
+        "/api/v1/bastion/approve",
     ):
         assert forbidden not in text

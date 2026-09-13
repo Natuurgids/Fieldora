@@ -1,0 +1,66 @@
+name: Fieldora Docker deployment layout certification
+
+on:
+  pull_request:
+    paths:
+      - "deployment/docker/**"
+      - "Install-Fieldora-Clean.ps1"
+      - "Install-Fieldora-Clean-Windows.ps1"
+      - "Install-Fieldora-Clean-Linux.ps1"
+      - ".github/workflows/docker-layout-certification.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  docker-layout-contract:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Parse deployment-target installers
+        shell: pwsh
+        run: |
+          foreach ($path in @(
+            './deployment/docker/common/Install-Fieldora-Clean.ps1',
+            './deployment/docker/windows/Install-Fieldora-Clean-Windows.ps1',
+            './deployment/docker/linux/Install-Fieldora-Clean-Linux.ps1'
+          )) {
+            $text = Get-Content -LiteralPath $path -Raw
+            [void][scriptblock]::Create($text)
+            Write-Host "$path syntax: OK"
+          }
+
+      - name: Certify staged root compatibility copies
+        shell: pwsh
+        run: |
+          $pairs = @(
+            @('./Install-Fieldora-Clean.ps1','./deployment/docker/common/Install-Fieldora-Clean.ps1'),
+            @('./Install-Fieldora-Clean-Windows.ps1','./deployment/docker/windows/Install-Fieldora-Clean-Windows.ps1'),
+            @('./Install-Fieldora-Clean-Linux.ps1','./deployment/docker/linux/Install-Fieldora-Clean-Linux.ps1')
+          )
+          foreach ($pair in $pairs) {
+            $rootHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $pair[0]).Hash
+            $targetHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $pair[1]).Hash
+            if ($rootHash -ne $targetHash) {
+              throw "Staged Docker installer diverged from root compatibility path: $($pair[0]) != $($pair[1])"
+            }
+            Write-Host "$($pair[0]) == $($pair[1]): OK"
+          }
+
+      - name: Certify deployment-target separation
+        shell: pwsh
+        run: |
+          $readme = Get-Content -LiteralPath ./deployment/docker/README.md -Raw
+          foreach ($needle in @(
+            'Windows Docker',
+            'Linux Docker',
+            'separate from Windows Desktop, Linux Desktop, Kubernetes, and OpenShift',
+            'Do not treat the Linux Docker installer as a Linux Desktop installer.'
+          )) {
+            if (-not $readme.Contains($needle)) {
+              throw "Docker deployment layout documentation is missing: $needle"
+            }
+          }
+          Write-Host 'Docker deployment targets remain distinct from desktop and orchestrator targets: OK'

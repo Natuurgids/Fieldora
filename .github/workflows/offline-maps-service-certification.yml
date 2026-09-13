@@ -3,9 +3,11 @@ name: Fieldora offline maps service certification
 on:
   pull_request:
     paths:
+      - "src/natureai_next/infrastructure/subsystems/maps.py"
       - "src/natureai_next/server/offline_maps_web.py"
       - "src/natureai_next/server/facility_module_composition.py"
       - "src/natureai_next/server/web_module_extensions.py"
+      - "tests/test_offline_map_security_install.py"
       - "tests/test_route_less_module_contract_runtime.py"
       - ".github/workflows/offline-maps-service-certification.yml"
   workflow_dispatch:
@@ -34,9 +36,14 @@ jobs:
       - name: Ruff Offline Maps service boundary
         run: >-
           python -m ruff check
+          src/natureai_next/infrastructure/subsystems/maps.py
           src/natureai_next/server/offline_maps_web.py
           src/natureai_next/server/facility_module_composition.py
           src/natureai_next/server/web_module_extensions.py
+          tests/test_offline_map_security_install.py
           tests/test_route_less_module_contract_runtime.py
       - name: Offline Maps service contract regression
-        run: pytest -q tests/test_route_less_module_contract_runtime.py
+        run: >-
+          pytest -q
+          tests/test_offline_map_security_install.py
+          tests/test_route_less_module_contract_runtime.py

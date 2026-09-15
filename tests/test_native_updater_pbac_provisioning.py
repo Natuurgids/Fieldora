@@ -11,7 +11,7 @@ from natureai_next.infrastructure.subsystems.access_control import ACCESS_CONTRO
 def _provision(path: Path) -> None:
     connection = sqlite3.connect(path)
     try:
-        MigrationRunner(connection).apply(ACCESS_CONTROL_MIGRATIONS)
+        MigrationRunner(ACCESS_CONTROL_MIGRATIONS, "security-test").apply(connection)
     finally:
         connection.close()
 

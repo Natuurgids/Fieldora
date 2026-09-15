@@ -1,10 +1,4 @@
-"""Trusted application boundary for Security Install acceptance.
-
-This module is the only production bridge between provider-neutral Security
-Install evidence and Fieldora business authorization. Callers provide identity
-and release binding, never an ``AccessDecision``. The decision is always made
-and audited by Fieldora's normal PBAC service.
-"""
+"""Trusted application boundary for Security Install acceptance."""
 
 from __future__ import annotations
 
@@ -14,6 +8,7 @@ from pathlib import Path
 from natureai_next.application.access_control import AccessDenied, PolicyDecisionService
 from natureai_next.domain.access_control import AccessRequest
 from natureai_next.domain.security_install import (
+    AuthenticatedReleaseContext,
     SecurityInstallAcceptanceError,
     TrustedInstallAcceptance,
     accept_security_install_release,
@@ -34,8 +29,9 @@ def require_security_install(
     expected_package_id: str,
     expected_target_component: str,
     actual_target_version: str,
+    authenticated_release: AuthenticatedReleaseContext,
 ) -> TrustedInstallAcceptance:
-    """Require audited PBAC and independently accept one local release artifact."""
+    """Require audited PBAC and authenticated provenance for one release."""
     if not isinstance(evidence, Mapping):
         raise SecurityInstallAcceptanceError("trusted Security Install evidence must be an object")
 
@@ -72,4 +68,5 @@ def require_security_install(
         expected_target_component=component,
         actual_target_version=target_version,
         business_authorization=decision,
+        authenticated_release=authenticated_release,
     )

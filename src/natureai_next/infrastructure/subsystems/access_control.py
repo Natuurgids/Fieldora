@@ -132,6 +132,37 @@ ACCESS_CONTROL_MIGRATIONS = (
         );
         """,
     ),
+    Migration(
+        7,
+        "least privilege native updater authorization",
+        """
+        INSERT INTO access_identities(
+            identity_id,kind,display_name,organization_id,enabled,attributes_json
+        ) VALUES(
+            'fieldora-native-updater','service','Fieldora Native Updater','',1,'{}'
+        ) ON CONFLICT(identity_id) DO UPDATE SET
+            kind='service',display_name='Fieldora Native Updater',enabled=1;
+
+        INSERT INTO access_policies(
+            policy_id,name,effect,source,source_id,subject_id,role_id,
+            actions_json,resource_types_json,resource_id,organization_id,project_id,
+            purposes_json,fields_json,conditions_json,valid_from_utc,valid_until_utc,
+            priority,enabled
+        ) VALUES(
+            'fieldora-native-updater-security-install',
+            'Native updater Security Install',
+            'allow','direct','fieldora-native-updater','fieldora-native-updater','',
+            '["install"]','["security_install_release"]','','','',
+            '["security_install"]','[]','{}','','',100,1
+        ) ON CONFLICT(policy_id) DO UPDATE SET
+            name='Native updater Security Install',effect='allow',source='direct',
+            source_id='fieldora-native-updater',subject_id='fieldora-native-updater',role_id='',
+            actions_json='["install"]',resource_types_json='["security_install_release"]',
+            resource_id='',organization_id='',project_id='',purposes_json='["security_install"]',
+            fields_json='[]',conditions_json='{}',valid_from_utc='',valid_until_utc='',
+            priority=100,enabled=1;
+        """,
+    ),
 )
 
 

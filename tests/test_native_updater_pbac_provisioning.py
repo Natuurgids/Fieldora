@@ -4,6 +4,9 @@ import json
 import sqlite3
 from pathlib import Path
 
+from natureai_next.application.access_control import PolicyDecisionService
+from natureai_next.domain.access_control import AccessRequest
+from natureai_next.infrastructure.database.access_control import SqliteAccessControlRepository
 from natureai_next.infrastructure.database.migrations.core import MigrationRunner
 from natureai_next.infrastructure.subsystems.access_control import ACCESS_CONTROL_MIGRATIONS
 
@@ -14,6 +17,15 @@ def _provision(path: Path) -> None:
         MigrationRunner(ACCESS_CONTROL_MIGRATIONS, "security-test").apply(connection)
     finally:
         connection.close()
+
+
+def _install_request(subject_id: str) -> AccessRequest:
+    return AccessRequest(
+        subject_id=subject_id,
+        action="install",
+        resource_type="security_install_release",
+        purpose="security_install",
+    )
 
 
 def test_clean_install_provisions_exact_native_updater_identity_and_permission(tmp_path: Path) -> None:
@@ -64,3 +76,35 @@ def test_native_updater_provisioning_is_idempotent(tmp_path: Path) -> None:
 
     assert identity_count == 1
     assert policy_count == 1
+
+
+def test_unrelated_subject_remains_denied(tmp_path: Path) -> None:
+    database = tmp_path / "access-control.sqlite3"
+    _provision(database)
+    decision = PolicyDecisionService(SqliteAccessControlRepository(database)).decide(
+        _install_request("unrelated-service")
+    )
+    assert not decision.allowed
+
+
+def test_missing_or_disabled_updater_identity_is_denied(tmp_path: Path) -> None:
+    for mode in ("missing", "disabled"):
+        database = tmp_path / f"{mode}.sqlite3"
+        _provision(database)
+        connection = sqlite3.connect(database)
+        try:
+            if mode == "missing":
+                connection.execute(
+                    "DELETE FROM access_identities WHERE identity_id='fieldora-native-updater'"
+                )
+            else:
+                connection.execute(
+                    "UPDATE access_identities SET enabled=0 WHERE identity_id='fieldora-native-updater'"
+                )
+            connection.commit()
+        finally:
+            connection.close()
+        decision = PolicyDecisionService(SqliteAccessControlRepository(database)).decide(
+            _install_request("fieldora-native-updater")
+        )
+        assert not decision.allowed

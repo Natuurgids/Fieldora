@@ -205,13 +205,17 @@ Status values: `NOT STARTED`, `IN PROGRESS`, `IMPLEMENTED — TESTS PENDING`, `C
 
 | Finding | Status | Completion evidence |
 | --- | --- | --- |
-| F-01 Native release authenticity/provenance | NOT STARTED | Contract documented; implementation required |
+| F-01 Native release authenticity/provenance | IN PROGRESS | Ed25519 signed index verification and administrator trust-anchor loading implemented; authenticated package hash/size and Security Install evidence binding tests added. Still required: wire trust-anchor path at desktop/update composition, remove trust in serialized provenance booleans inside Security Install acceptance, and add release/build tooling that emits the signed index. |
 | F-02 Native updater PBAC provisioning | NOT STARTED | Contract documented; implementation required |
 | F-03 Local PBAC administration authorization | NOT STARTED | Contract documented; implementation required |
 | F-04 Config-root binding | NOT STARTED | Contract documented; implementation required |
-| F-05 Authenticated anti-rollback | NOT STARTED | Depends on F-01 |
+| F-05 Authenticated anti-rollback | IMPLEMENTED — TESTS PENDING | Version and minimum-supported-version are consumed only after Ed25519 verification; tamper-negative tests added but CI/check result not yet observed. |
 | F-06 Immutable deployment/runtime binding | NOT STARTED | Contract documented; implementation required |
-| F-07 Security certification coverage | IN PROGRESS | Acceptance gates defined; workflow/tests required |
+| F-07 Security certification coverage | IN PROGRESS | Native authenticity negative/positive pytest coverage added; dedicated workflow and remaining PBAC/config-root/runtime gates required. |
+
+## Current continuation note — 2026-09-15
+
+Branch work added `application/update_trust.py`, changed `OfflineUpdateService` to require an explicit administrator-controlled trust-anchor file, and added `tests/test_native_update_authenticity.py`. The PR remains draft. No passing CI result has yet been observed for these commits, so none of these properties is certified. Continue F-01 before moving to F-02: first inspect/update all `OfflineUpdateService` composition call sites for the new required trust-anchor argument, then change Security Install so authenticity/provenance is derived from cryptographic verification output rather than `signature_verified` / `provenance_verified` media booleans, then add signed-index release tooling and run/inspect the focused tests and static checks.
 
 ## Completion definition
 

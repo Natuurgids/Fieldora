@@ -126,13 +126,17 @@ def test_project_creator_can_only_receive_narrow_owner_workspace_grant(tmp_path:
         organization_id="org-1",
         project_id="project-1",
         name="Project One",
-        actions=("view", "edit"),
-        resource_types=("project", "task"),
     )
 
     assert grant.subject_id == "creator-1"
     assert grant.source is PolicySource.OBJECT_GRANT
     assert grant.source_id == "project-1"
+    assert grant.actions == ("view", "edit", "upload", "download", "search", "link", "unlink", "export")
+    assert grant.resource_types == (
+        "project", "phase", "task", "sprint", "allocation", "dossier", "dossier_review",
+        "observation", "specimen", "encounter", "protocol", "survey_event", "enrichment",
+        "sample", "laboratory_record", "collection", "asset",
+    )
     assert grant.organization_id == "org-1"
     assert grant.project_id == "project-1"
     assert grant.purposes == ("research",)
@@ -149,6 +153,20 @@ def test_project_creator_can_only_receive_narrow_owner_workspace_grant(tmp_path:
         )
 
 
+def test_project_owner_grant_interface_cannot_expand_scope(tmp_path: Path) -> None:
+    repository = _repository(tmp_path / "access.sqlite3")
+    repository.put_identity(Identity("creator-1", IdentityKind.USER, "Creator", "org-1"))
+    service = AccessAdministrationService(repository, actor_id="creator-1")
+
+    with pytest.raises(TypeError):
+        service.grant_project_owner_workspace(
+            organization_id="org-1",
+            project_id="project-1",
+            name="Project One",
+            actions=("install",),
+        )
+
+
 def test_project_owner_grant_requires_create_project_authority(tmp_path: Path) -> None:
     repository = _repository(tmp_path / "access.sqlite3")
     repository.put_identity(Identity("creator-1", IdentityKind.USER, "Creator", "org-1"))
@@ -158,6 +176,4 @@ def test_project_owner_grant_requires_create_project_authority(tmp_path: Path) -
             organization_id="org-1",
             project_id="project-1",
             name="Project One",
-            actions=("view",),
-            resource_types=("project",),
         )

@@ -1,0 +1,28 @@
+name: Native container identity security
+
+on:
+  pull_request:
+    paths:
+      - "scripts/verify_container_identity.py"
+      - "tests/test_container_identity_security.py"
+      - ".github/workflows/native-container-identity-security.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  immutable-container-identity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify pull request head checkout
+        if: ${{ github.event_name == 'pull_request' }}
+        run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install focused test dependency
+        run: python -m pip install pytest
+      - name: Certify immutable identity verifier
+        run: python -m pytest -q tests/test_container_identity_security.py

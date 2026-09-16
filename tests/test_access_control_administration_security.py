@@ -177,3 +177,52 @@ def test_project_owner_grant_requires_create_project_authority(tmp_path: Path) -
             project_id="project-1",
             name="Project One",
         )
+
+
+def _qt_buttons(workspace) -> dict[str, object]:
+    from PySide6.QtWidgets import QPushButton
+
+    return {button.text(): button for button in workspace.findChildren(QPushButton)}
+
+
+def test_qt_access_administration_is_read_only_without_actor(tmp_path: Path) -> None:
+    pytest.importorskip("PySide6")
+    from PySide6.QtWidgets import QApplication
+    from natureai_next.ui.qt.access_control import AccessControlWorkspace
+
+    app = QApplication.instance() or QApplication([])
+    repository = _repository(tmp_path / "access.sqlite3")
+    workspace = AccessControlWorkspace(AccessAdministrationService(repository))
+    buttons = _qt_buttons(workspace)
+
+    assert buttons["Refresh"].isEnabled()
+    for label in (
+        "New Organization", "New Identity", "Add to Group", "Assign Role",
+        "New Contract", "New Policy",
+    ):
+        assert not buttons[label].isEnabled()
+    workspace.close()
+    app.processEvents()
+
+
+def test_qt_access_administration_enables_only_authorized_mutation(tmp_path: Path) -> None:
+    pytest.importorskip("PySide6")
+    from PySide6.QtWidgets import QApplication
+    from natureai_next.ui.qt.access_control import AccessControlWorkspace
+
+    app = QApplication.instance() or QApplication([])
+    repository = _repository(tmp_path / "access.sqlite3")
+    _authorize(repository, "admin-1", "access_identity")
+    workspace = AccessControlWorkspace(
+        AccessAdministrationService(repository, actor_id="admin-1")
+    )
+    buttons = _qt_buttons(workspace)
+
+    assert buttons["New Identity"].isEnabled()
+    assert buttons["Refresh"].isEnabled()
+    for label in (
+        "New Organization", "Add to Group", "Assign Role", "New Contract", "New Policy",
+    ):
+        assert not buttons[label].isEnabled()
+    workspace.close()
+    app.processEvents()

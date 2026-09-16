@@ -27,42 +27,29 @@ SHA-256 is not publisher authenticity. A Git commit SHA is not OCI/runtime ident
 ## Remediation requirements and order
 
 ### F-01 — Native release authenticity/provenance — HIGH
-
 Use a canonical signed native release index with detached Ed25519 verification against an administrator-controlled trust anchor that is not supplied by the user-selected update source. Signed content must bind format/version, product, channel, version, minimum supported version, package basename, SHA-256, byte size, release identity/digest, and Security Install evidence digest. Reject unsigned/malformed/untrusted/path-traversal/hash-size/evidence mismatches. `OfflineUpdateService.check()` authenticates before consuming security-sensitive metadata. Security Install derives authenticity from verification output, never media booleans.
 
-Primary code: `application/updates.py`, `application/update_trust.py`, `application/security_install.py`, `domain/security_install.py`, release tooling.
-
 ### F-02 — Native updater PBAC provisioning — HIGH
-
-Clean bootstrap provisions enabled service identity `fieldora-native-updater` with only effective permission action `install`, resource type `security_install_release`, purpose `security_install`. Provisioning is idempotent; no wildcard updater grant. Tests cover clean install, unrelated subject denial, and missing/disabled updater denial.
+Clean bootstrap provisions enabled service identity `fieldora-native-updater` with only effective permission action `install`, resource type `security_install_release`, purpose `security_install`. Provisioning is idempotent; no wildcard updater grant.
 
 ### F-03 — Local PBAC administration authorization — HIGH
-
 Access-control mutations carry authenticated actor context and are authorized at the application/service boundary before writes. Cover organization, identity, group membership, role assignment, contract, and policy mutation with narrowly scoped administration permissions. Qt is read-only/fail-closed without an authorized actor. Tests include prevention of self-provisioning an unauthorized Security Install grant.
 
-Primary code: `application/access_control.py`, `ui/qt/access_control.py`, desktop actor/session composition, server administration patterns.
-
 ### F-04 — Config-root / authorization-context binding — MEDIUM
-
-Carry the resolved application/config root explicitly desktop -> stage -> handoff -> updater. Updater PBAC DB, history, and update state resolve from that explicit root and cannot be redirected by inherited `APERTURE_DATA_ROOT` / `NATUREAI_DATA_ROOT`. Test non-default roots and conflicting environment roots.
-
-Primary code: `bootstrap/paths.py`, `application/native_handoff.py`, `bootstrap/native_updater.py`, desktop composition.
+Carry the resolved application/config root explicitly desktop -> stage -> handoff -> updater. Updater PBAC DB, history, and update state resolve from that explicit root and cannot be redirected by inherited `APERTURE_DATA_ROOT` / `NATUREAI_DATA_ROOT`.
 
 ### F-05 — Authenticated anti-rollback — MEDIUM
-
 Version and minimum-supported-version remain monotonic checks but are authenticated signed fields. Tests prove modifying either invalidates authenticity.
 
 ### F-06 — Immutable deployment/runtime binding — MEDIUM
-
-Establish `Git commit -> build inputs -> OCI digest -> deployed digest -> running digest -> certification proof`. Never use mutable image tag alone as runtime identity. Certification compares intended built/deployed immutable identity with running workload identity; functional health checks are not cryptographic binding. Re-inspect current deployment code before changes because it may evolve independently.
+Establish `Git commit -> build inputs -> OCI digest -> deployed digest -> running digest -> certification proof`. Never use mutable image tag alone as runtime identity.
 
 ### F-07 — Security certification coverage — DEFENSE IN DEPTH
-
-CI/certification must demonstrate: valid signed update accepted; unsigned/untrusted/tampered metadata rejected; package hash/size and Security Install evidence mismatches rejected; valid artifact without PBAC denied; exact updater identity/policy provisioned; unrelated subject denied; local PBAC mutation without authorized actor denied; explicit config root preserved; inherited environment cannot redirect PBAC DB; immutable runtime digest recorded/checked.
+CI/certification must demonstrate all positive and fail-closed boundaries above, including local PBAC mutation without an authorized actor, explicit config-root preservation, and immutable runtime digest verification.
 
 ## Integration rules
 
-This branch owns the concrete remediation. PR #10 / `deployment/docker-layout-stage` is stale/superseded and must not be resurrected. PR #13 / `feat/platform-bootstrap-contract` may contain compatible platform/supply-chain contract work, but re-evaluate it against current `main` before reuse. If main advances, integrate carefully and re-run all security gates.
+This branch owns the concrete remediation. PR #10 / `deployment/docker-layout-stage` is stale/superseded and must not be resurrected. PR #13 / `feat/platform-bootstrap-contract` may contain compatible platform/supply-chain contract work, but re-evaluate it against current `main` before reuse.
 
 ## Progress ledger
 
@@ -70,23 +57,23 @@ Status values: `NOT STARTED`, `IN PROGRESS`, `IMPLEMENTED — TESTS PENDING`, `C
 
 | Finding | Status | Completion evidence |
 | --- | --- | --- |
-| F-01 Native release authenticity/provenance | IN PROGRESS | Ed25519 signed-index verification, strict signed-field validation, administrator trust-anchor loading, package hash/size and Security Install evidence binding, detached-updater re-verification, cryptographically derived Security Install release context, and signed-index tooling are implemented. `ApplicationPaths` defines the administrator trust anchor at the explicit application root. Serialized provenance booleans are non-authoritative. The focused hardening workflow passed 49 tests at head `b1260dc9048ddd1154e39e561c94a5e4c7ac945f`. Remaining: desktop trust-anchor composition. |
-| F-02 Native updater PBAC provisioning | CERTIFIED | Migration 7 provisions enabled `fieldora-native-updater`, removes inherited/legacy updater authority, and leaves one direct allow policy limited to `install` / `security_install_release` / `security_install`. Tests cover clean install, idempotency, exact policy, unrelated-subject denial, missing/disabled updater denial, out-of-scope requests, and legacy/inherited grant cleanup. Dedicated hardening workflow run 35072409315 completed successfully at head `b1260dc9048ddd1154e39e561c94a5e4c7ac945f`; the focused suite reported 49 passed. |
-| F-03 Local PBAC administration authorization | NOT STARTED | Application-layer actor authorization and fail-closed Qt mutation controls required. |
-| F-04 Config-root binding | IN PROGRESS | Handoff carries explicit config/trust roots; updater requires explicit roots, resolves PBAC/history from config root, rejects request/root mismatch, and re-verifies signed staged index. `ApplicationPaths` binds `updates_dir` and `update_trust_anchor_file` to the same explicit application root. Focused CI proves inherited `APERTURE_DATA_ROOT` / `NATUREAI_DATA_ROOT` cannot redirect authenticated-update PBAC. Remaining: desktop composition must pass the resolved root/trust anchor and root update settings/staging/history consistently. |
-| F-05 Authenticated anti-rollback | CERTIFIED | Version/minimum version are consumed only after signature verification; tamper-negative tests are exercised by dedicated hardening workflow run 35072409315, which completed successfully at head `b1260dc9048ddd1154e39e561c94a5e4c7ac945f` with 49 focused tests passed. |
+| F-01 Native release authenticity/provenance | IN PROGRESS | Ed25519 signed-index verification, strict signed-field validation, administrator trust-anchor loading, package hash/size and Security Install evidence binding, detached-updater re-verification, cryptographically derived Security Install release context, and signed-index tooling are implemented. Focused hardening CI passed at `b1260dc9048ddd1154e39e561c94a5e4c7ac945f`. Remaining: desktop trust-anchor composition. |
+| F-02 Native updater PBAC provisioning | CERTIFIED | Migration 7 provisions the exact updater identity and removes inherited/legacy updater authority. Dedicated hardening workflow run 35072409315 passed 49 focused tests at `b1260dc9048ddd1154e39e561c94a5e4c7ac945f`. |
+| F-03 Local PBAC administration authorization | IN PROGRESS | `AccessAdministrationService` now requires an authenticated `actor_id` and PBAC `administer` authorization with purpose `access_control_administration` before organization, identity, group-membership, role-assignment, contract, or policy writes. Contract proposal/approval actor parameters must match the authenticated actor. New tests cover no-actor denial, unauthorized-actor denial, authorized identity administration, and prevention of self-provisioning a Security Install policy; the focused workflow includes them. Remaining: observe successful CI, then wire authenticated desktop actor context and make the Qt workspace explicitly read-only when no authorized actor is available. |
+| F-04 Config-root binding | IN PROGRESS | Handoff/updater use explicit config/trust roots and focused CI proves inherited root variables cannot redirect updater PBAC. Remaining: desktop composition must pass root/trust anchor and root update settings/staging/history consistently. |
+| F-05 Authenticated anti-rollback | CERTIFIED | Dedicated hardening workflow run 35072409315 exercised signed version/minimum-version tamper negatives successfully. |
 | F-06 Immutable deployment/runtime binding | NOT STARTED | Implementation required. |
-| F-07 Security certification coverage | IN PROGRESS | `.github/workflows/security-hardening-certification.yml` provides a dedicated PR/manual gate for native authenticity, Security Install provenance/PBAC, updater provisioning, handoff roots, conflicting inherited environment roots, and application update-path tests. Run 35072409315 succeeded at `b1260dc9048ddd1154e39e561c94a5e4c7ac945f` with 49 tests passed. Desktop composition, local PBAC administration, and immutable runtime-digest gates remain. |
+| F-07 Security certification coverage | IN PROGRESS | Dedicated hardening workflow exists and previously passed 49 tests. It now also includes the PBAC administration actor tests. Desktop composition, Qt actor/read-only composition, and immutable runtime-digest gates remain. |
 
 ## Current continuation note — 2026-09-16
 
-PR #15 remains open and draft. `main` remains at audited commit `54abf55aa0c5124e1c1e7c46db14814c64a4e37c`; immediately before the focused-workflow commits the branch was 30 commits ahead and 0 behind. At head `b1260dc9048ddd1154e39e561c94a5e4c7ac945f`, dedicated hardening workflow run 35072409315 completed successfully and its `native-security-boundaries` job reported `49 passed in 0.58s`. The Qt, browser multi-import, facility-actions, and WEB-060 release-gate workflows also completed successfully at that head; the administration-actions workflow was still in progress when last inspected. F-02 and F-05 are therefore certified by the dedicated focused gate. Do not extend that certification to unresolved desktop composition, F-03, or F-06.
+PR #15 remains open and draft with no review comments or review threads. `main` remains audited commit `54abf55aa0c5124e1c1e7c46db14814c64a4e37c`. Before the F-03 commits, the branch was 33 commits ahead and 0 behind main. Commit `c1ee6e06638144a470fbca04256a71ef38aba040` makes local PBAC administration fail closed at the application boundary without authenticated, policy-authorized actor context; `ebf1a6dbb7f79f14f8a254a06d57f8321bc9d43c` fixes the focused fixture; `066e2b39d989cc4a3bc1d408e8b4a46b3fd1f944` adds those tests to the dedicated workflow. No workflow run was visible immediately after `066e2b39`, so F-03 is not certified.
 
-Highest-priority unresolved integration remains F-01/F-04 desktop composition. `MainWindow` still constructs `OfflineUpdateService()` without the required trust-anchor argument, stores update settings/staging/history under the library/session root, and launches the updater without explicit config/trust roots. `run_desktop()` and its bootstrap call also do not carry those values. Continue by wiring `container.paths.local_root`, `container.paths.updates_dir`, and `container.paths.update_trust_anchor_file` through bootstrap -> `run_desktop` -> `MainWindow`, moving update state to the application `updates_dir`, and passing the same roots into `augment_request` / `HelperLaunch`. Large-file GitHub edits require complete-file replacement: do not overwrite `ui/qt/application.py` or `bootstrap/cli.py` from partial fetches.
+Highest-priority unresolved integration remains desktop composition across F-01/F-03/F-04. `MainWindow` still constructs `OfflineUpdateService()` without the required trust-anchor argument, keeps update state under the library root, launches the updater without explicit config/trust roots, and constructs access administration without authenticated actor context while rediscovering application paths from environment. Continue by wiring the already-resolved `container.paths` and authenticated desktop identity through bootstrap -> `run_desktop` -> `MainWindow`, and make Access & Contracts read-only when that actor lacks administration authority. Large-file GitHub edits require complete-file replacement: do not overwrite `ui/qt/application.py` or `bootstrap/cli.py` from partial fetches.
 
 ## Completion definition
 
-Do not mark complete or ready for merge until: F-01 through F-07 are `CERTIFIED` (or an approved non-applicable decision is documented); positive and fail-closed negative tests pass; no authenticity decision trusts serialized verification booleans; native install requires both authenticated provenance and independent PBAC; local PBAC mutation requires an authorized actor; desktop/updater share one explicit application root; container certification checks immutable runtime identity; unrelated security gates remain passing; PR #15 is re-reviewed after final end-to-end audit; and this ledger reflects actual repository state.
+Do not mark complete or ready for merge until F-01 through F-07 are certified (or an approved non-applicable decision is documented), native install requires both authenticated provenance and PBAC, local PBAC mutation requires authorized actor context, desktop/updater share one explicit application root, immutable runtime identity is certified, unrelated gates pass, and this ledger reflects repository state.
 
 ## Instruction to the next chat
 

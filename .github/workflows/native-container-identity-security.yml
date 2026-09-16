@@ -16,6 +16,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Verify pull request head checkout
         if: ${{ github.event_name == 'pull_request' }}
         run: test "$(git rev-parse HEAD)" = "${{ github.event.pull_request.head.sha }}"

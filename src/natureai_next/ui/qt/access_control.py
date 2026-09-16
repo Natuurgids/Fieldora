@@ -18,8 +18,12 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from natureai_next.application.access_control import AccessAdministrationService
+from natureai_next.application.access_control import (
+    AccessAdministrationService,
+    PolicyDecisionService,
+)
 from natureai_next.domain.access_control import (
+    AccessRequest,
     IdentityKind,
     PolicyEffect,
     PolicySource,
@@ -69,6 +73,35 @@ class AccessControlWorkspace(QWidget):
         create_policy.clicked.connect(self._new_policy)
         refresh = QPushButton("Refresh")
         refresh.clicked.connect(self.refresh)
+
+        actor = service.repository.identity(service.actor_id) if service.actor_id else None
+        actor_organization = actor.organization_id if actor is not None and actor.enabled else ""
+        policy = PolicyDecisionService(service.repository)
+
+        def may_administer(resource_type: str, *, organization_id: str = "") -> bool:
+            if actor is None or not actor.enabled:
+                return False
+            return policy.decide(
+                AccessRequest(
+                    subject_id=service.actor_id,
+                    action="administer",
+                    resource_type=resource_type,
+                    organization_id=organization_id,
+                    purpose="access_control_administration",
+                )
+            ).allowed
+
+        mutation_buttons = (
+            (create_organization, "access_organization", actor_organization),
+            (create_identity, "access_identity", actor_organization),
+            (add_to_group, "access_group_membership", ""),
+            (assign_role, "access_role_assignment", actor_organization),
+            (create_contract, "access_contract", actor_organization),
+            (create_policy, "access_policy", actor_organization),
+        )
+        for button, resource_type, organization_id in mutation_buttons:
+            button.setEnabled(may_administer(resource_type, organization_id=organization_id))
+
         actions = QHBoxLayout()
         for button in (
             create_organization, create_identity, add_to_group, assign_role,
@@ -85,7 +118,8 @@ class AccessControlWorkspace(QWidget):
         intro = QLabel(
             "Local administration foundation for users, groups, services, devices, "
             "roles, contracts, and policy-based access control. Default policy is deny. "
-            "Authentication and federation arrive with the server platform."
+            "Mutation controls are enabled only when the authenticated actor has the "
+            "corresponding PBAC administration authority."
         )
         intro.setWordWrap(True)
         layout = QVBoxLayout(self)

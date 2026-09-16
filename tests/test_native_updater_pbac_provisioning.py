@@ -4,6 +4,8 @@ import json
 import sqlite3
 from pathlib import Path
 
+import pytest
+
 from natureai_next.application.access_control import PolicyDecisionService
 from natureai_next.domain.access_control import AccessRequest
 from natureai_next.infrastructure.database.access_control import SqliteAccessControlRepository
@@ -108,3 +110,77 @@ def test_missing_or_disabled_updater_identity_is_denied(tmp_path: Path) -> None:
             _install_request("fieldora-native-updater")
         )
         assert not decision.allowed
+
+
+@pytest.mark.parametrize(
+    ("action", "resource_type", "purpose"),
+    [
+        ("administer", "security_install_release", "security_install"),
+        ("install", "access_policy", "security_install"),
+        ("install", "security_install_release", "administration"),
+    ],
+)
+def test_native_updater_is_denied_outside_exact_permission(
+    tmp_path: Path, action: str, resource_type: str, purpose: str
+) -> None:
+    database = tmp_path / "access-control.sqlite3"
+    _provision(database)
+    decision = PolicyDecisionService(SqliteAccessControlRepository(database)).decide(
+        AccessRequest(
+            subject_id="fieldora-native-updater",
+            action=action,
+            resource_type=resource_type,
+            purpose=purpose,
+        )
+    )
+    assert not decision.allowed
+
+
+def test_provisioning_removes_inherited_or_legacy_updater_authority(tmp_path: Path) -> None:
+    database = tmp_path / "access-control.sqlite3"
+    connection = sqlite3.connect(database)
+    try:
+        MigrationRunner(ACCESS_CONTROL_MIGRATIONS[:6], "security-test").apply(connection)
+        connection.execute(
+            "INSERT INTO access_identities(identity_id,kind,display_name,organization_id,enabled,attributes_json) "
+            "VALUES('fieldora-native-updater','user','Legacy updater','legacy-org',1,'{\"platform_admin\":\"true\"}')"
+        )
+        connection.execute(
+            "INSERT INTO access_role_assignments(subject_id,role_id,organization_id,project_id) "
+            "VALUES('fieldora-native-updater','platform-admin','','')"
+        )
+        connection.execute(
+            "INSERT INTO access_group_members(group_id,member_id) VALUES('legacy-admins','fieldora-native-updater')"
+        )
+        connection.execute(
+            "INSERT INTO access_policies(policy_id,name,effect,source,source_id,subject_id,role_id," 
+            "actions_json,resource_types_json,resource_id,organization_id,project_id,purposes_json," 
+            "fields_json,conditions_json,valid_from_utc,valid_until_utc,priority,enabled) VALUES(" 
+            "'legacy-updater-admin','Legacy updater admin','allow','direct','legacy','fieldora-native-updater',''," 
+            "'[\"*\"]','[\"*\"]','','','','[]','[]','{}','','',1000,1)"
+        )
+        connection.commit()
+        MigrationRunner(ACCESS_CONTROL_MIGRATIONS, "security-test").apply(connection)
+
+        identity = connection.execute(
+            "SELECT kind,organization_id,enabled,attributes_json FROM access_identities "
+            "WHERE identity_id='fieldora-native-updater'"
+        ).fetchone()
+        extra_policies = connection.execute(
+            "SELECT COUNT(*) FROM access_policies WHERE subject_id='fieldora-native-updater' "
+            "AND policy_id<>'fieldora-native-updater-security-install'"
+        ).fetchone()[0]
+        roles = connection.execute(
+            "SELECT COUNT(*) FROM access_role_assignments WHERE subject_id='fieldora-native-updater'"
+        ).fetchone()[0]
+        groups = connection.execute(
+            "SELECT COUNT(*) FROM access_group_members WHERE member_id='fieldora-native-updater' "
+            "OR group_id='fieldora-native-updater'"
+        ).fetchone()[0]
+    finally:
+        connection.close()
+
+    assert identity == ("service", "", 1, "{}")
+    assert extra_policies == 0
+    assert roles == 0
+    assert groups == 0

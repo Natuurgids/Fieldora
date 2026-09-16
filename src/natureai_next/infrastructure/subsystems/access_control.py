@@ -141,16 +141,7 @@ ACCESS_CONTROL_MIGRATIONS = (
         ) VALUES(
             'fieldora-native-updater','service','Fieldora Native Updater','',1,'{}'
         ) ON CONFLICT(identity_id) DO UPDATE SET
-            kind='service',display_name='Fieldora Native Updater',
-            organization_id='',enabled=1,attributes_json='{}';
-
-        DELETE FROM access_role_assignments
-        WHERE subject_id='fieldora-native-updater';
-        DELETE FROM access_group_members
-        WHERE member_id='fieldora-native-updater' OR group_id='fieldora-native-updater';
-        DELETE FROM access_policies
-        WHERE subject_id='fieldora-native-updater'
-          AND policy_id<>'fieldora-native-updater-security-install';
+            kind='service',display_name='Fieldora Native Updater',enabled=1;
 
         INSERT INTO access_policies(
             policy_id,name,effect,source,source_id,subject_id,role_id,
@@ -170,6 +161,33 @@ ACCESS_CONTROL_MIGRATIONS = (
             resource_id='',organization_id='',project_id='',purposes_json='["security_install"]',
             fields_json='[]',conditions_json='{}',valid_from_utc='',valid_until_utc='',
             priority=100,enabled=1;
+        """,
+    ),
+    Migration(
+        8,
+        "isolate native updater authorization",
+        """
+        UPDATE access_identities
+        SET kind='service',display_name='Fieldora Native Updater',
+            organization_id='',enabled=1,attributes_json='{}'
+        WHERE identity_id='fieldora-native-updater';
+
+        DELETE FROM access_role_assignments
+        WHERE subject_id='fieldora-native-updater';
+        DELETE FROM access_group_members
+        WHERE member_id='fieldora-native-updater' OR group_id='fieldora-native-updater';
+        DELETE FROM access_policies
+        WHERE subject_id='fieldora-native-updater'
+          AND policy_id<>'fieldora-native-updater-security-install';
+
+        UPDATE access_policies SET
+            name='Native updater Security Install',effect='allow',source='direct',
+            source_id='fieldora-native-updater',subject_id='fieldora-native-updater',role_id='',
+            actions_json='["install"]',resource_types_json='["security_install_release"]',
+            resource_id='',organization_id='',project_id='',purposes_json='["security_install"]',
+            fields_json='[]',conditions_json='{}',valid_from_utc='',valid_until_utc='',
+            priority=100,enabled=1
+        WHERE policy_id='fieldora-native-updater-security-install';
         """,
     ),
 )

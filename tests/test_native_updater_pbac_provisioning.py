@@ -184,3 +184,48 @@ def test_provisioning_removes_inherited_or_legacy_updater_authority(tmp_path: Pa
     assert extra_policies == 0
     assert roles == 0
     assert groups == 0
+
+
+def test_existing_migration_7_database_upgrades_without_checksum_rewrite(tmp_path: Path) -> None:
+    assert ACCESS_CONTROL_MIGRATIONS[6].checksum == (
+        "5642fcd9073ffa621fd3930ab6a27e75dc3187e8fc678d3a104704a3a9c6ad86"
+    )
+    database = tmp_path / "access-control.sqlite3"
+    connection = sqlite3.connect(database)
+    try:
+        MigrationRunner(ACCESS_CONTROL_MIGRATIONS[:7], "security-test-old").apply(connection)
+        connection.execute(
+            "UPDATE access_identities SET organization_id='legacy-org',attributes_json='{\"platform_admin\":\"true\"}' "
+            "WHERE identity_id='fieldora-native-updater'"
+        )
+        connection.execute(
+            "INSERT INTO access_policies(policy_id,name,effect,source,source_id,subject_id,role_id," 
+            "actions_json,resource_types_json,resource_id,organization_id,project_id,purposes_json," 
+            "fields_json,conditions_json,valid_from_utc,valid_until_utc,priority,enabled) VALUES(" 
+            "'post-v7-updater-admin','Post-v7 updater admin','allow','direct','legacy','fieldora-native-updater',''," 
+            "'[\"*\"]','[\"*\"]','','','','[]','[]','{}','','',1000,1)"
+        )
+        connection.commit()
+
+        MigrationRunner(ACCESS_CONTROL_MIGRATIONS, "security-test-current").apply(connection)
+
+        migration_numbers = [
+            row[0]
+            for row in connection.execute(
+                "SELECT migration_number FROM schema_migrations ORDER BY migration_number"
+            )
+        ]
+        identity = connection.execute(
+            "SELECT kind,organization_id,enabled,attributes_json FROM access_identities "
+            "WHERE identity_id='fieldora-native-updater'"
+        ).fetchone()
+        extra_policies = connection.execute(
+            "SELECT COUNT(*) FROM access_policies WHERE subject_id='fieldora-native-updater' "
+            "AND policy_id<>'fieldora-native-updater-security-install'"
+        ).fetchone()[0]
+    finally:
+        connection.close()
+
+    assert migration_numbers == list(range(1, 9))
+    assert identity == ("service", "", 1, "{}")
+    assert extra_policies == 0

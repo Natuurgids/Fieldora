@@ -100,3 +100,64 @@ def test_actor_cannot_self_provision_security_install_policy(tmp_path: Path) -> 
         )
 
     assert all(policy.name != "Self provision Security Install" for policy in repository.policies())
+
+
+def test_project_creator_can_only_receive_narrow_owner_workspace_grant(tmp_path: Path) -> None:
+    repository = _repository(tmp_path / "access.sqlite3")
+    repository.put_identity(Identity("creator-1", IdentityKind.USER, "Creator", "org-1"))
+    repository.put_policy(
+        Policy(
+            policy_id="creator-create-project",
+            name="May create projects",
+            effect=PolicyEffect.ALLOW,
+            source=PolicySource.DIRECT,
+            source_id="creator-1",
+            subject_id="creator-1",
+            role_id="",
+            actions=("create",),
+            resource_types=("project",),
+            organization_id="org-1",
+            purposes=("research",),
+        )
+    )
+    service = AccessAdministrationService(repository, actor_id="creator-1")
+
+    grant = service.grant_project_owner_workspace(
+        organization_id="org-1",
+        project_id="project-1",
+        name="Project One",
+        actions=("view", "edit"),
+        resource_types=("project", "task"),
+    )
+
+    assert grant.subject_id == "creator-1"
+    assert grant.source is PolicySource.OBJECT_GRANT
+    assert grant.source_id == "project-1"
+    assert grant.organization_id == "org-1"
+    assert grant.project_id == "project-1"
+    assert grant.purposes == ("research",)
+    with pytest.raises(AccessDenied):
+        service.create_policy(
+            name="Still not an access administrator",
+            effect=PolicyEffect.ALLOW,
+            source=PolicySource.DIRECT,
+            subject_id="creator-1",
+            actions=("install",),
+            resource_types=("security_install_release",),
+            organization_id="org-1",
+            purposes=("security_install",),
+        )
+
+
+def test_project_owner_grant_requires_create_project_authority(tmp_path: Path) -> None:
+    repository = _repository(tmp_path / "access.sqlite3")
+    repository.put_identity(Identity("creator-1", IdentityKind.USER, "Creator", "org-1"))
+
+    with pytest.raises(AccessDenied):
+        AccessAdministrationService(repository, actor_id="creator-1").grant_project_owner_workspace(
+            organization_id="org-1",
+            project_id="project-1",
+            name="Project One",
+            actions=("view",),
+            resource_types=("project",),
+        )

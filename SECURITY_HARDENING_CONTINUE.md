@@ -36,20 +36,39 @@ Clean bootstrap provisions enabled service identity `fieldora-native-updater` wi
 Access-control mutations carry authenticated actor context and are authorized at the application/service boundary before writes. Cover organization, identity, group membership, role assignment, contract, and policy mutation with narrowly scoped administration permissions. Qt is read-only/fail-closed without an authorized actor. Tests include prevention of self-provisioning an unauthorized Security Install grant.
 
 ### F-04 — Config-root / authorization-context binding — MEDIUM
-Carry the resolved application/config root explicitly desktop -> stage -> handoff -> updater. Updater PBAC DB, history, and update state resolve from that explicit root and cannot be redirected by inherited `APERTURE_DATA_ROOT` / `NATUREAI_DATA_ROOT`.
+Carry the resolved application/config root explicitly desktop -> stage -> handoff -> updater. Updater PBAC DB, history, and update state resolve from that explicit root. Do not independently rediscover the root from inherited environment variables after handoff.
 
 ### F-05 — Authenticated anti-rollback — MEDIUM
-Version and minimum-supported-version remain monotonic checks but are authenticated signed fields. Tests prove modifying either invalidates authenticity.
+Version and `minimum_supported_version` remain monotonic checks, but both must be inside the authenticated native-release manifest. Add tests proving that modifying either field invalidates the signature.
 
-### F-06 — Immutable deployment/runtime binding — MEDIUM
-Establish `Git commit -> build inputs -> OCI digest -> deployed digest -> running digest -> certification proof`. Never use mutable image tag alone as runtime identity.
+### F-06 — Deployment identity
+Container release/runtime evidence should bind:
 
-### F-07 — Security certification coverage — DEFENSE IN DEPTH
-CI/certification must demonstrate all positive and fail-closed boundaries above, including local PBAC mutation without an authorized actor, explicit config-root preservation, and immutable runtime digest verification.
+`Git commit -> build input -> OCI digest -> deployed digest -> running container digest -> certification proof`.
 
-## Integration rules
+Functional health checks remain necessary but are not a substitute for immutable artifact identity.
 
-This branch owns the concrete remediation. PR #10 / `deployment/docker-layout-stage` is stale/superseded and must not be resurrected. PR #13 / `feat/platform-bootstrap-contract` may contain compatible platform/supply-chain contract work, but re-evaluate it against current `main` before reuse.
+## Certification gates
+
+The implementation is complete only when CI demonstrates all of the following:
+
+- valid signed native update is accepted;
+- unsigned index is rejected;
+- signature made by an untrusted key is rejected;
+- tampered version, minimum version, package hash, package size, release digest, or Security Install evidence is rejected;
+- valid package with invalid/missing PBAC authorization is rejected;
+- clean install provisions the exact updater identity and least-privilege allow policy;
+- unrelated subjects cannot install a Security Install release;
+- local PBAC mutation without authorized actor context is rejected;
+- explicit non-default config root is preserved across detached updater handoff;
+- updater cannot select a different PBAC database through inherited root environment variables;
+- container certification records and verifies the immutable running image digest.
+
+## Branch integration
+
+This branch owns the security implementation. It should not be folded into stale deployment-layout staging work.
+
+`feat/platform-bootstrap-contract` has useful overlap at the platform/supply-chain contract layer and should be rebased onto current `main`; its platform manifest work can remain separate. Native update authenticity, updater PBAC provisioning, and local PBAC authorization must be implemented here (or cherry-picked from here) so the trust-boundary changes remain independently reviewable.
 
 ## Progress ledger
 
@@ -59,23 +78,21 @@ Status values: `NOT STARTED`, `IN PROGRESS`, `IMPLEMENTED — TESTS PENDING`, `C
 | --- | --- | --- |
 | F-01 Native release authenticity/provenance | IN PROGRESS | Ed25519 signed-index verification, strict signed-field validation, administrator trust-anchor loading, package hash/size and Security Install evidence binding, detached-updater re-verification, cryptographically derived Security Install release context, and signed-index tooling are implemented. Focused hardening CI passed at `b1260dc9048ddd1154e39e561c94a5e4c7ac945f`. Remaining: desktop trust-anchor composition. |
 | F-02 Native updater PBAC provisioning | CERTIFIED | Historical Migration 7 is preserved byte-for-byte because the migration runner enforces immutable SQL checksums. Migration 8 now removes inherited/legacy updater roles, groups, policies and identity attributes while preserving the exact `fieldora-native-updater` Security Install permission. Upgrade regression coverage pins the historical Migration 7 checksum, applies the old state, introduces excess authority, upgrades through Migration 8, and verifies isolation. Dedicated hardening workflow run 35089520417 succeeded at `e2c1bcf9fbbc0e2885834d16d9e46cf313bc741d`. |
-| F-03 Local PBAC administration authorization | IN PROGRESS | `AccessAdministrationService` requires authenticated `actor_id` plus PBAC `administer` / `access_control_administration` authorization before organization, identity, group-membership, role-assignment, contract, or policy writes. Contract proposal/approval identities are bound to the actor. Focused hardening workflow run 35073093431 succeeded at `87fd75a03a76d56f807576e7b5ecee9c109b6e08`. WEB-030 production owner-grant propagation is now certified: run 35098533519 succeeded at `b582daaf149a6dff338d9f064ba19cfbd4126b02`, using actor-bound `AccessAdministrationService(..., actor_id=identity_id)` plus the fixed `grant_project_owner_workspace()` seam. Remaining: desktop authenticated actor composition and Qt read-only/fail-closed behavior. |
+| F-03 Local PBAC administration authorization | IN PROGRESS | `AccessAdministrationService` requires authenticated `actor_id` plus PBAC `administer` / `access_control_administration` authorization before organization, identity, group-membership, role-assignment, contract, or policy writes. Contract proposal/approval identities are bound to the actor. WEB-030 production owner-grant propagation is certified at run 35098533519. Qt fail-closed capability controls and focused tests are certified at `5e74849b463482e9e2b95fba570261ba8852ed0b`: Qt run 35128650055 and native hardening run 35128650081 succeeded. Remaining: desktop authenticated actor composition. |
 | F-04 Config-root binding | IN PROGRESS | Handoff/updater use explicit config/trust roots and focused CI proves inherited root variables cannot redirect updater PBAC. Remaining: desktop composition must pass root/trust anchor and root update settings/staging/history consistently. |
 | F-05 Authenticated anti-rollback | CERTIFIED | Dedicated hardening workflow run 35072409315 exercised signed version/minimum-version tamper negatives successfully. |
 | F-06 Immutable deployment/runtime binding | NOT STARTED | Implementation required. |
-| F-07 Security certification coverage | IN PROGRESS | Native hardening and WEB-030 are green at `b582daaf` (runs 35098532643 and 35098533519). The same head exposed a separate media-identity gate failure because its lightweight `_AccessRepository` test double no longer implemented the authenticated owner-grant repository contract; production WEB-030 remained green. Commit `f40e9628daa6cdb7d6a4749e895b8512fb855cdb` updates only that test double with identity/policy/audit repository behavior rather than weakening authorization. At the last check, WEB-030 run 35103348388 and native hardening run 35103348462 were green on `f40e9628`; media-identity run 35103348287 was still in progress. Desktop composition, Qt actor/read-only composition, and immutable runtime-digest gates remain. |
+| F-07 Security certification coverage | IN PROGRESS | At `5e74849b463482e9e2b95fba570261ba8852ed0b`, all observed PR workflow runs completed successfully, including Qt 35128650055, native hardening 35128650081, WEB-030 35128650022, media identity 35128650034, WEB-060 35128650020, WEB-028 35128650043, WEB-029 35128650195, WEB-031 35128650200, WEB-037 35128650027, WEB-057 35128650148, WEB-058 35128650040, zero-trust web 35128650211, project parity 35128650157, facility actions 35128650313, and administration actions 35128650225. Desktop composition and immutable runtime-digest gates remain. |
 
 ## Current continuation note — 2026-09-16
 
-PR #15 remains open and draft with no comments, review threads, or submitted reviews. `main` remains `54abf55aa0c5124e1c1e7c46db14814c64a4e37c`; the branch remained 0 commits behind main when rechecked before the first change in this continuation.
+PR #15 remains open and draft with no comments, review threads, or submitted reviews. `main` remains `54abf55aa0c5124e1c1e7c46db14814c64a4e37c`. At the mandatory re-check, branch head `5e74849b463482e9e2b95fba570261ba8852ed0b` was 53 commits ahead and 0 behind main.
 
-The mandatory handoff point `b582daaf149a6dff338d9f064ba19cfbd4126b02` is now inspected and WEB-030 is certified. Workflow run 35098533519 completed successfully, including the creator immediate Project authority step. Native hardening run 35098532643 also succeeded. The production browser path is actor-bound and calls the narrow `grant_project_owner_workspace()` operation; the previous ledger statement that it still used unauthenticated general `create_policy()` was stale and is corrected here.
-
-One unrelated gate at `b582daaf` failed: media-identity run 35098533649. Its only failure was `tests/test_browser_functionality_api.py::test_project_creator_receives_project_scoped_workspace_permission`, where the test-only `_AccessRepository` lacked `identity()` after the owner seam was correctly hardened. Commit `f40e9628daa6cdb7d6a4749e895b8512fb855cdb` repaired the test double by supplying the authenticated identity, the pre-existing project-create authorization needed by the narrow seam, and the repository methods used by `PolicyDecisionService`. It did not bypass or relax the service-layer authorization. On the first follow-up check, WEB-030 run 35103348388 and native hardening run 35103348462 were green; media-identity run 35103348287 and several unrelated workflows were still running. Re-check all of those runs before relying on the new head as fully green.
+The Qt access-administration test commit `5e74849b463482e9e2b95fba570261ba8852ed0b` is now certified by concrete workflow evidence. Qt certification run 35128650055 and native security hardening run 35128650081 both completed successfully. WEB-030 run 35128650022 and media-identity run 35128650034 also completed successfully, and every other observed PR workflow run for that head was green. The focused Qt tests prove actorless administration exposes no mutation controls while Refresh remains available, and an actor authorized only for `access_identity` receives only the corresponding mutation control. Service-layer authorization remains authoritative.
 
 The updater migration history is upgrade-safe. `MigrationRunner` rejects checksum changes for already-applied migrations, so Migration 7 is preserved at its historical checksum and Migration 8 carries cleanup/isolation. Do not edit either migration in place; future changes require a new migration number.
 
-Highest-priority unresolved integration is desktop composition across F-01/F-03/F-04. Inspection confirms `MainWindow` still constructs `OfflineUpdateService()` without its administrator trust-anchor argument, derives update settings/staging/history from `session_path.parent`, launches handoff without explicit config/trust roots, and calls `resolve_application_paths()` inside the Qt composition for subsystem databases. It also constructs `AccessAdministrationService` without actor context. `run_desktop` does have an actual authenticated local-login identity (`login.profile["username"]`); use that authenticated session identity rather than inventing an OS/library identity. Continue by wiring the already-resolved `container.paths` and authenticated desktop identity through bootstrap -> `run_desktop` -> `MainWindow`, and make Access & Contracts read-only when that actor lacks administration authority. Large-file GitHub edits require complete-file replacement: do not overwrite `ui/qt/application.py` or `bootstrap/cli.py` from partial fetches.
+Highest-priority unresolved integration remains desktop composition across F-01/F-03/F-04. Current branch inspection confirms `MainWindow` still constructs `OfflineUpdateService()` without its required administrator trust-anchor argument, derives update settings/staging/history from `session_path.parent`, launches handoff without explicit config/trust roots, and repeatedly calls `resolve_application_paths()` inside Qt composition. It also constructs `AccessAdministrationService` without actor context. `run_desktop` establishes the actual authenticated local-login identity from `login.profile["username"]`. Continue by wiring the already-resolved `container.paths` and authenticated desktop identity through bootstrap -> `run_desktop` -> `MainWindow`, then add focused regression tests. Large-file GitHub edits require complete-file replacement: do not overwrite `ui/qt/application.py` or `bootstrap/cli.py` from partial fetches.
 
 ## Completion definition
 

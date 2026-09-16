@@ -27,6 +27,14 @@ _PROJECT_CONTRACT_RIGHTS = {
     "download_export": (("project_export",), "research"),
     "upload": (("asset",), "research"),
 }
+_PROJECT_OWNER_ACTIONS = (
+    "view", "edit", "upload", "download", "search", "link", "unlink", "export",
+)
+_PROJECT_OWNER_RESOURCE_TYPES = (
+    "project", "phase", "task", "sprint", "allocation", "dossier", "dossier_review",
+    "observation", "specimen", "encounter", "protocol", "survey_event", "enrichment",
+    "sample", "laboratory_record", "collection", "asset",
+)
 _ADMIN_ACTION = "administer"
 _ADMIN_PURPOSE = "access_control_administration"
 
@@ -256,8 +264,8 @@ class AccessAdministrationService:
         self._require_admin("access_role_assignment", organization_id=organization_id, resource_id=subject_id)
         self.repository.assign_role(subject_id, role_id, organization_id, project_id)
 
-    def grant_project_owner_workspace(self, *, organization_id: str, project_id: str, name: str, actions: tuple[str, ...], resource_types: tuple[str, ...]) -> Policy:
-        """Create only the authenticated creator's scoped owner grant after re-authorizing create/project."""
+    def grant_project_owner_workspace(self, *, organization_id: str, project_id: str, name: str) -> Policy:
+        """Create only the authenticated creator's fixed, project-scoped owner grant."""
         organization_id = organization_id.strip()
         project_id = project_id.strip()
         if not self.actor_id:
@@ -278,8 +286,8 @@ class AccessAdministrationService:
         policy = Policy(
             policy_id=str(uuid4()), name=f"Project owner workspace: {name.strip()}",
             effect=PolicyEffect.ALLOW, source=PolicySource.OBJECT_GRANT,
-            source_id=project_id, subject_id=self.actor_id, role_id="", actions=actions,
-            resource_types=resource_types, organization_id=organization_id,
+            source_id=project_id, subject_id=self.actor_id, role_id="", actions=_PROJECT_OWNER_ACTIONS,
+            resource_types=_PROJECT_OWNER_RESOURCE_TYPES, organization_id=organization_id,
             project_id=project_id, purposes=("research",),
         )
         self.repository.put_policy(policy)

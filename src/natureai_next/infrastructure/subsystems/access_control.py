@@ -141,7 +141,16 @@ ACCESS_CONTROL_MIGRATIONS = (
         ) VALUES(
             'fieldora-native-updater','service','Fieldora Native Updater','',1,'{}'
         ) ON CONFLICT(identity_id) DO UPDATE SET
-            kind='service',display_name='Fieldora Native Updater',enabled=1;
+            kind='service',display_name='Fieldora Native Updater',
+            organization_id='',enabled=1,attributes_json='{}';
+
+        DELETE FROM access_role_assignments
+        WHERE subject_id='fieldora-native-updater';
+        DELETE FROM access_group_members
+        WHERE member_id='fieldora-native-updater' OR group_id='fieldora-native-updater';
+        DELETE FROM access_policies
+        WHERE subject_id='fieldora-native-updater'
+          AND policy_id<>'fieldora-native-updater-security-install';
 
         INSERT INTO access_policies(
             policy_id,name,effect,source,source_id,subject_id,role_id,

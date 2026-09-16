@@ -10,6 +10,7 @@ import hashlib
 import json
 from pathlib import Path
 
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.serialization import load_pem_private_key
 
 from natureai_next.application.update_trust import (
@@ -72,7 +73,7 @@ def main() -> int:
         payload["release_notes"] = args.release_notes
 
     private_key = load_pem_private_key(args.private_key.read_bytes(), password=None)
-    if private_key.__class__.__name__ != "Ed25519PrivateKey":
+    if not isinstance(private_key, Ed25519PrivateKey):
         parser.error("--private-key must contain an Ed25519 private key")
     signature = private_key.sign(canonical_json_bytes(payload))
     envelope = {

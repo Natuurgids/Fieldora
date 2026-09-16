@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import sqlite3
 from pathlib import Path
 
 import pytest
@@ -7,15 +8,17 @@ import pytest
 from natureai_next.application.access_control import AccessAdministrationService, AccessDenied
 from natureai_next.domain.access_control import Identity, IdentityKind, Policy, PolicyEffect, PolicySource
 from natureai_next.infrastructure.database.access_control import SqliteAccessControlRepository
+from natureai_next.infrastructure.database.migrations.core import MigrationRunner
 from natureai_next.infrastructure.subsystems.access_control import ACCESS_CONTROL_MIGRATIONS
-from natureai_next.infrastructure.subsystems.base import MigrationRunner
 
 
 def _repository(path: Path) -> SqliteAccessControlRepository:
-    repository = SqliteAccessControlRepository(path)
-    with repository.connection() as connection:
+    connection = sqlite3.connect(path)
+    try:
         MigrationRunner(ACCESS_CONTROL_MIGRATIONS, "security-test").apply(connection)
-    return repository
+    finally:
+        connection.close()
+    return SqliteAccessControlRepository(path)
 
 
 def _authorize(repository: SqliteAccessControlRepository, actor_id: str, resource_type: str) -> None:

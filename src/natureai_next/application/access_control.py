@@ -256,6 +256,35 @@ class AccessAdministrationService:
         self._require_admin("access_role_assignment", organization_id=organization_id, resource_id=subject_id)
         self.repository.assign_role(subject_id, role_id, organization_id, project_id)
 
+    def grant_project_owner_workspace(self, *, organization_id: str, project_id: str, name: str, actions: tuple[str, ...], resource_types: tuple[str, ...]) -> Policy:
+        """Create only the authenticated creator's scoped owner grant after re-authorizing create/project."""
+        organization_id = organization_id.strip()
+        project_id = project_id.strip()
+        if not self.actor_id:
+            raise AccessDenied("project owner grant requires authenticated actor")
+        identity = self.repository.identity(self.actor_id)
+        if identity is None or not identity.enabled or identity.organization_id != organization_id:
+            raise AccessDenied("project owner grant actor is not an enabled organizational identity")
+        if not project_id:
+            raise ValueError("project owner grant requires project id")
+        self._policy.require(AccessRequest(
+            subject_id=self.actor_id,
+            action="create",
+            resource_type="project",
+            resource_id="",
+            organization_id=organization_id,
+            purpose="research",
+        ))
+        policy = Policy(
+            policy_id=str(uuid4()), name=f"Project owner workspace: {name.strip()}",
+            effect=PolicyEffect.ALLOW, source=PolicySource.OBJECT_GRANT,
+            source_id=project_id, subject_id=self.actor_id, role_id="", actions=actions,
+            resource_types=resource_types, organization_id=organization_id,
+            project_id=project_id, purposes=("research",),
+        )
+        self.repository.put_policy(policy)
+        return policy
+
     def create_policy(self, *, name: str, effect: PolicyEffect, source: PolicySource, source_id: str = "", subject_id: str = "", role_id: str = "", actions: tuple[str, ...], resource_types: tuple[str, ...], resource_id: str = "", organization_id: str = "", project_id: str = "", purposes: tuple[str, ...] = (), fields: tuple[str, ...] = (), valid_until_utc: str = "") -> Policy:
         self._require_admin("access_policy", organization_id=organization_id, resource_id=subject_id or role_id)
         policy = Policy(

@@ -24,6 +24,7 @@ class ApplicationPaths:
     models_dir: Path
     taxonomy_packages_dir: Path
     updates_dir: Path
+    update_trust_anchor_file: Path
     plugins_dir: Path
     subsystem_databases_dir: Path
     offline_map_packages_dir: Path
@@ -70,6 +71,7 @@ def resolve_application_paths(config_root: Path | None = None) -> ApplicationPat
         models_dir=local_root / "models",
         taxonomy_packages_dir=local_root / "taxonomy-packages",
         updates_dir=local_root / "updates",
+        update_trust_anchor_file=local_root / "update-trust-anchors.json",
         plugins_dir=local_root / "plugins",
         subsystem_databases_dir=local_root / "subsystems",
         offline_map_packages_dir=local_root / "offline-maps",

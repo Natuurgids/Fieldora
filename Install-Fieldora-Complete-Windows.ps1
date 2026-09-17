@@ -43,13 +43,16 @@ Write-Host "Fieldora Complete Windows Docker Installer" -ForegroundColor Green
 Write-Host "Fieldora : Natuurgids/Fieldora@$FieldoraRef"; Write-Host "Bastion  : Natuurgids/FieldoraBastion@$BastionRef"; Write-Host "Root     : $InstallRoot"
 Write-Host "This is a destructive clean installation of the Fieldora server stack. Bastion remains a separate container security boundary." -ForegroundColor Yellow
 $confirm = Read-Host "Type CLEAN to continue"; if ($confirm.Trim().ToUpperInvariant() -ne 'CLEAN') { Write-Host "Installation cancelled."; exit 0 }
-$temp = [IO.Path]::GetTempPath(); $core = Join-Path $temp "Install-Fieldora-Clean-$([Guid]::NewGuid().ToString('N')).ps1"; $handoff = Join-Path $temp "Install-Fieldora-Handoff-$([Guid]::NewGuid().ToString('N')).ps1"
+$temp = [IO.Path]::GetTempPath(); $core = Join-Path $temp "Install-Fieldora-Clean-$([Guid]::NewGuid().ToString('N')).ps1"; $handoff = Join-Path $temp "Install-Fieldora-Handoff-$([Guid]::NewGuid().ToString('N')).ps1"; $cleanInput = Join-Path $temp "Fieldora-Clean-$([Guid]::NewGuid().ToString('N')).txt"
 try {
     Step "Downloading repository-controlled Fieldora installer"
     Invoke-WebRequest -Uri (Get-RawUrl 'Natuurgids/Fieldora' $FieldoraRef 'Install-Fieldora-Clean.ps1') -OutFile $core -UseBasicParsing
     Step "Installing Fieldora server containers"
-    'CLEAN' | & $core -InstallRoot $InstallRoot -FieldoraRef $FieldoraRef -AdminUsername $AdminUsername -AdminName $AdminName -Organization $Organization -AdminPassword $AdminPassword
-    if (-not $?) { throw "Fieldora clean installer failed." }
+    Set-Content -LiteralPath $cleanInput -Value 'CLEAN' -Encoding ascii
+    $coreArgs = @('-NoLogo','-NoProfile','-File',$core,'-InstallRoot',$InstallRoot,'-FieldoraRef',$FieldoraRef,'-AdminUsername',$AdminUsername,'-AdminName',$AdminName,'-Organization',$Organization)
+    if ($AdminPassword) { $coreArgs += @('-AdminPassword',$AdminPassword) }
+    $process = Start-Process -FilePath (Get-Command pwsh).Source -ArgumentList $coreArgs -RedirectStandardInput $cleanInput -NoNewWindow -Wait -PassThru
+    if ($process.ExitCode -ne 0) { throw "Fieldora clean installer failed (exit code $($process.ExitCode))." }
     Step "Configuring temporary administrator credential handoff"
     Invoke-WebRequest -Uri (Get-RawUrl 'Natuurgids/Fieldora' $FieldoraRef 'Install-Fieldora-Bootstrap-Handoff.ps1') -OutFile $handoff -UseBasicParsing
     & $handoff -InstallRoot $InstallRoot -RetentionDays $CredentialHandoffRetentionDays
@@ -71,4 +74,4 @@ try {
     Write-Host "FieldoraBastion root : $BastionRoot" -ForegroundColor Green
     Write-Host "Bastion scanner and bundle-builder are hardened on-demand tool containers; they are built but not left running as idle services." -ForegroundColor Green
     Write-Host "Bootstrap credentials: $(Join-Path $InstallRoot 'bootstrap-handoff\ADMIN-CREDENTIALS.txt')" -ForegroundColor Yellow
-} finally { Remove-Item -LiteralPath $core -Force -ErrorAction SilentlyContinue; Remove-Item -LiteralPath $handoff -Force -ErrorAction SilentlyContinue }
+} finally { Remove-Item -LiteralPath $core -Force -ErrorAction SilentlyContinue; Remove-Item -LiteralPath $handoff -Force -ErrorAction SilentlyContinue; Remove-Item -LiteralPath $cleanInput -Force -ErrorAction SilentlyContinue }

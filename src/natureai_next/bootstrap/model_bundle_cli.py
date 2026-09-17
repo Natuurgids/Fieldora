@@ -20,7 +20,10 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
 from natureai_next.application.security_install import require_security_install
-from natureai_next.domain.security_install import SecurityInstallAcceptanceError
+from natureai_next.domain.security_install import (
+    AuthenticatedReleaseContext,
+    SecurityInstallAcceptanceError,
+)
 
 _MODEL_EXTENSIONS = {".safetensors", ".onnx", ".gguf"}
 _SUPPORT_EXTENSIONS = {
@@ -435,6 +438,24 @@ def _verify_security_install_archive(
         raise ModelBundleError("Security Install artifact must be a readable ZIP") from exc
 
 
+def _authenticated_manifest_release(
+    bundle_dir: Path,
+    verified: VerifiedModelBundle,
+) -> AuthenticatedReleaseContext:
+    """Derive release identity only from the already verified signed manifest."""
+    if not verified.signature_verified or not verified.signing_key_id:
+        raise ModelBundleError(
+            "model installation requires a manifest authenticated by a trusted signing key"
+        )
+    manifest_path = bundle_dir.resolve() / "manifest.json"
+    manifest_bytes = manifest_path.read_bytes()
+    return AuthenticatedReleaseContext(
+        release_id=f"fieldora-model:{verified.model_id}:{verified.version}",
+        release_digest=hashlib.sha256(manifest_bytes).hexdigest(),
+        signer_key_id=verified.signing_key_id,
+    )
+
+
 def _require_model_security_install(
     evidence: Mapping[str, object],
     *,
@@ -443,6 +464,7 @@ def _require_model_security_install(
     subject_id: str,
     actual_target_version: str,
     verified: VerifiedModelBundle,
+    authenticated_release: AuthenticatedReleaseContext,
 ) -> None:
     try:
         accepted = require_security_install(
@@ -453,6 +475,7 @@ def _require_model_security_install(
             expected_package_id=artifact_path.name,
             expected_target_component=f"fieldora-model:{verified.model_id}",
             actual_target_version=actual_target_version,
+            authenticated_release=authenticated_release,
         )
     except SecurityInstallAcceptanceError as exc:
         raise ModelBundleError(f"Security Install acceptance failed: {exc}") from exc
@@ -497,6 +520,7 @@ def install_model_bundle(
     access_control_database: Path,
     security_install_subject: str,
     actual_target_version: str,
+    authenticated_release: AuthenticatedReleaseContext | None = None,
     max_total_bytes: int = _DEFAULT_MAX_BYTES,
     trusted_signing_key: Path | None = None,
     require_signature: bool = False,
@@ -509,6 +533,7 @@ def install_model_bundle(
         require_signature=require_signature,
         require_clean_scan=require_clean_scan,
     )
+    release_context = authenticated_release or _authenticated_manifest_release(bundle_dir, verified)
     _verify_security_install_archive(security_install_artifact, bundle_dir, verified)
     _require_model_security_install(
         security_install_evidence,
@@ -517,6 +542,7 @@ def install_model_bundle(
         subject_id=security_install_subject,
         actual_target_version=actual_target_version,
         verified=verified,
+        authenticated_release=release_context,
     )
 
     destination = model_store / verified.model_id / verified.version
@@ -545,6 +571,7 @@ def install_model_bundle(
             subject_id=security_install_subject,
             actual_target_version=actual_target_version,
             verified=verified,
+            authenticated_release=release_context,
         )
         if destination.exists():
             raise ModelBundleError(f"model version is already installed: {verified.artifact_storage_id}")

@@ -20,12 +20,31 @@ $ProgressPreference = "SilentlyContinue"
 function Step([string]$Text) { Write-Host "`n============================================================" -ForegroundColor DarkCyan; Write-Host "==> $Text" -ForegroundColor Cyan; Write-Host "============================================================" -ForegroundColor DarkCyan }
 function Assert-Exit([string]$Message) { if ($LASTEXITCODE -ne 0) { throw "$Message (exit code $LASTEXITCODE)" } }
 function Get-RawUrl([string]$Repository,[string]$Ref,[string]$Path) { $encodedPath = ($Path -split '/' | ForEach-Object {[Uri]::EscapeDataString($_)}) -join '/'; return "https://raw.githubusercontent.com/$Repository/$Ref/$encodedPath" }
+function Get-GitHubToken {
+    foreach ($name in @('GH_TOKEN','GITHUB_TOKEN')) {
+        $value = [Environment]::GetEnvironmentVariable($name)
+        if (-not [string]::IsNullOrWhiteSpace($value)) { return $value.Trim() }
+    }
+    $gh = Get-Command gh -ErrorAction SilentlyContinue
+    if ($gh) {
+        $value = (& $gh.Source auth token 2>$null | Out-String).Trim()
+        if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($value)) { return $value }
+    }
+    return ''
+}
 function Download-Archive([string]$Repository,[string]$Ref,[string]$Destination) {
     $temp = [IO.Path]::GetTempPath(); $token = [Guid]::NewGuid().ToString('N'); $zip = Join-Path $temp "fieldora-$token.zip"; $extract = Join-Path $temp "fieldora-$token"
     try {
         New-Item -ItemType Directory -Force -Path $extract | Out-Null
-        $encoded = [Uri]::EscapeDataString($Ref); $url = "https://github.com/$Repository/archive/refs/heads/$encoded.zip"; if ($Ref -match '^[0-9a-fA-F]{40}$') { $url = "https://github.com/$Repository/archive/$Ref.zip" }
-        Invoke-WebRequest -Uri $url -OutFile $zip -UseBasicParsing
+        $encoded = [Uri]::EscapeDataString($Ref); $url = "https://api.github.com/repos/$Repository/zipball/$encoded"
+        $headers = @{ Accept = 'application/vnd.github+json'; 'X-GitHub-Api-Version' = '2022-11-28'; 'User-Agent' = 'Fieldora-Installer' }
+        $githubToken = Get-GitHubToken
+        if ($githubToken) { $headers.Authorization = "Bearer $githubToken" }
+        try { Invoke-WebRequest -Uri $url -Headers $headers -OutFile $zip -UseBasicParsing }
+        catch {
+            if (-not $githubToken) { throw "Unable to download $Repository@$Ref. This repository may be private. Set GH_TOKEN/GITHUB_TOKEN or authenticate GitHub CLI with 'gh auth login', then rerun the installer." }
+            throw
+        }
         Expand-Archive -LiteralPath $zip -DestinationPath $extract -Force
         $source = Get-ChildItem -LiteralPath $extract -Directory | Select-Object -First 1; if (-not $source) { throw "Archive for $Repository@$Ref was empty." }
         Remove-Item -LiteralPath $Destination -Recurse -Force -ErrorAction SilentlyContinue; New-Item -ItemType Directory -Force -Path $Destination | Out-Null
@@ -47,12 +66,6 @@ $temp = [IO.Path]::GetTempPath(); $core = Join-Path $temp "Install-Fieldora-Clea
 try {
     Step "Downloading repository-controlled Fieldora installer"
     Invoke-WebRequest -Uri (Get-RawUrl 'Natuurgids/Fieldora' $FieldoraRef 'Install-Fieldora-Clean.ps1') -OutFile $core -UseBasicParsing
-    $coreText = Get-Content -LiteralPath $core -Raw
-    $oldBootstrap = '& docker compose run --rm --no-deps fieldora-server fieldora-server --data-root /var/lib/fieldora --access-backend postgresql --postgres-access-dsn-file /run/secrets/fieldora-access-dsn init-user --organization $Organization --name $AdminName --username $AdminUsername --password $AdminPassword'
-    $newBootstrap = '& docker compose run --rm --no-deps fieldora-server python3.11 /opt/fieldora/scripts/bootstrap_fieldora_admin.py --dsn-file /run/secrets/fieldora-access-dsn --organization $Organization --name $AdminName --username $AdminUsername --password $AdminPassword'
-    if (-not $coreText.Contains($oldBootstrap)) { throw "Fieldora clean installer bootstrap contract changed; refusing an unreviewed rewrite." }
-    $coreText = $coreText.Replace($oldBootstrap, $newBootstrap)
-    Set-Content -LiteralPath $core -Value $coreText -Encoding utf8NoBOM
     Step "Installing Fieldora server containers"
     Set-Content -LiteralPath $cleanInput -Value 'CLEAN' -Encoding ascii
     $coreArgs = @('-NoLogo','-NoProfile','-File',$core,'-InstallRoot',$InstallRoot,'-FieldoraRef',$FieldoraRef,'-AdminUsername',$AdminUsername,'-AdminName',$AdminName,'-Organization',$Organization)

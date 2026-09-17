@@ -1,0 +1,82 @@
+name: Fieldora installer review certification
+
+on:
+  pull_request:
+    paths:
+      - "scripts/build_fieldora_windows_installer.ps1"
+      - "scripts/build_fieldora_linux_installer.ps1"
+      - "Install-Fieldora-Clean-Linux.ps1"
+      - "Install-Fieldora-Clean.ps1"
+      - "Install-Fieldora-Bootstrap-Handoff.ps1"
+      - "Install-Fieldora-Offline-Model.ps1"
+      - ".github/workflows/installer-review-certification.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  packaging-contract:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse review builders
+        shell: pwsh
+        run: |
+          foreach ($path in @('./scripts/build_fieldora_windows_installer.ps1','./scripts/build_fieldora_linux_installer.ps1')) {
+            [void][scriptblock]::Create((Get-Content -LiteralPath $path -Raw))
+          }
+      - name: Verify Windows builder uses repository version
+        shell: pwsh
+        run: |
+          $builder = Get-Content ./scripts/build_fieldora_windows_installer.ps1 -Raw
+          foreach ($needle in @("Join-Path `$PSScriptRoot '..'", 'pyproject.toml', "Version = ''", 'dist-installer\\Fieldora-$Version-Setup.exe')) {
+            if (-not $builder.Contains($needle)) { throw "Windows review builder contract missing: $needle" }
+          }
+      - name: Build Linux review bundle
+        shell: pwsh
+        run: ./scripts/build_fieldora_linux_installer.ps1
+      - name: Verify Linux bundle manifest
+        shell: pwsh
+        run: |
+          $manifest = Get-Content ./dist-installer-linux/SHA256SUMS.json -Raw | ConvertFrom-Json
+          if ($manifest.Count -ne 4) { throw 'Linux installer bundle must contain exactly four certified installer components.' }
+          foreach ($entry in $manifest) {
+            $actual = (Get-FileHash (Join-Path ./dist-installer-linux $entry.file) -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($actual -ne $entry.sha256) { throw "Linux installer bundle digest mismatch: $($entry.file)" }
+          }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fieldora-linux-installer-review
+          path: |
+            Fieldora-Linux-Installer-Review.zip
+            Fieldora-Linux-Installer-Review.zip.sha256
+          if-no-files-found: error
+
+  linux-clean-install:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run actual Linux clean installer at exact commit
+        shell: pwsh
+        run: |
+          $root = Join-Path $env:RUNNER_TEMP 'fieldora-linux-review'
+          ./Install-Fieldora-Clean-Linux.ps1 -InstallRoot $root -FieldoraRef $env:GITHUB_SHA -AdminPassword 'FieldoraReview-Only-2026!'
+      - name: Verify installed runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/fieldora-linux-review"
+          test -f "$root/compose.yaml"
+          test -f "$root/service-trust/ca-certificate.pem"
+          test -f "$root/bootstrap-handoff/ADMIN-CREDENTIALS.txt"
+          docker compose -f "$root/compose.yaml" -f "$root/compose.override.yaml" ps
+          curl --fail --silent --show-error --cacert "$root/service-trust/ca-certificate.pem" https://127.0.0.1:8765/health/live >/dev/null
+          curl --fail --silent --show-error --cacert "$root/service-trust/ca-certificate.pem" https://127.0.0.1:8765/health/ready >/dev/null
+      - name: Capture failure diagnostics
+        if: failure()
+        shell: bash
+        run: |
+          root="$RUNNER_TEMP/fieldora-linux-review"
+          if [ -f "$root/compose.yaml" ]; then docker compose -f "$root/compose.yaml" -f "$root/compose.override.yaml" ps || true; docker compose -f "$root/compose.yaml" -f "$root/compose.override.yaml" logs --tail 200 || true; fi

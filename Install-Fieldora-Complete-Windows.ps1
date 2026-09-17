@@ -96,8 +96,13 @@ try {
     } finally { Pop-Location }
     Step "Verifying Fieldora server"
     $ca = Join-Path $InstallRoot 'service-trust\ca-certificate.pem'; if (-not (Test-Path -LiteralPath $ca)) { throw "Fieldora service CA was not created." }
-    & curl.exe --fail --silent --show-error --cacert $ca https://127.0.0.1:8765/health/live | Out-Null; Assert-Exit "Fieldora live health check failed"
-    & curl.exe --fail --silent --show-error --cacert $ca https://127.0.0.1:8765/health/ready | Out-Null; Assert-Exit "Fieldora readiness check failed"
+    # The Fieldora root is a private local CA and intentionally has no public CRL/OCSP
+    # distribution point. Windows curl uses Schannel, which otherwise treats the
+    # unavailable revocation status as an error even when --cacert validates the chain.
+    # Keep peer/hostname/CA verification enabled; suppress only that inapplicable lookup.
+    $curlTls = @('--fail','--silent','--show-error','--ssl-no-revoke','--cacert',$ca)
+    & curl.exe @curlTls https://127.0.0.1:8765/health/live | Out-Null; Assert-Exit "Fieldora live health check failed"
+    & curl.exe @curlTls https://127.0.0.1:8765/health/ready | Out-Null; Assert-Exit "Fieldora readiness check failed"
     Step "Complete Docker environment installed"
     Write-Host "Fieldora root        : $InstallRoot" -ForegroundColor Green
     Write-Host "FieldoraBastion root : $BastionRoot" -ForegroundColor Green

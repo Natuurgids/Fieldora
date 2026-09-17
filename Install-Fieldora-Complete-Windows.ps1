@@ -47,6 +47,12 @@ $temp = [IO.Path]::GetTempPath(); $core = Join-Path $temp "Install-Fieldora-Clea
 try {
     Step "Downloading repository-controlled Fieldora installer"
     Invoke-WebRequest -Uri (Get-RawUrl 'Natuurgids/Fieldora' $FieldoraRef 'Install-Fieldora-Clean.ps1') -OutFile $core -UseBasicParsing
+    $coreText = Get-Content -LiteralPath $core -Raw
+    $oldBootstrap = '& docker compose run --rm --no-deps fieldora-server fieldora-server --data-root /var/lib/fieldora --access-backend postgresql --postgres-access-dsn-file /run/secrets/fieldora-access-dsn init-user --organization $Organization --name $AdminName --username $AdminUsername --password $AdminPassword'
+    $newBootstrap = '& docker compose run --rm --no-deps fieldora-server python3.11 /opt/fieldora/scripts/bootstrap_fieldora_admin.py --dsn-file /run/secrets/fieldora-access-dsn --organization $Organization --name $AdminName --username $AdminUsername --password $AdminPassword'
+    if (-not $coreText.Contains($oldBootstrap)) { throw "Fieldora clean installer bootstrap contract changed; refusing an unreviewed rewrite." }
+    $coreText = $coreText.Replace($oldBootstrap, $newBootstrap)
+    Set-Content -LiteralPath $core -Value $coreText -Encoding utf8NoBOM
     Step "Installing Fieldora server containers"
     Set-Content -LiteralPath $cleanInput -Value 'CLEAN' -Encoding ascii
     $coreArgs = @('-NoLogo','-NoProfile','-File',$core,'-InstallRoot',$InstallRoot,'-FieldoraRef',$FieldoraRef,'-AdminUsername',$AdminUsername,'-AdminName',$AdminName,'-Organization',$Organization)

@@ -4,7 +4,6 @@ on:
   pull_request:
     paths:
       - "scripts/build_fieldora_windows_installer.ps1"
-      - "scripts/build_fieldora_linux_installer.ps1"
       - "Install-Fieldora-Clean-Linux.ps1"
       - "Install-Fieldora-Clean.ps1"
       - "Install-Fieldora-Bootstrap-Handoff.ps1"
@@ -16,58 +15,41 @@ permissions:
   contents: read
 
 jobs:
-  packaging-contract:
+  windows-desktop-packaging-contract:
+    name: Windows native desktop packaging contract
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - name: Parse review builders
+      - name: Parse native desktop review builder
         shell: pwsh
-        run: |
-          foreach ($path in @('./scripts/build_fieldora_windows_installer.ps1','./scripts/build_fieldora_linux_installer.ps1')) {
-            [void][scriptblock]::Create((Get-Content -LiteralPath $path -Raw))
-          }
-      - name: Verify Windows builder uses repository version
+        run: '[void][scriptblock]::Create((Get-Content -LiteralPath ./scripts/build_fieldora_windows_installer.ps1 -Raw))'
+      - name: Verify native desktop builder uses repository root and version
         shell: pwsh
         run: |
           $builder = Get-Content ./scripts/build_fieldora_windows_installer.ps1 -Raw
-          foreach ($needle in @("Join-Path `$PSScriptRoot '..'", 'pyproject.toml', "Version = ''", 'dist-installer\\Fieldora-$Version-Setup.exe')) {
-            if (-not $builder.Contains($needle)) { throw "Windows review builder contract missing: $needle" }
+          foreach ($needle in @("Join-Path `$PSScriptRoot '..'", 'pyproject.toml', "Version = ''", 'Fieldora-$Version-Setup.exe')) {
+            if (-not $builder.Contains($needle)) { throw "Windows native desktop builder contract missing: $needle" }
           }
-      - name: Build Linux review bundle
-        shell: pwsh
-        run: ./scripts/build_fieldora_linux_installer.ps1
-      - name: Verify Linux bundle manifest
-        shell: pwsh
-        run: |
-          $manifest = Get-Content ./dist-installer-linux/SHA256SUMS.json -Raw | ConvertFrom-Json
-          if ($manifest.Count -ne 4) { throw 'Linux installer bundle must contain exactly four certified installer components.' }
-          foreach ($entry in $manifest) {
-            $actual = (Get-FileHash (Join-Path ./dist-installer-linux $entry.file) -Algorithm SHA256).Hash.ToLowerInvariant()
-            if ($actual -ne $entry.sha256) { throw "Linux installer bundle digest mismatch: $($entry.file)" }
-          }
-      - uses: actions/upload-artifact@v4
-        with:
-          name: fieldora-linux-installer-review
-          path: |
-            Fieldora-Linux-Installer-Review.zip
-            Fieldora-Linux-Installer-Review.zip.sha256
-          if-no-files-found: error
+          if ($builder.Contains('Install-Fieldora-Clean-Linux.ps1')) { throw 'Native desktop builder must not depend on the Linux Docker/server installer.' }
 
-  linux-clean-install:
+  linux-docker-server-clean-install:
+    name: Linux Docker/server clean install
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
-      - name: Run actual Linux clean installer at exact commit
+      - name: Run Linux Docker/server clean installer at exact PR head
         shell: pwsh
+        env:
+          FIELDORA_INSTALL_CONFIRM: CLEAN
         run: |
-          $root = Join-Path $env:RUNNER_TEMP 'fieldora-linux-review'
-          ./Install-Fieldora-Clean-Linux.ps1 -InstallRoot $root -FieldoraRef $env:GITHUB_SHA -AdminPassword 'FieldoraReview-Only-2026!'
-      - name: Verify installed runtime
+          $root = Join-Path $env:RUNNER_TEMP 'fieldora-linux-server-review'
+          ./Install-Fieldora-Clean-Linux.ps1 -InstallRoot $root -FieldoraRef '${{ github.event.pull_request.head.sha || github.sha }}' -AdminPassword 'FieldoraReview-Only-2026!'
+      - name: Verify installed server runtime
         shell: bash
         run: |
           set -euo pipefail
-          root="$RUNNER_TEMP/fieldora-linux-review"
+          root="$RUNNER_TEMP/fieldora-linux-server-review"
           test -f "$root/compose.yaml"
           test -f "$root/service-trust/ca-certificate.pem"
           test -f "$root/bootstrap-handoff/ADMIN-CREDENTIALS.txt"
@@ -78,5 +60,5 @@ jobs:
         if: failure()
         shell: bash
         run: |
-          root="$RUNNER_TEMP/fieldora-linux-review"
+          root="$RUNNER_TEMP/fieldora-linux-server-review"
           if [ -f "$root/compose.yaml" ]; then docker compose -f "$root/compose.yaml" -f "$root/compose.override.yaml" ps || true; docker compose -f "$root/compose.yaml" -f "$root/compose.override.yaml" logs --tail 200 || true; fi

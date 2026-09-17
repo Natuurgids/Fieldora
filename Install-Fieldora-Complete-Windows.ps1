@@ -66,6 +66,16 @@ $temp = [IO.Path]::GetTempPath(); $core = Join-Path $temp "Install-Fieldora-Clea
 try {
     Step "Downloading repository-controlled Fieldora installer"
     Invoke-WebRequest -Uri (Get-RawUrl 'Natuurgids/Fieldora' $FieldoraRef 'Install-Fieldora-Clean.ps1') -OutFile $core -UseBasicParsing
+    # Both long-lived processes open the same staged-ingestion SQLite reference store.
+    # On Docker Desktop, simultaneous first startup can race while SQLite switches the
+    # database into WAL mode. Make the worker wait for the API health gate so schema/WAL
+    # initialization has completed before the second process opens the store.
+    $coreText = Get-Content -LiteralPath $core -Raw
+    $workerMarker = "  fieldora-worker:`n    image: fieldora-v5-rocky:local`n    container_name: fieldora-worker`n    restart: unless-stopped`n    environment:`n      FIELDORA_SERVICE_ID: fieldora-worker-local`n      FIELDORA_HEARTBEAT_SECONDS: `"30`"`n    depends_on:`n      postgres:`n        condition: service_healthy"
+    $workerReplacement = "$workerMarker`n      fieldora-server:`n        condition: service_healthy"
+    if (-not $coreText.Contains($workerMarker)) { throw "Fieldora worker startup contract changed; refusing an unreviewed rewrite." }
+    $coreText = $coreText.Replace($workerMarker, $workerReplacement)
+    Set-Content -LiteralPath $core -Value $coreText -Encoding utf8NoBOM
     Step "Installing Fieldora server containers"
     Set-Content -LiteralPath $cleanInput -Value 'CLEAN' -Encoding ascii
     $coreArgs = @('-NoLogo','-NoProfile','-File',$core,'-InstallRoot',$InstallRoot,'-FieldoraRef',$FieldoraRef,'-AdminUsername',$AdminUsername,'-AdminName',$AdminName,'-Organization',$Organization)

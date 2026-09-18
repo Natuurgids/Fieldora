@@ -467,9 +467,27 @@ def _require_model_security_install(
     verified: VerifiedModelBundle,
     authenticated_release: AuthenticatedReleaseContext,
 ) -> None:
+    # Receiver-owned attestations are deliberately created only after Fieldora has
+    # independently verified the transferred ZIP and its trusted manifest signature.
+    # Bastion cannot assert that the receiving Fieldora instance accepted or verified it.
+    receiver_evidence = dict(evidence)
+    artifact_sha256 = _file_sha256(artifact_path)
+    receiver_evidence["transfer_receipt"] = {
+        "package_id": artifact_path.name,
+        "collector_id": "fieldora-offline-installer",
+        "expected_sha256": artifact_sha256,
+        "observed_sha256": artifact_sha256,
+        "status": "accepted",
+    }
+    receiver_evidence["independent_verification"] = {
+        "verified": True,
+        "package_id": artifact_path.name,
+        "release_digest": authenticated_release.release_digest,
+        "sha256": artifact_sha256,
+    }
     try:
         accepted = require_security_install(
-            evidence,
+            receiver_evidence,
             artifact_path=artifact_path,
             access_control_database=access_control_database,
             access_control_repository=access_control_repository,

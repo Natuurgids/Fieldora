@@ -671,7 +671,7 @@ Internal root CA: $TrustRoot\ca-certificate.pem
     Write-Host "Fieldora: https://127.0.0.1:8765"
     Write-Host "Docs:     https://127.0.0.1:8765/docs"
     Write-Host "User:     $AdminUsername"
-    Write-Host "Password: $AdminPassword"
+    Write-Host "Password: stored only in the protected credential handoff file (not written to console/log output)"
     Write-Host "Credentials: $InstallRoot\ADMIN-CREDENTIALS.txt"
     Write-Host "API service:       $ApiServiceId"
     Write-Host "Worker service:    $WorkerServiceId"

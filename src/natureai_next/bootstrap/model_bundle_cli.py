@@ -572,6 +572,7 @@ def install_model_bundle(
             security_install_evidence,
             artifact_path=security_install_artifact,
             access_control_database=access_control_database,
+            access_control_repository=access_control_repository,
             subject_id=security_install_subject,
             actual_target_version=actual_target_version,
             verified=verified,

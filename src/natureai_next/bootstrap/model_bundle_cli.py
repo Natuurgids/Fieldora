@@ -460,7 +460,8 @@ def _require_model_security_install(
     evidence: Mapping[str, object],
     *,
     artifact_path: Path,
-    access_control_database: Path,
+    access_control_database: Path | None,
+    access_control_repository: object | None,
     subject_id: str,
     actual_target_version: str,
     verified: VerifiedModelBundle,
@@ -471,6 +472,7 @@ def _require_model_security_install(
             evidence,
             artifact_path=artifact_path,
             access_control_database=access_control_database,
+            access_control_repository=access_control_repository,
             subject_id=subject_id,
             expected_package_id=artifact_path.name,
             expected_target_component=f"fieldora-model:{verified.model_id}",
@@ -517,7 +519,8 @@ def install_model_bundle(
     *,
     security_install_artifact: Path,
     security_install_evidence: Mapping[str, object],
-    access_control_database: Path,
+    access_control_database: Path | None = None,
+    access_control_repository: object | None = None,
     security_install_subject: str,
     actual_target_version: str,
     authenticated_release: AuthenticatedReleaseContext | None = None,
@@ -539,6 +542,7 @@ def install_model_bundle(
         security_install_evidence,
         artifact_path=security_install_artifact,
         access_control_database=access_control_database,
+        access_control_repository=access_control_repository,
         subject_id=security_install_subject,
         actual_target_version=actual_target_version,
         verified=verified,
@@ -615,7 +619,9 @@ def _parser() -> argparse.ArgumentParser:
             command.add_argument("--store", type=Path, required=True)
             command.add_argument("--security-install-artifact", type=Path, required=True)
             command.add_argument("--security-install-evidence", type=Path, required=True)
-            command.add_argument("--access-control-database", type=Path, required=True)
+            access = command.add_mutually_exclusive_group(required=True)
+            access.add_argument("--access-control-database", type=Path)
+            access.add_argument("--postgres-access-dsn-file", type=Path)
             command.add_argument("--security-install-subject", required=True)
             command.add_argument("--actual-target-version", required=True)
     return parser
@@ -644,6 +650,27 @@ def main(argv: list[str] | None = None) -> int:
                 "malware_scan": verified.malware_scan,
             }
         else:
+            access_repository = None
+            if args.postgres_access_dsn_file is not None:
+                if (
+                    not args.postgres_access_dsn_file.is_file()
+                    or args.postgres_access_dsn_file.stat().st_size > 16_384
+                ):
+                    raise ModelBundleError("PostgreSQL access DSN file is invalid")
+                access_dsn = args.postgres_access_dsn_file.read_text(encoding="utf-8").strip()
+                if not access_dsn:
+                    raise ModelBundleError("PostgreSQL access DSN file is empty")
+                try:
+                    import psycopg
+                except ImportError as exc:
+                    raise ModelBundleError(
+                        "PostgreSQL Security Install requires the server-postgresql dependency"
+                    ) from exc
+                from natureai_next.server.postgres_access import PostgresAccessControlRepository
+
+                access_repository = PostgresAccessControlRepository(
+                    lambda: psycopg.connect(access_dsn, connect_timeout=10)
+                )
             verified, _destination = install_model_bundle(
                 args.bundle,
                 args.store,
@@ -652,6 +679,7 @@ def main(argv: list[str] | None = None) -> int:
                     args.security_install_evidence
                 ),
                 access_control_database=args.access_control_database,
+                access_control_repository=access_repository,
                 security_install_subject=args.security_install_subject,
                 actual_target_version=args.actual_target_version,
                 **kwargs,

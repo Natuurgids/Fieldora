@@ -24,7 +24,8 @@ def require_security_install(
     evidence: Mapping[str, object],
     *,
     artifact_path: Path,
-    access_control_database: Path,
+    access_control_database: Path | None = None,
+    access_control_repository: SqliteAccessControlRepository | None = None,
     subject_id: str,
     expected_package_id: str,
     expected_target_component: str,
@@ -44,7 +45,12 @@ def require_security_install(
     if not package_id or not component or not target_version:
         raise SecurityInstallAcceptanceError("incomplete Security Install release binding")
 
-    repository = SqliteAccessControlRepository(access_control_database)
+    if access_control_repository is not None:
+        repository = access_control_repository
+    elif access_control_database is not None:
+        repository = SqliteAccessControlRepository(access_control_database)
+    else:
+        raise SecurityInstallAcceptanceError("missing Fieldora access-control repository")
     policy = PolicyDecisionService(repository)
     request = AccessRequest(
         subject_id=subject,

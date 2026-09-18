@@ -24,13 +24,13 @@ def require_security_install(
     evidence: Mapping[str, object],
     *,
     artifact_path: Path,
-    access_control_database: Path | None = None,
-    access_control_repository: SqliteAccessControlRepository | None = None,
     subject_id: str,
     expected_package_id: str,
     expected_target_component: str,
     actual_target_version: str,
     authenticated_release: AuthenticatedReleaseContext,
+    access_control_database: Path | None = None,
+    access_control_repository: object | None = None,
 ) -> TrustedInstallAcceptance:
     """Require audited PBAC and authenticated provenance for one release."""
     if not isinstance(evidence, Mapping):

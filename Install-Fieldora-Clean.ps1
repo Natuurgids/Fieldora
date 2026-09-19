@@ -22,7 +22,8 @@ param(
     [string]$AdminUsername = "admin",
     [string]$AdminName = "Administrator",
     [string]$Organization = "local",
-    [string]$AdminPassword = ""
+    [string]$AdminPassword = "",
+    [string]$AdminPasswordFile = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -99,6 +100,11 @@ if ((Read-Host "Type CLEAN to continue").Trim().ToUpperInvariant() -ne "CLEAN") 
     exit 0
 }
 
+if ($AdminPassword -and $AdminPasswordFile) { throw "Use either AdminPassword or AdminPasswordFile, not both." }
+if ($AdminPasswordFile) {
+    if (-not (Test-Path -LiteralPath $AdminPasswordFile -PathType Leaf)) { throw "Administrator password file was not found." }
+    $AdminPassword = [IO.File]::ReadAllText($AdminPasswordFile).TrimEnd("`r","`n")
+}
 if ([string]::IsNullOrWhiteSpace($AdminPassword)) { $AdminPassword = New-Password }
 if ($AdminPassword.Length -lt 12) { throw "Administrator password must be at least 12 characters." }
 $PostgresPassword = New-Password

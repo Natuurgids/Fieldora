@@ -12,6 +12,7 @@ param(
     [string]$AdminName = "Administrator",
     [string]$Organization = "local",
     [string]$AdminPassword = "",
+    [string]$AdminPasswordFile = "",
     [ValidateRange(1,90)][int]$CredentialHandoffRetentionDays = 7
 )
 Set-StrictMode -Version Latest
@@ -82,7 +83,15 @@ try {
     Step "Installing Fieldora server containers"
     Set-Content -LiteralPath $cleanInput -Value 'CLEAN' -Encoding ascii
     $coreArgs = @('-NoLogo','-NoProfile','-File',$core,'-InstallRoot',$InstallRoot,'-FieldoraRef',$FieldoraRef,'-AdminUsername',$AdminUsername,'-AdminName',$AdminName,'-Organization',$Organization)
-    if ($AdminPassword) { $coreArgs += @('-AdminPassword',$AdminPassword) }
+    if ($AdminPassword -and $AdminPasswordFile) { throw "Use either AdminPassword or AdminPasswordFile, not both." }
+    $forwardPasswordFile = $AdminPasswordFile
+    $ownedPasswordFile = $null
+    if ($AdminPassword) {
+        $ownedPasswordFile = Join-Path $temp "Fieldora-Admin-$([Guid]::NewGuid().ToString('N')).secret"
+        [IO.File]::WriteAllText($ownedPasswordFile, $AdminPassword)
+        $forwardPasswordFile = $ownedPasswordFile
+    }
+    if ($forwardPasswordFile) { $coreArgs += @('-AdminPasswordFile',$forwardPasswordFile) }
     $process = Start-Process -FilePath (Get-Command pwsh).Source -ArgumentList $coreArgs -RedirectStandardInput $cleanInput -NoNewWindow -Wait -PassThru
     if ($process.ExitCode -ne 0) { throw "Fieldora clean installer failed (exit code $($process.ExitCode))." }
     Step "Configuring temporary administrator credential handoff"

@@ -581,11 +581,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                 map_workspace_factory=map_workspace_factory,
                 knowledge_center_workspace_factory=knowledge_center_workspace_factory,
                 offline_map_setup_factory=offline_map_setup_factory,
+                application_paths=container.paths,
                 health_service=LibraryHealthService(
                     layout=opened.layout,
                     connection_factory=opened.connection_factory,
                     integrity_checker=lambda factory, full: check_integrity(factory, full=full),
-                    update_settings_path=session_path.parent / "update-settings.json",
+                    update_settings_path=container.paths.updates_dir / "update-settings.json",
                     subsystem_registry=container.subsystem_registry,
                 ),
                 on_about_to_quit=opened.close,

@@ -10,11 +10,7 @@ from urllib.parse import parse_qs, quote, unquote, urlsplit
 
 from natureai_next.application.access_control import AccessAdministrationService
 from natureai_next.application.authentication import AuthenticationFailed
-from natureai_next.domain.access_control import (
-    AccessRequest,
-    PolicyEffect,
-    PolicySource,
-)
+from natureai_next.domain.access_control import AccessRequest
 from natureai_next.server.api import ApiResponse
 from natureai_next.server.browser_functionality_web import (
     patch_browser_functionality_response,
@@ -26,25 +22,6 @@ from natureai_next.server.web_capabilities import capability_payload
 
 _COOKIE_NAME = "fieldora_session"
 _COOKIE_PATH = "/api/v1/"
-_PROJECT_OWNER_RESOURCE_TYPES = (
-    "project",
-    "phase",
-    "task",
-    "sprint",
-    "allocation",
-    "dossier",
-    "dossier_review",
-    "observation",
-    "specimen",
-    "encounter",
-    "protocol",
-    "survey_event",
-    "enrichment",
-    "sample",
-    "laboratory_record",
-    "collection",
-    "asset",
-)
 
 
 class ProjectSummaryLike(Protocol):
@@ -510,14 +487,15 @@ class BrowserFunctionalityFieldoraApi(ProjectOwnerContractFieldoraApi):
                 return ApiResponse.json(
                     400, {"error": "invalid_request", "detail": str(exc)}
                 )
+            item = self._project_for_organization(identity.organization_id, project_id)
+            if item is None or item.owner_id != identity.identity_id:
+                return ApiResponse.json(500, {"error": "project_owner_binding_failed"})
             self._grant_project_owner(
                 identity.identity_id,
                 identity.organization_id,
                 project_id,
                 name,
             )
-            item = self._project_for_organization(identity.organization_id, project_id)
-            assert item is not None
             return ApiResponse.json(
                 201,
                 {"item": self._project_item(item), "revision": item.revision},
@@ -532,7 +510,7 @@ class BrowserFunctionalityFieldoraApi(ProjectOwnerContractFieldoraApi):
             record["id"] = resource_id
             record["name"] = name
             record.setdefault("status", "active")
-            record.setdefault("owner_id", identity.identity_id)
+            record["owner_id"] = identity.identity_id
         except (KeyError, TypeError, ValueError):
             return ApiResponse.json(400, {"error": "invalid_request"})
 
@@ -708,33 +686,15 @@ class BrowserFunctionalityFieldoraApi(ProjectOwnerContractFieldoraApi):
         project_id: str,
         name: str,
     ) -> None:
-        # A creator must be able to work inside the project immediately. This is not
-        # an administrator bypass: the grant is subject-specific and constrained to
-        # the new project, organization and research purpose. Explicit denies still
-        # participate in the normal PBAC decision.
         if self._access_repository is None:
             return
-        administration = AccessAdministrationService(self._access_repository)
-        administration.create_policy(
-            name=f"Project owner workspace: {name}",
-            effect=PolicyEffect.ALLOW,
-            source=PolicySource.OBJECT_GRANT,
-            source_id=project_id,
-            subject_id=identity_id,
-            actions=(
-                "view",
-                "edit",
-                "upload",
-                "download",
-                "search",
-                "link",
-                "unlink",
-                "export",
-            ),
-            resource_types=_PROJECT_OWNER_RESOURCE_TYPES,
+        administration = AccessAdministrationService(
+            self._access_repository, actor_id=identity_id
+        )
+        administration.grant_project_owner_workspace(
             organization_id=organization_id,
             project_id=project_id,
-            purposes=("research",),
+            name=name,
         )
 
 

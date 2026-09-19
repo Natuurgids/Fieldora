@@ -1,0 +1,91 @@
+name: Fieldora installer review certification
+
+on:
+  pull_request:
+    paths:
+      - "scripts/build_fieldora_windows_installer.ps1"
+      - "Install-Fieldora-Clean-Linux.ps1"
+      - "Install-Fieldora-Clean.ps1"
+      - "Install-Fieldora-Complete-Windows.ps1"
+      - "Install-Fieldora-Complete-Linux.ps1"
+      - "Install-Fieldora-Bootstrap-Handoff.ps1"
+      - "Install-Fieldora-Offline-Model.ps1"
+      - ".github/workflows/installer-review-certification.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-desktop-packaging-contract:
+    name: Windows native desktop packaging contract
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse native desktop review builder
+        shell: pwsh
+        run: '[void][scriptblock]::Create((Get-Content -LiteralPath ./scripts/build_fieldora_windows_installer.ps1 -Raw))'
+      - name: Verify native desktop builder uses repository root and version
+        shell: pwsh
+        run: |
+          $builder = Get-Content ./scripts/build_fieldora_windows_installer.ps1 -Raw
+          foreach ($needle in @("Join-Path `$PSScriptRoot '..'", 'pyproject.toml', "Version = ''", 'Fieldora-$Version-Setup.exe')) {
+            if (-not $builder.Contains($needle)) { throw "Windows native desktop builder contract missing: $needle" }
+          }
+          if ($builder.Contains('Install-Fieldora-Clean-Linux.ps1')) { throw 'Native desktop builder must not depend on the Linux Docker/server installer.' }
+
+  complete-installer-security-contract:
+    name: Complete installer security and logging contract
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse complete installers
+        shell: pwsh
+        run: |
+          [void][scriptblock]::Create((Get-Content -LiteralPath ./Install-Fieldora-Complete-Windows.ps1 -Raw))
+          [void][scriptblock]::Create((Get-Content -LiteralPath ./Install-Fieldora-Complete-Linux.ps1 -Raw))
+      - name: Verify immutable refs and password-free transcript contract
+        shell: pwsh
+        run: |
+          $windows = Get-Content ./Install-Fieldora-Complete-Windows.ps1 -Raw
+          $linux = Get-Content ./Install-Fieldora-Complete-Linux.ps1 -Raw
+          foreach ($text in @($windows,$linux)) {
+            if ($text.Contains('$FieldoraRef = "security/native-update-trust-hardening"')) { throw 'Complete installer must not default to mutable Fieldora branch.' }
+            if ($text.Contains('$BastionRef = "main"')) { throw 'Complete installer must not default to mutable Bastion main.' }
+          }
+          if ($windows.Contains('Write-Host "Password: $AdminPassword"') -or $linux.Contains('Write-Host "Password: $AdminPassword"')) { throw 'Password console/log leak pattern found.' }
+          foreach ($needle in @('Start-Transcript','install-{0}.log','Stop-Transcript')) {
+            if (-not $windows.Contains($needle)) { throw "Windows sanitized logging contract missing: $needle" }
+          }
+
+  linux-docker-server-clean-install:
+    name: Linux Docker/server clean install
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Linux Docker/server clean installer at exact PR head
+        shell: bash
+        env:
+          FIELDORA_PR_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/fieldora-linux-server-review"
+          printf 'CLEAN\n' | pwsh -NoLogo -NoProfile -File ./Install-Fieldora-Clean-Linux.ps1 -InstallRoot "$root" -FieldoraRef "$FIELDORA_PR_HEAD" -AdminPassword 'FieldoraReview-Only-2026!'
+      - name: Verify installed server runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/fieldora-linux-server-review"
+          test -f "$root/compose.yaml"
+          test -f "$root/service-trust/ca-certificate.pem"
+          test -f "$root/bootstrap-handoff/ADMIN-CREDENTIALS.txt"
+          docker compose -f "$root/compose.yaml" -f "$root/compose.override.yaml" ps
+          curl --fail --silent --show-error --cacert "$root/service-trust/ca-certificate.pem" https://127.0.0.1:8765/health/live >/dev/null
+          curl --fail --silent --show-error --cacert "$root/service-trust/ca-certificate.pem" https://127.0.0.1:8765/health/ready >/dev/null
+      - name: Capture failure diagnostics
+        if: failure()
+        shell: bash
+        run: |
+          root="$RUNNER_TEMP/fieldora-linux-server-review"
+          if [ -f "$root/compose.yaml" ]; then docker compose -f "$root/compose.yaml" -f "$root/compose.override.yaml" ps || true; docker compose -f "$root/compose.yaml" -f "$root/compose.override.yaml" logs --tail 200 || true; fi

@@ -28,6 +28,7 @@ from natureai_next.application.updates import (
     UpdateSettings,
     UpdateSettingsStore,
 )
+from natureai_next.bootstrap.paths import ApplicationPaths
 from natureai_next.bootstrap.startup_timing import StartupTimeline
 from natureai_next.domain.importing import (
     ImportSourceKind,
@@ -183,6 +184,8 @@ class MainWindow(QMainWindow):
         map_workspace_factory: Callable[[], QWidget] | None = None,
         knowledge_center_workspace_factory: Callable[[], QWidget] | None = None,
         offline_map_setup_factory: Callable[[QWidget], QDialog] | None = None,
+        application_paths: ApplicationPaths,
+        access_actor_id: str,
     ) -> None:
         super().__init__()
         self._session_path = session_path
@@ -191,15 +194,19 @@ class MainWindow(QMainWindow):
         self._recovery_service = LibraryRecoveryService()
         self._default_backup_directory = default_backup_directory
         self._offline_map_setup_factory = offline_map_setup_factory
-        self._update_settings_path = session_path.parent / "update-settings.json"
-        self._update_staging_directory = session_path.parent / "updates" / "staging"
+        self._application_paths = application_paths
+        self._access_actor_id = access_actor_id.strip()
+        self._update_settings_path = application_paths.updates_dir / "update-settings.json"
+        self._update_staging_directory = application_paths.updates_dir / "staging"
         self._restore_staging_directory = session_path.parent / "recovery" / "staging"
         self._library_database_path = session_path.parent / "library.sqlite3"
         self._enrichment_database_path = enrichment_database_path
         self._update_settings_store = UpdateSettingsStore()
-        self._update_service = OfflineUpdateService()
+        self._update_service = OfflineUpdateService(
+            trust_anchor_path=application_paths.update_trust_anchor_file
+        )
         self._update_history_store = UpdateHistoryStore()
-        self._update_history_path = session_path.parent / "updates" / "update-history.jsonl"
+        self._update_history_path = application_paths.updates_dir / "update-history.jsonl"
         self._store = SessionStateStore()
         self._session = self._store.load(session_path)
         self._branding_path = session_path.parent / "branding.toml"
@@ -405,11 +412,11 @@ class MainWindow(QMainWindow):
                 maintenance_service,
                 self,
                 approval_database_path=(
-                    resolve_application_paths().subsystem_databases_dir
+                    application_paths.subsystem_databases_dir
                     / "deletion-approvals.sqlite3"
                 ),
                 access_database_path=(
-                    resolve_application_paths().subsystem_databases_dir
+                    application_paths.subsystem_databases_dir
                     / "access-control.sqlite3"
                 ),
             )
@@ -424,7 +431,7 @@ class MainWindow(QMainWindow):
             parent=self,
         )
         science_database = (
-            resolve_application_paths().subsystem_databases_dir / "science.sqlite3"
+            application_paths.subsystem_databases_dir / "science.sqlite3"
         )
         from natureai_next.application.local_profiles import provision_project_access
         provision_project_access(
@@ -452,9 +459,10 @@ class MainWindow(QMainWindow):
         self._access_control_workspace = AccessControlWorkspace(
             AccessAdministrationService(
                 SqliteAccessControlRepository(
-                    resolve_application_paths().subsystem_databases_dir
+                    application_paths.subsystem_databases_dir
                     / "access-control.sqlite3"
-                )
+                ),
+                actor_id=self._access_actor_id,
             ),
             self,
         )
@@ -492,7 +500,7 @@ class MainWindow(QMainWindow):
             workspace.route_requested.connect(self._select_workspace)
 
         marine_maritime_database = (
-            resolve_application_paths().subsystem_databases_dir
+            application_paths.subsystem_databases_dir
             / "marine-maritime.sqlite3"
         )
         self._marine_maritime_workspaces = {
@@ -653,7 +661,7 @@ class MainWindow(QMainWindow):
 
         self._dynamic_model_manager = DynamicModelManager(
             ModelCatalog.load(model_catalog_path),
-            resolve_application_paths().models_dir / "runtime",
+            application_paths.models_dir / "runtime",
             capability_router=self._enrichment_controller.capability_router,
         )
         self._models_workspace = ModelManagerWorkspace(self._dynamic_model_manager, self)
@@ -702,7 +710,7 @@ class MainWindow(QMainWindow):
             source_registry,
             self,
             bundle_installer=OfflineBundleInstaller(
-                resolve_application_paths().plugins_dir,
+                application_paths.plugins_dir,
                 source_registry,
                 api_version=PLUGIN_API_VERSION,
                 application_version=__version__,
@@ -1890,7 +1898,11 @@ class MainWindow(QMainWindow):
                 )
             staged = self._update_service.stage(candidate, self._update_staging_directory)
             augment_request(
-                staged.request_path, parent_pid=os.getpid(), library_path=self._session_path.parent
+                staged.request_path,
+                parent_pid=os.getpid(),
+                library_path=self._session_path.parent,
+                config_root=self._application_paths.local_root,
+                trust_anchor_path=self._application_paths.update_trust_anchor_file,
             )
             helper = launch_helper(
                 HelperLaunch(
@@ -1898,6 +1910,8 @@ class MainWindow(QMainWindow):
                     request_path=staged.request_path,
                     parent_pid=os.getpid(),
                     library_path=self._session_path.parent,
+                    config_root=self._application_paths.local_root,
+                    trust_anchor_path=self._application_paths.update_trust_anchor_file,
                 )
             )
             wait_for_helper_ready(helper, staged.request_path, timeout_seconds=10.0)
@@ -2219,6 +2233,7 @@ def run_desktop(
     map_workspace_factory: Callable[[], QWidget] | None = None,
     knowledge_center_workspace_factory: Callable[[], QWidget] | None = None,
     offline_map_setup_factory: Callable[[QWidget], QDialog] | None = None,
+    application_paths: ApplicationPaths,
     on_about_to_quit: Callable[[], None] = lambda: None,
     argv: Sequence[str] | None = None,
     startup_timeline: StartupTimeline | None = None,
@@ -2244,7 +2259,10 @@ def run_desktop(
             startup_splash.close()
         return 0
 
-    os.environ["FIELDORA_IDENTITY_ID"] = str(login.profile["username"])
+    access_actor_id = str(login.profile["username"]).strip()
+    if not access_actor_id:
+        raise RuntimeError("authenticated desktop identity is required")
+    os.environ["FIELDORA_IDENTITY_ID"] = access_actor_id
     WorkspaceContext.current().identity_changed(source="login")
     os.environ["FIELDORA_PROFILE_ROLE"] = str(login.profile["role"])
     os.environ["FIELDORA_PROFILE_STORE"] = str(profile_path)
@@ -2279,6 +2297,8 @@ def run_desktop(
             map_workspace_factory=map_workspace_factory,
             knowledge_center_workspace_factory=knowledge_center_workspace_factory,
             offline_map_setup_factory=offline_map_setup_factory,
+            application_paths=application_paths,
+            access_actor_id=access_actor_id,
         )
     except Exception:
         # MainWindow construction may have created child workers before a later

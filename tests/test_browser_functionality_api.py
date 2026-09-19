@@ -10,6 +10,8 @@ from natureai_next.domain.access_control import (
     Identity,
     IdentityKind,
     Policy,
+    PolicyEffect,
+    PolicySource,
 )
 from natureai_next.server.api import ApiResponse
 from natureai_next.server.browser_functionality_api import (
@@ -51,6 +53,41 @@ class _Science:
 class _AccessRepository:
     def __init__(self) -> None:
         self.saved_policies: list[Policy] = []
+        self._identity = Identity(
+            "admin-1",
+            IdentityKind.USER,
+            "Administrator",
+            "local",
+            attributes={"platform_admin": "true"},
+        )
+        self._create_policy = Policy(
+            policy_id="test-project-create",
+            name="Test project create",
+            effect=PolicyEffect.ALLOW,
+            source=PolicySource.DIRECT,
+            source_id="admin-1",
+            subject_id="admin-1",
+            role_id="",
+            actions=("create",),
+            resource_types=("project",),
+            organization_id="local",
+            purposes=("research",),
+        )
+
+    def identity(self, identity_id: str) -> Identity | None:
+        return self._identity if identity_id == self._identity.identity_id else None
+
+    def identities(self) -> tuple[Identity, ...]:
+        return (self._identity,)
+
+    def role_ids(self, subject_id: str, organization_id: str, project_id: str) -> tuple[str, ...]:
+        return ()
+
+    def policies(self) -> tuple[Policy, ...]:
+        return (self._create_policy, *self.saved_policies)
+
+    def append_audit(self, record: dict) -> None:
+        pass
 
     def put_policy(self, policy: Policy) -> None:
         self.saved_policies.append(policy)

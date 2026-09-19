@@ -2,7 +2,8 @@
 
 The contract is provider-neutral. FieldoraBastion is the default provider for
 ``secure-transfer``, but provider identity never grants Fieldora business
-authorization. A caller must supply a separate Fieldora PBAC decision.
+authorization. A caller must supply a separate Fieldora PBAC decision and
+cryptographically authenticated release context.
 """
 
 from __future__ import annotations
@@ -24,6 +25,15 @@ class SecurityInstallAcceptanceError(ValueError):
 
 
 @dataclass(frozen=True, slots=True)
+class AuthenticatedReleaseContext:
+    """Release identity established by cryptographic update-index verification."""
+
+    release_id: str
+    release_digest: str
+    signer_key_id: str
+
+
+@dataclass(frozen=True, slots=True)
 class TrustedInstallAcceptance:
     """Fieldora-owned acceptance bound to one artifact and PBAC decision."""
 
@@ -37,23 +47,15 @@ class TrustedInstallAcceptance:
     secure_transfer_provider: str
     collector_id: str
     matched_policy_ids: tuple[str, ...]
+    signer_key_id: str
 
 
 def canonical_sha256(value: object) -> str:
-    """Return the deterministic SHA-256 used for approval payload binding."""
-
-    payload = json.dumps(
-        value,
-        ensure_ascii=False,
-        sort_keys=True,
-        separators=(",", ":"),
-    ).encode("utf-8")
+    payload = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
     return hashlib.sha256(payload).hexdigest()
 
 
 def file_sha256(path: Path) -> str:
-    """Calculate SHA-256 from the artifact Fieldora is about to mutate from."""
-
     digest = hashlib.sha256()
     with path.open("rb") as stream:
         for block in iter(lambda: stream.read(1024 * 1024), b""):
@@ -115,21 +117,18 @@ def accept_security_install_release(
     expected_target_component: str,
     actual_target_version: str,
     business_authorization: AccessDecision,
+    authenticated_release: AuthenticatedReleaseContext,
 ) -> TrustedInstallAcceptance:
-    """Independently verify release evidence and Fieldora business authorization.
-
-    The artifact digest and size are calculated from the local file. The
-    secure-transfer provider is informational; authorization depends on the
-    capability/evidence semantics, not a specific provider id. The transfer
-    receipt intentionally follows the current FieldoraBastion receipt shape;
-    release certification and independent verification stay separate concerns
-    in the Security Install envelope.
-    """
+    """Verify release evidence against authenticated provenance and PBAC authorization."""
 
     if not business_authorization.allowed:
         raise SecurityInstallAcceptanceError("Fieldora business authorization denied")
     if not artifact_path.is_file() or artifact_path.is_symlink():
         raise SecurityInstallAcceptanceError("artifact must be a regular non-symlink file")
+
+    authenticated_release_id = _token(authenticated_release.release_id, "authenticated release_id")
+    authenticated_release_digest = _sha256(authenticated_release.release_digest, "authenticated release_digest")
+    signer_key_id = _token(authenticated_release.signer_key_id, "authenticated signer key_id")
 
     protocol_version = _protocol(evidence.get("protocol_version"), "Security Install protocol version")
     if protocol_version != SUPPORTED_SECURITY_INSTALL_PROTOCOL:
@@ -138,6 +137,8 @@ def accept_security_install_release(
     release_id = _token(evidence.get("release_id"), "release_id")
     package_id = _token(evidence.get("package_id"), "package_id")
     release_digest = _sha256(evidence.get("release_digest"), "release_digest")
+    if release_id != authenticated_release_id or release_digest != authenticated_release_digest:
+        raise SecurityInstallAcceptanceError("Security Install release is not bound to authenticated provenance")
     if package_id != expected_package_id:
         raise SecurityInstallAcceptanceError("package identity mismatch")
 
@@ -180,15 +181,25 @@ def accept_security_install_release(
     if _token(compatibility_payload.get("version"), "compatibility version") != target_version:
         raise SecurityInstallAcceptanceError("compatibility approval version mismatch")
 
-    supply_chain = _object(evidence.get("commercial_private_supply_chain"), "supply-chain")
-    _approved(supply_chain, "commercial-private supply-chain")
-    if supply_chain.get("private_distribution") is not True:
-        raise SecurityInstallAcceptanceError("commercial-private supply-chain evidence is incomplete")
+    private_supply_chain = evidence.get("commercial_private_supply_chain")
+    controlled_supply_chain = evidence.get("controlled_supply_chain")
+    if private_supply_chain is not None and controlled_supply_chain is not None:
+        raise SecurityInstallAcceptanceError("multiple supply-chain evidence modes are not allowed")
+    if private_supply_chain is not None:
+        supply_chain = _object(private_supply_chain, "supply-chain")
+        _approved(supply_chain, "commercial-private supply-chain")
+        if supply_chain.get("private_distribution") is not True:
+            raise SecurityInstallAcceptanceError("commercial-private supply-chain evidence is incomplete")
+    else:
+        supply_chain = _object(controlled_supply_chain, "controlled supply-chain")
+        _approved(supply_chain, "controlled supply-chain")
+        if supply_chain.get("bastion_verified") is not True or supply_chain.get("offline_transfer") is not True:
+            raise SecurityInstallAcceptanceError("controlled supply-chain evidence is incomplete")
 
-    provenance = _object(evidence.get("provenance"), "signature/provenance")
-    if provenance.get("signature_verified") is not True or provenance.get("provenance_verified") is not True:
-        raise SecurityInstallAcceptanceError("signature/provenance evidence is not verified")
-    if _sha256(provenance.get("release_digest"), "provenance release_digest") != release_digest:
+    # Serialized provenance booleans are intentionally not authorization inputs. The
+    # release id/digest above must match the cryptographically verified update index.
+    provenance = _object(evidence.get("provenance"), "provenance")
+    if _sha256(provenance.get("release_digest"), "provenance release_digest") != authenticated_release_digest:
         raise SecurityInstallAcceptanceError("provenance release digest mismatch")
 
     transfer = _object(evidence.get("secure_transfer"), "secure-transfer")
@@ -234,4 +245,5 @@ def accept_security_install_release(
         secure_transfer_provider=provider_id,
         collector_id=collector_id,
         matched_policy_ids=business_authorization.matched_policy_ids,
+        signer_key_id=signer_key_id,
     )

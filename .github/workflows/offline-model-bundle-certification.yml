@@ -83,7 +83,7 @@ jobs:
           [void][scriptblock]::Create($text)
           foreach ($needle in @(
             'Get-Command docker',
-            '"--network", "none"',
+            '$networkName',
             '"--read-only"',
             '"--cap-drop", "ALL"',
             '"--security-opt", "no-new-privileges:true"',
@@ -91,6 +91,11 @@ jobs:
             '--trusted-signing-key',
             '--require-signature',
             '--require-clean-scan',
+            '--security-install-artifact',
+            '--security-install-evidence',
+            '--postgres-access-dsn-file',
+            '--security-install-subject',
+            'fieldora-api-trust:/run/fieldora-trust:ro',
             './fieldora-models:/var/lib/fieldora-models:ro',
             'FIELDORA_MODEL_STORE: /var/lib/fieldora-models',
             'compose.models.yaml',
@@ -102,7 +107,7 @@ jobs:
               throw "Portable offline model installer is missing: $needle"
             }
           }
-          foreach ($forbidden in @('docker.exe','--network host','artifact_store_path')) {
+          foreach ($forbidden in @('docker.exe','--network host','"--network", "none"','artifact_store_path')) {
             if ($text.Contains($forbidden)) {
               throw "Offline model installer violates portability or opacity contract: $forbidden"
             }

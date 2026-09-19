@@ -10,7 +10,9 @@ from natureai_next.application.access_control import (
 )
 from natureai_next.domain.access_control import (
     AccessRequest,
+    Identity,
     IdentityKind,
+    Policy,
     PolicyEffect,
     PolicySource,
 )
@@ -139,9 +141,39 @@ def _request(identity_id: str, action: str, resource_type: str, project_id: str)
     )
 
 
+def _authorized_administration(
+    repository: SqliteAccessControlRepository,
+) -> AccessAdministrationService:
+    actor_id = "test-access-administrator"
+    repository.put_identity(
+        Identity(actor_id, IdentityKind.USER, "Test Access Administrator", "organization-1")
+    )
+    for resource_type in (
+        "access_organization",
+        "access_identity",
+        "access_policy",
+    ):
+        repository.put_policy(
+            Policy(
+                policy_id=f"test-admin-{resource_type}",
+                name=f"Test administer {resource_type}",
+                effect=PolicyEffect.ALLOW,
+                source=PolicySource.DIRECT,
+                source_id=actor_id,
+                subject_id=actor_id,
+                role_id="",
+                actions=("administer",),
+                resource_types=(resource_type,),
+                organization_id="organization-1",
+                purposes=("access_control_administration",),
+            )
+        )
+    return AccessAdministrationService(repository, actor_id=actor_id)
+
+
 def test_creator_immediately_gets_only_project_scoped_workspace_authority(tmp_path) -> None:
     repository = SqliteAccessControlRepository(tmp_path / "access.sqlite3")
-    administration = AccessAdministrationService(repository)
+    administration = _authorized_administration(repository)
     administration.create_organization("organization-1", "Organization One")
     creator = administration.create_identity(
         "Creator", "organization-1", IdentityKind.USER
@@ -214,7 +246,7 @@ def test_creator_immediately_gets_only_project_scoped_workspace_authority(tmp_pa
 
 def test_explicit_deny_still_overrides_creator_owner_grant(tmp_path) -> None:
     repository = SqliteAccessControlRepository(tmp_path / "access.sqlite3")
-    administration = AccessAdministrationService(repository)
+    administration = _authorized_administration(repository)
     administration.create_organization("organization-1", "Organization One")
     creator = administration.create_identity(
         "Creator", "organization-1", IdentityKind.USER

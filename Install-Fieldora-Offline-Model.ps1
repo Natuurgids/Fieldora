@@ -10,10 +10,13 @@ application container and are mounted read-only into the API and worker.
 param(
     [Parameter(Mandatory)][string]$InstallRoot,
     [Parameter(Mandatory)][string]$BundlePath,
+    [Parameter(Mandatory)][string]$SecurityInstallArtifact,
+    [Parameter(Mandatory)][string]$SecurityInstallEvidence,
+    [Parameter(Mandatory)][string]$TrustedSigningKey,
+    [Parameter(Mandatory)][string]$SecurityInstallSubject,
+    [string]$ActualTargetVersion = "not-installed",
     [ValidateRange(1,1099511627776)][Int64]$MaxBytes = 68719476736,
-    [string]$TrustedSigningKey = "",
-    [switch]$RequireSignature,
-    [switch]$RequireCleanScan
+    [bool]$RequireCleanScan = $true
 )
 
 $ErrorActionPreference = "Stop"
@@ -32,6 +35,9 @@ if ($LASTEXITCODE -ne 0) { throw "Docker Compose is unavailable." }
 
 $installFull = [IO.Path]::GetFullPath($InstallRoot)
 $bundleFull = [IO.Path]::GetFullPath($BundlePath)
+$artifactFull = [IO.Path]::GetFullPath($SecurityInstallArtifact)
+$evidenceFull = [IO.Path]::GetFullPath($SecurityInstallEvidence)
+$signingKeyFull = [IO.Path]::GetFullPath($TrustedSigningKey)
 $composePath = Join-Path $installFull "compose.yaml"
 $standardOverridePath = Join-Path $installFull "compose.override.yaml"
 $modelStore = Join-Path $installFull "fieldora-models"
@@ -46,16 +52,27 @@ if (-not (Test-Path -LiteralPath $bundleFull -PathType Container)) {
 if (-not (Test-Path -LiteralPath (Join-Path $bundleFull "manifest.json") -PathType Leaf)) {
     throw "Offline model bundle must contain manifest.json."
 }
-if (($RequireSignature -or $RequireCleanScan) -and [string]::IsNullOrWhiteSpace($TrustedSigningKey)) {
-    throw "-RequireSignature and -RequireCleanScan require -TrustedSigningKey."
-}
-$signingKeyFull = ""
-if (-not [string]::IsNullOrWhiteSpace($TrustedSigningKey)) {
-    $signingKeyFull = [IO.Path]::GetFullPath($TrustedSigningKey)
-    if (-not (Test-Path -LiteralPath $signingKeyFull -PathType Leaf)) {
-        throw "Trusted signing public key was not found: $signingKeyFull"
+foreach ($requiredFile in @(
+    @{ Path=$artifactFull; Label="Security Install artifact" },
+    @{ Path=$evidenceFull; Label="Security Install evidence" },
+    @{ Path=$signingKeyFull; Label="trusted Bastion signing public key" }
+)) {
+    if (-not (Test-Path -LiteralPath $requiredFile.Path -PathType Leaf)) {
+        throw "$($requiredFile.Label) was not found: $($requiredFile.Path)"
     }
 }
+if ([string]::IsNullOrWhiteSpace($SecurityInstallSubject)) {
+    throw "Security Install requires the Fieldora identity id of the authorizing actor."
+}
+$accessDsn = Join-Path $installFull "secrets\\fieldora-access-dsn"
+if (-not (Test-Path -LiteralPath $accessDsn -PathType Leaf)) {
+    throw "Fieldora PostgreSQL access DSN secret was not found: $accessDsn"
+}
+$networkName = "fieldora_fieldora-network"
+$networkFound = (@(& docker network ls --filter "name=^${networkName}$" --format "{{.Name}}") -join "").Trim()
+if ($networkFound -ne $networkName) { throw "Fieldora internal Docker network is unavailable." }
+$trustVolume = (@(& docker volume ls --filter "name=^fieldora-api-trust$" --format "{{.Name}}") -join "").Trim()
+if ($trustVolume -ne "fieldora-api-trust") { throw "Fieldora API trust volume is unavailable." }
 New-Item -ItemType Directory -Force -Path $modelStore | Out-Null
 
 $image = (@(& docker images --format "{{.Repository}}:{{.Tag}}" "fieldora-v5-rocky:local") -join "").Trim()
@@ -66,29 +83,32 @@ if ($image -ne "fieldora-v5-rocky:local") {
 Write-Host "Verifying and installing offline model bundle..." -ForegroundColor Cyan
 $dockerArgs = @(
     "run", "--rm",
-    "--network", "none",
+    "--network", $networkName,
     "--read-only",
     "--cap-drop", "ALL",
     "--security-opt", "no-new-privileges:true",
     "--user", "0",
     "-v", "${bundleFull}:/bundle:ro",
+    "-v", "${artifactFull}:/security-install/artifact.zip:ro",
+    "-v", "${evidenceFull}:/security-install/evidence.json:ro",
+    "-v", "${signingKeyFull}:/trusted-signing-key.pem:ro",
+    "-v", "${accessDsn}:/run/secrets/fieldora-access-dsn:ro",
+    "-v", "fieldora-api-trust:/run/fieldora-trust:ro",
     "-v", "${modelStore}:/models"
 )
-if ($signingKeyFull) {
-    $dockerArgs += @("-v", "${signingKeyFull}:/trusted-signing-key.pem:ro")
-}
 $dockerArgs += @(
     "fieldora-v5-rocky:local",
     "fieldora-model-bundle", "install", "/bundle",
     "--store", "/models",
-    "--max-bytes", "$MaxBytes"
+    "--max-bytes", "$MaxBytes",
+    "--trusted-signing-key", "/trusted-signing-key.pem",
+    "--require-signature",
+    "--security-install-artifact", "/security-install/artifact.zip",
+    "--security-install-evidence", "/security-install/evidence.json",
+    "--postgres-access-dsn-file", "/run/secrets/fieldora-access-dsn",
+    "--security-install-subject", $SecurityInstallSubject,
+    "--actual-target-version", $ActualTargetVersion
 )
-if ($signingKeyFull) {
-    $dockerArgs += @("--trusted-signing-key", "/trusted-signing-key.pem")
-}
-if ($RequireSignature) {
-    $dockerArgs += "--require-signature"
-}
 if ($RequireCleanScan) {
     $dockerArgs += "--require-clean-scan"
 }
@@ -135,9 +155,8 @@ if ($LASTEXITCODE -ne 0) {
 
 Write-Host ""
 Write-Host "Offline model installed and model store mounted read-only." -ForegroundColor Green
-if ($RequireSignature -or $RequireCleanScan) {
-    Write-Host "Manifest signature: required and verified against the supplied Ed25519 public key." -ForegroundColor Green
-}
+Write-Host "Manifest signature: required and independently verified against the Fieldora-side trusted Bastion Ed25519 public key." -ForegroundColor Green
+Write-Host "Security Install: artifact/evidence independently verified; authorization evaluated by Fieldora PostgreSQL PBAC." -ForegroundColor Green
 if ($RequireCleanScan) {
     Write-Host "Malware scan: signed clean attestation required and verified." -ForegroundColor Green
 }

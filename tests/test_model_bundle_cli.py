@@ -20,7 +20,7 @@ from natureai_next.domain.access_control import (
     PolicyEffect,
     PolicySource,
 )
-from natureai_next.domain.security_install import canonical_sha256
+from natureai_next.domain.security_install import AuthenticatedReleaseContext, canonical_sha256
 from natureai_next.infrastructure.database.access_control import SqliteAccessControlRepository
 
 
@@ -135,6 +135,14 @@ def _evidence(
     }
 
 
+def _authenticated_release() -> AuthenticatedReleaseContext:
+    return AuthenticatedReleaseContext(
+        release_id="model-release-42",
+        release_digest="a" * 64,
+        signer_key_id="test-release-signer",
+    )
+
+
 def _allow_install(database: Path, subject: str = "installer") -> None:
     repository = SqliteAccessControlRepository(database)
     repository.put_identity(
@@ -166,6 +174,7 @@ def _install_kwargs(tmp_path: Path, bundle: Path, *, provider_id: str = "fieldor
         "access_control_database": database,
         "security_install_subject": "installer",
         "actual_target_version": "not-installed",
+        "authenticated_release": _authenticated_release(),
     }
 
 
@@ -310,6 +319,22 @@ def test_install_is_gated_atomic_and_accepts_alternate_transfer_provider(tmp_pat
         install_model_bundle(bundle, store, **kwargs)
 
 
+def test_install_rejects_mismatched_authenticated_release(tmp_path: Path) -> None:
+    bundle = _write_bundle(tmp_path / "bundle", {"model/model.onnx": b"model"})
+    store = tmp_path / "store"
+    _artifact, _database, kwargs = _install_kwargs(tmp_path, bundle)
+    kwargs["authenticated_release"] = AuthenticatedReleaseContext(
+        release_id="different-release",
+        release_digest="b" * 64,
+        signer_key_id="test-release-signer",
+    )
+
+    with pytest.raises(ModelBundleError, match="not bound to authenticated provenance"):
+        install_model_bundle(bundle, store, **kwargs)
+
+    assert not store.exists()
+
+
 def test_install_denied_by_real_pbac_does_not_mutate_store(tmp_path: Path) -> None:
     bundle = _write_bundle(tmp_path / "bundle", {"model/model.onnx": b"model"})
     artifact = _zip_bundle(bundle, tmp_path / "model-bundle.zip")
@@ -329,6 +354,7 @@ def test_install_denied_by_real_pbac_does_not_mutate_store(tmp_path: Path) -> No
             access_control_database=database,
             security_install_subject="installer",
             actual_target_version="not-installed",
+            authenticated_release=_authenticated_release(),
         )
 
     assert not store.exists()

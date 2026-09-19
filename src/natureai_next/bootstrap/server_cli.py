@@ -120,7 +120,9 @@ def build_parser() -> argparse.ArgumentParser:
     initialize.add_argument("--organization", required=True)
     initialize.add_argument("--name", required=True)
     initialize.add_argument("--username", required=True)
-    initialize.add_argument("--password")
+    password_source = initialize.add_mutually_exclusive_group()
+    password_source.add_argument("--password")
+    password_source.add_argument("--password-file", type=Path)
     register = commands.add_parser("register-media")
     register.add_argument("--source", type=Path, required=True)
     register.add_argument("--organization", required=True)
@@ -439,7 +441,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     signing_key = signing_root / "export-private.pem"
     signing_trust = signing_root / "export-trusted-keys.json"
     if args.command == "init-user":
-        password = args.password or getpass.getpass("Password: ")
+        if args.password_file is not None:
+            if args.password_file.is_symlink() or not args.password_file.is_file():
+                raise SystemExit("password file must be a regular non-symlink file")
+            password = args.password_file.read_text(encoding="utf-8").rstrip("\r\n")
+        else:
+            password = args.password or getpass.getpass("Password: ")
         administration = AccessAdministrationService(repository)
         if not any(
             item.organization_id == args.organization

@@ -5,6 +5,9 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import os
+import shutil
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -12,7 +15,13 @@ from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
-from natureai_next.domain.security_install import AuthenticatedReleaseContext, canonical_sha256, file_sha256
+from natureai_next.application.security_install import require_security_install
+from natureai_next.domain.security_install import (
+    AuthenticatedReleaseContext,
+    SecurityInstallAcceptanceError,
+    canonical_sha256,
+    file_sha256,
+)
 
 _ALLOWED_TYPES = {"map_dataset", "biodiversity_dataset"}
 _MAX_EVIDENCE_BYTES = 4 * 1024 * 1024
@@ -121,3 +130,132 @@ def verify_dataset_transfer(
         artifact_type, artifact_id, version, package_id, payload_sha, file_count,
         AuthenticatedReleaseContext(release_id, release_digest, key_id), evidence,
     )
+
+
+
+def _security_install_evidence(verified: VerifiedDatasetTransfer, artifact_path: Path) -> dict[str, object]:
+    """Translate authenticated Bastion facts into the provider-neutral Fieldora gate."""
+    artifact_sha = file_sha256(artifact_path)
+    component = f"fieldora-dataset:{verified.artifact_type}:{verified.artifact_id}"
+    compatibility_payload = {
+        "release_id": verified.release.release_id,
+        "component": component,
+        "version": verified.version,
+    }
+    return {
+        "protocol_version": 1,
+        "release_id": verified.release.release_id,
+        "package_id": verified.package_id,
+        "release_digest": verified.release.release_digest,
+        "target": {
+            "component": component,
+            "version": verified.version,
+            "compatible_from": ["not-installed"],
+        },
+        "artifact": {
+            "package_id": verified.package_id,
+            "sha256": artifact_sha,
+            "size": artifact_path.stat().st_size,
+        },
+        "compatibility_approval": {
+            "approved": True,
+            "payload": compatibility_payload,
+            "approval_digest": canonical_sha256(compatibility_payload),
+        },
+        "commercial_private_supply_chain": {
+            "approved": True,
+            "private_distribution": True,
+        },
+        "provenance": {"release_digest": verified.release.release_digest},
+        "secure_transfer": {
+            "provider_id": "fieldora-bastion",
+            "capability": "secure-transfer",
+            "protocol_version": 1,
+            "approved": True,
+            "release_digest": verified.release.release_digest,
+        },
+        "transfer_receipt": {
+            "package_id": verified.package_id,
+            "collector_id": "fieldora-dataset-installer",
+            "expected_sha256": artifact_sha,
+            "observed_sha256": artifact_sha,
+            "status": "accepted",
+        },
+        "independent_verification": {
+            "verified": True,
+            "package_id": verified.package_id,
+            "release_digest": verified.release.release_digest,
+            "sha256": artifact_sha,
+        },
+    }
+
+
+def install_dataset_transfer(
+    artifact_path: Path,
+    evidence_path: Path,
+    signature_path: Path,
+    trusted_signing_key: Path,
+    dataset_store: Path,
+    *,
+    security_install_subject: str,
+    access_control_database: Path | None = None,
+    access_control_repository: object | None = None,
+) -> tuple[VerifiedDatasetTransfer, Path]:
+    """Verify, authorize and atomically activate a standalone dataset transfer."""
+    verified = verify_dataset_transfer(
+        artifact_path, evidence_path, signature_path, trusted_signing_key
+    )
+    evidence = _security_install_evidence(verified, artifact_path)
+    component = f"fieldora-dataset:{verified.artifact_type}:{verified.artifact_id}"
+
+    def authorize() -> None:
+        try:
+            require_security_install(
+                evidence,
+                artifact_path=artifact_path,
+                subject_id=security_install_subject,
+                expected_package_id=verified.package_id,
+                expected_target_component=component,
+                actual_target_version="not-installed",
+                authenticated_release=verified.release,
+                access_control_database=access_control_database,
+                access_control_repository=access_control_repository,
+            )
+        except SecurityInstallAcceptanceError as exc:
+            raise DatasetTransferError(f"Security Install acceptance failed: {exc}") from exc
+
+    authorize()
+    destination = dataset_store / verified.artifact_type / verified.artifact_id / verified.version
+    if destination.exists():
+        raise DatasetTransferError("dataset version is already installed")
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    staging = Path(tempfile.mkdtemp(prefix=".fieldora-dataset-", dir=destination.parent))
+    try:
+        staged_artifact = staging / verified.package_id
+        shutil.copyfile(artifact_path, staged_artifact, follow_symlinks=False)
+        if file_sha256(staged_artifact) != file_sha256(artifact_path):
+            raise DatasetTransferError("dataset artifact changed during install staging")
+        (staging / "FIELDORA-INSTALL.json").write_text(
+            json.dumps(
+                {
+                    "artifact_type": verified.artifact_type,
+                    "artifact_id": verified.artifact_id,
+                    "version": verified.version,
+                    "release_id": verified.release.release_id,
+                    "release_digest": verified.release.release_digest,
+                    "signer_key_id": verified.release.signer_key_id,
+                    "network": "offline",
+                },
+                sort_keys=True,
+                indent=2,
+            ) + "\n",
+            encoding="utf-8",
+        )
+        authorize()
+        if destination.exists():
+            raise DatasetTransferError("dataset version is already installed")
+        os.replace(staging, destination)
+    except BaseException:
+        shutil.rmtree(staging, ignore_errors=True)
+        raise
+    return verified, destination

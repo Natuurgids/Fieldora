@@ -31,8 +31,14 @@ def _transfer(tmp_path: Path):
         serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo
     ))
     artifact = tmp_path / "map_dataset-base-1.zip"
-    artifact.write_bytes(b"PK-test-dataset")
+    payload = b'{"type":"FeatureCollection","features":[]}'
+    with ZipFile(artifact, "w") as archive:
+        archive.writestr("base.geojson", payload)
     artifact_sha = hashlib.sha256(artifact.read_bytes()).hexdigest()
+    payload_file_sha = hashlib.sha256(payload).hexdigest()
+    payload_tree = hashlib.sha256(
+        f"base.geojson\\0{len(payload)}\\0{payload_file_sha}\\n".encode()
+    ).hexdigest()
     release = {
         "artifact_type": "map_dataset", "artifact_id": "base", "version": "1",
         "package_sha256": artifact_sha, "signer_key_id": key_id,
@@ -41,7 +47,7 @@ def _transfer(tmp_path: Path):
         "protocol_version": 2,
         "release_id": "fieldora-artifact:map_dataset:base:1",
         "artifact_type": "map_dataset", "artifact_id": "base", "version": "1",
-        "payload_sha256": "a" * 64, "file_count": 1,
+        "payload_sha256": payload_tree, "file_count": 1,
         "artifact": {"package_id": artifact.name, "sha256": artifact_sha, "size": artifact.stat().st_size},
         "release_digest": canonical_sha256(release), "signer_key_id": key_id,
         "source_provenance": {"source_id": "maps"},
@@ -152,3 +158,43 @@ def test_dataset_receiver_cli_install_with_sqlite_pbac(
     output = json.loads(capsys.readouterr().out)
     assert output["ok"] is True
     assert Path(output["destination"]).is_dir()
+
+
+
+def test_rejects_zip_payload_not_matching_signed_tree(tmp_path: Path) -> None:
+    artifact, evidence, signature, public = _transfer(tmp_path)
+    # Re-sign evidence for the changed ZIP envelope while deliberately retaining the
+    # original signed payload tree digest: receiver must independently inspect members.
+    with ZipFile(artifact, "w") as archive:
+        archive.writestr("other.geojson", b"{}")
+    data = json.loads(evidence.read_text())
+    data["artifact"]["sha256"] = hashlib.sha256(artifact.read_bytes()).hexdigest()
+    data["artifact"]["size"] = artifact.stat().st_size
+    key = Ed25519PrivateKey.generate()
+    public.write_bytes(key.public_key().public_bytes(
+        serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo
+    ))
+    public_der = key.public_key().public_bytes(
+        serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo
+    )
+    key_id = hashlib.sha256(public_der).hexdigest()[:32]
+    data["signer_key_id"] = key_id
+    release = {
+        "artifact_type": data["artifact_type"], "artifact_id": data["artifact_id"],
+        "version": data["version"], "package_sha256": data["artifact"]["sha256"],
+        "signer_key_id": key_id,
+    }
+    data["release_digest"] = canonical_sha256(release)
+    evidence_bytes = (json.dumps(data, sort_keys=True, separators=(",", ":")) + "\n").encode()
+    evidence.write_bytes(evidence_bytes)
+    signature.write_text(json.dumps({
+        "algorithm": "ed25519", "key_id": key_id,
+        "signature": base64.b64encode(key.sign(evidence_bytes)).decode(),
+    }, sort_keys=True, separators=(",", ":")) + "\n")
+    database = tmp_path / "access.sqlite3"
+    _allow_install(database)
+    with pytest.raises(DatasetTransferError, match="payload does not match"):
+        install_dataset_transfer(
+            artifact, evidence, signature, public, tmp_path / "store",
+            security_install_subject="installer", access_control_database=database,
+        )

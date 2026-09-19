@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import base64
 import hashlib
 import json
@@ -259,3 +260,81 @@ def install_dataset_transfer(
         shutil.rmtree(staging, ignore_errors=True)
         raise
     return verified, destination
+
+
+
+def _postgres_repository(dsn_file: Path):
+    if dsn_file.is_symlink() or not dsn_file.is_file() or dsn_file.stat().st_size > 16_384:
+        raise DatasetTransferError("PostgreSQL access DSN file is invalid")
+    dsn = dsn_file.read_text(encoding="utf-8").strip()
+    if not dsn:
+        raise DatasetTransferError("PostgreSQL access DSN file is empty")
+    try:
+        import psycopg
+    except ImportError as exc:
+        raise DatasetTransferError(
+            "PostgreSQL Security Install requires the server-postgresql dependency"
+        ) from exc
+    from natureai_next.server.postgres_access import PostgresAccessControlRepository
+    return PostgresAccessControlRepository(lambda: psycopg.connect(dsn, connect_timeout=10))
+
+
+def _parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="fieldora-dataset-transfer",
+        description="Verify and install signed standalone Bastion dataset transfers.",
+    )
+    sub = parser.add_subparsers(dest="command", required=True)
+    for name in ("verify", "install"):
+        command = sub.add_parser(name)
+        command.add_argument("artifact", type=Path)
+        command.add_argument("--evidence", type=Path, required=True)
+        command.add_argument("--signature", type=Path, required=True)
+        command.add_argument("--trusted-signing-key", type=Path, required=True)
+        if name == "install":
+            command.add_argument("--store", type=Path, required=True)
+            command.add_argument("--security-install-subject", required=True)
+            access = command.add_mutually_exclusive_group(required=True)
+            access.add_argument("--access-control-database", type=Path)
+            access.add_argument("--postgres-access-dsn-file", type=Path)
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = _parser().parse_args(argv)
+    try:
+        if args.command == "verify":
+            verified = verify_dataset_transfer(
+                args.artifact, args.evidence, args.signature, args.trusted_signing_key
+            )
+            destination = None
+        else:
+            repository = (
+                _postgres_repository(args.postgres_access_dsn_file)
+                if args.postgres_access_dsn_file is not None else None
+            )
+            verified, destination = install_dataset_transfer(
+                args.artifact, args.evidence, args.signature, args.trusted_signing_key,
+                args.store, security_install_subject=args.security_install_subject,
+                access_control_database=args.access_control_database,
+                access_control_repository=repository,
+            )
+        output = {
+            "ok": True,
+            "artifact_type": verified.artifact_type,
+            "artifact_id": verified.artifact_id,
+            "version": verified.version,
+            "release_id": verified.release.release_id,
+            "signer_key_id": verified.release.signer_key_id,
+        }
+        if destination is not None:
+            output["destination"] = str(destination)
+    except (DatasetTransferError, OSError, UnicodeDecodeError) as exc:
+        print(json.dumps({"ok": False, "error": str(exc)}, separators=(",", ":")))
+        return 2
+    print(json.dumps(output, separators=(",", ":")))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

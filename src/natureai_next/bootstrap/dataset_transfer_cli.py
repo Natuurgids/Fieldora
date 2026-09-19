@@ -10,7 +10,8 @@ import os
 import shutil
 import tempfile
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
+from zipfile import BadZipFile, ZipFile, ZipInfo
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives import serialization
@@ -191,6 +192,49 @@ def _security_install_evidence(verified: VerifiedDatasetTransfer, artifact_path:
     }
 
 
+def _zip_member_is_symlink(info: ZipInfo) -> bool:
+    return ((info.external_attr >> 16) & 0o170000) == 0o120000
+
+
+def _verify_archive_payload(artifact_path: Path, verified: VerifiedDatasetTransfer) -> None:
+    """Independently bind ZIP members to Bastion's signed canonical payload digest."""
+    digest = hashlib.sha256()
+    file_count = 0
+    try:
+        with ZipFile(artifact_path, "r") as archive:
+            files: list[tuple[str, int, str]] = []
+            seen: set[str] = set()
+            for info in archive.infolist():
+                raw = info.filename.replace("\\", "/")
+                path = PurePosixPath(raw)
+                if not raw or path.is_absolute() or any(part in {"", ".", ".."} for part in path.parts):
+                    raise DatasetTransferError("dataset ZIP contains an unsafe path")
+                name = path.as_posix()
+                if name in seen:
+                    raise DatasetTransferError("dataset ZIP contains duplicate paths")
+                seen.add(name)
+                if _zip_member_is_symlink(info):
+                    raise DatasetTransferError("dataset ZIP contains a symlink")
+                if info.is_dir():
+                    continue
+                member_digest = hashlib.sha256()
+                size = 0
+                with archive.open(info, "r") as stream:
+                    for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                        size += len(chunk)
+                        member_digest.update(chunk)
+                files.append((name, size, member_digest.hexdigest()))
+            file_count = len(files)
+            for name, size, sha256 in sorted(files):
+                digest.update(f"{name}\0{size}\0{sha256}\n".encode())
+    except DatasetTransferError:
+        raise
+    except (BadZipFile, OSError, RuntimeError, ValueError) as exc:
+        raise DatasetTransferError("dataset artifact must be a readable safe ZIP") from exc
+    if file_count != verified.file_count or digest.hexdigest() != verified.payload_sha256:
+        raise DatasetTransferError("dataset ZIP payload does not match signed Bastion payload binding")
+
+
 def install_dataset_transfer(
     artifact_path: Path,
     evidence_path: Path,
@@ -206,6 +250,7 @@ def install_dataset_transfer(
     verified = verify_dataset_transfer(
         artifact_path, evidence_path, signature_path, trusted_signing_key
     )
+    _verify_archive_payload(artifact_path, verified)
     evidence = _security_install_evidence(verified, artifact_path)
     component = f"fieldora-dataset:{verified.artifact_type}:{verified.artifact_id}"
 
@@ -252,6 +297,7 @@ def install_dataset_transfer(
             ) + "\n",
             encoding="utf-8",
         )
+        _verify_archive_payload(staged_artifact, verified)
         authorize()
         if destination.exists():
             raise DatasetTransferError("dataset version is already installed")

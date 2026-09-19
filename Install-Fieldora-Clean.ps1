@@ -231,6 +231,7 @@ $dsns = @{
 }
 foreach ($k in $dsns.Keys) { Set-Content (Join-Path $SecretsRoot $k) -Encoding ascii -NoNewline -Value $dsns[$k] }
 Set-Content (Join-Path $SecretsRoot "postgres-password") -Encoding ascii -NoNewline -Value $PostgresPassword
+Set-Content (Join-Path $SecretsRoot "admin-bootstrap-password") -Encoding utf8NoBOM -NoNewline -Value $AdminPassword
 
 Step "Creating Docker Compose stack"
 $compose = @'
@@ -322,6 +323,7 @@ services:
     volumes:
       - ./fieldora-data:/var/lib/fieldora
       - ./secrets/fieldora-access-dsn:/run/secrets/fieldora-access-dsn:ro
+      - ./secrets/admin-bootstrap-password:/run/secrets/admin-bootstrap-password:ro
       - ./secrets/fieldora-science-dsn:/run/secrets/fieldora-science-dsn:ro
       - ./secrets/fieldora-jobs-dsn:/run/secrets/fieldora-jobs-dsn:ro
       - ./secrets/fieldora-media-dsn:/run/secrets/fieldora-media-dsn:ro
@@ -575,8 +577,9 @@ try {
     Assert-Exit "Certificate renewer activation failed"
 
     Step "Bootstrapping Fieldora administrator"
-    & docker compose run --rm --no-deps fieldora-server fieldora-server --data-root /var/lib/fieldora --access-backend postgresql --postgres-access-dsn-file /run/secrets/fieldora-access-dsn init-user --organization $Organization --name $AdminName --username $AdminUsername --password $AdminPassword
+    & docker compose run --rm --no-deps fieldora-server fieldora-server --data-root /var/lib/fieldora --access-backend postgresql --postgres-access-dsn-file /run/secrets/fieldora-access-dsn init-user --organization $Organization --name $AdminName --username $AdminUsername --password-file /run/secrets/admin-bootstrap-password
     Assert-Exit "Administrator bootstrap failed"
+    Remove-Item -LiteralPath (Join-Path $SecretsRoot "admin-bootstrap-password") -Force
 
     Set-Content (Join-Path $InstallRoot "ADMIN-CREDENTIALS.txt") -Encoding utf8NoBOM -Value @"
 Fieldora local Docker administrator

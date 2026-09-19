@@ -46,7 +46,7 @@ function Resolve-Conda {
 function Invoke-Conda([string[]]$Arguments) {
     & $script:Conda @Arguments
     if ($LASTEXITCODE -ne 0) {
-        Fail "conda command failed with exit code $LASTEXITCODE: conda $($Arguments -join ' ')"
+        Fail "conda command failed with exit code ${LASTEXITCODE}: conda $($Arguments -join ' ')"
     }
 }
 

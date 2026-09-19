@@ -115,6 +115,14 @@ def test_dataset_install_is_pbac_gated_and_atomic(tmp_path: Path) -> None:
     receipt = json.loads((destination / "FIELDORA-INSTALL.json").read_text())
     assert receipt["release_id"] == verified.release.release_id
     assert receipt["network"] == "offline"
+    from natureai_next.bootstrap.dataset_transfer_cli import _security_install_evidence
+    translated = _security_install_evidence(verified, artifact)
+    assert translated["controlled_supply_chain"] == {
+        "approved": True,
+        "bastion_verified": True,
+        "offline_transfer": True,
+    }
+    assert "commercial_private_supply_chain" not in translated
 
 
 def test_dataset_install_denied_by_pbac_does_not_activate(tmp_path: Path) -> None:

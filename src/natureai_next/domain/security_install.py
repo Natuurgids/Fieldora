@@ -181,10 +181,20 @@ def accept_security_install_release(
     if _token(compatibility_payload.get("version"), "compatibility version") != target_version:
         raise SecurityInstallAcceptanceError("compatibility approval version mismatch")
 
-    supply_chain = _object(evidence.get("commercial_private_supply_chain"), "supply-chain")
-    _approved(supply_chain, "commercial-private supply-chain")
-    if supply_chain.get("private_distribution") is not True:
-        raise SecurityInstallAcceptanceError("commercial-private supply-chain evidence is incomplete")
+    private_supply_chain = evidence.get("commercial_private_supply_chain")
+    controlled_supply_chain = evidence.get("controlled_supply_chain")
+    if private_supply_chain is not None and controlled_supply_chain is not None:
+        raise SecurityInstallAcceptanceError("multiple supply-chain evidence modes are not allowed")
+    if private_supply_chain is not None:
+        supply_chain = _object(private_supply_chain, "supply-chain")
+        _approved(supply_chain, "commercial-private supply-chain")
+        if supply_chain.get("private_distribution") is not True:
+            raise SecurityInstallAcceptanceError("commercial-private supply-chain evidence is incomplete")
+    else:
+        supply_chain = _object(controlled_supply_chain, "controlled supply-chain")
+        _approved(supply_chain, "controlled supply-chain")
+        if supply_chain.get("bastion_verified") is not True or supply_chain.get("offline_transfer") is not True:
+            raise SecurityInstallAcceptanceError("controlled supply-chain evidence is incomplete")
 
     # Serialized provenance booleans are intentionally not authorization inputs. The
     # release id/digest above must match the cryptographically verified update index.

@@ -168,9 +168,10 @@ def _security_install_evidence(verified: VerifiedDatasetTransfer, artifact_path:
             "payload": compatibility_payload,
             "approval_digest": canonical_sha256(compatibility_payload),
         },
-        "commercial_private_supply_chain": {
+        "controlled_supply_chain": {
             "approved": True,
-            "private_distribution": True,
+            "bastion_verified": True,
+            "offline_transfer": True,
         },
         "provenance": {"release_digest": verified.release.release_digest},
         "secure_transfer": {

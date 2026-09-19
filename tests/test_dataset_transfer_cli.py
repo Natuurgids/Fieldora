@@ -12,6 +12,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from natureai_next.bootstrap.dataset_transfer_cli import (
     DatasetTransferError,
     install_dataset_transfer,
+    main,
     verify_dataset_transfer,
 )
 from natureai_next.domain.access_control import Identity, IdentityKind, Policy, PolicyEffect, PolicySource
@@ -121,3 +122,33 @@ def test_dataset_install_denied_by_pbac_does_not_activate(tmp_path: Path) -> Non
             security_install_subject="installer", access_control_database=database,
         )
     assert not (store / "map_dataset" / "base" / "1").exists()
+
+
+
+def test_dataset_receiver_cli_verify(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    artifact, evidence, signature, public = _transfer(tmp_path)
+    result = main([
+        "verify", str(artifact), "--evidence", str(evidence), "--signature", str(signature),
+        "--trusted-signing-key", str(public),
+    ])
+    assert result == 0
+    output = json.loads(capsys.readouterr().out)
+    assert output["ok"] is True
+    assert output["artifact_type"] == "map_dataset"
+
+
+def test_dataset_receiver_cli_install_with_sqlite_pbac(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    artifact, evidence, signature, public = _transfer(tmp_path)
+    database = tmp_path / "access.sqlite3"
+    _allow_install(database)
+    result = main([
+        "install", str(artifact), "--evidence", str(evidence), "--signature", str(signature),
+        "--trusted-signing-key", str(public), "--store", str(tmp_path / "store"),
+        "--security-install-subject", "installer", "--access-control-database", str(database),
+    ])
+    assert result == 0
+    output = json.loads(capsys.readouterr().out)
+    assert output["ok"] is True
+    assert Path(output["destination"]).is_dir()

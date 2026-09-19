@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "scripts/build_fieldora_windows_installer.ps1"
+      - "scripts/build_aperture_windows_installer.ps1"
       - "Install-Fieldora-Clean-Linux.ps1"
       - "Install-Fieldora-Clean.ps1"
       - "Install-Fieldora-Complete-Windows.ps1"

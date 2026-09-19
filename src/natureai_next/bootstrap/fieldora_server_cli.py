@@ -63,7 +63,12 @@ def _bootstrap_initial_user(arguments: list[str]) -> int:
     username = args.username.strip()
     if not organization_id or not display_name or not username:
         raise SystemExit("organization, name, and username must be non-empty")
-    password = args.password or getpass.getpass("Password: ")
+    if args.password_file is not None:
+        if args.password_file.is_symlink() or not args.password_file.is_file():
+            raise SystemExit("password file must be a regular non-symlink file")
+        password = args.password_file.read_text(encoding="utf-8").rstrip("\r\n")
+    else:
+        password = args.password or getpass.getpass("Password: ")
 
     identity = Identity(
         str(uuid4()),

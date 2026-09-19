@@ -6,6 +6,8 @@ on:
       - "scripts/build_fieldora_windows_installer.ps1"
       - "Install-Fieldora-Clean-Linux.ps1"
       - "Install-Fieldora-Clean.ps1"
+      - "Install-Fieldora-Complete-Windows.ps1"
+      - "Install-Fieldora-Complete-Linux.ps1"
       - "Install-Fieldora-Bootstrap-Handoff.ps1"
       - "Install-Fieldora-Offline-Model.ps1"
       - ".github/workflows/installer-review-certification.yml"
@@ -31,6 +33,30 @@ jobs:
             if (-not $builder.Contains($needle)) { throw "Windows native desktop builder contract missing: $needle" }
           }
           if ($builder.Contains('Install-Fieldora-Clean-Linux.ps1')) { throw 'Native desktop builder must not depend on the Linux Docker/server installer.' }
+
+  complete-installer-security-contract:
+    name: Complete installer security and logging contract
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse complete installers
+        shell: pwsh
+        run: |
+          [void][scriptblock]::Create((Get-Content -LiteralPath ./Install-Fieldora-Complete-Windows.ps1 -Raw))
+          [void][scriptblock]::Create((Get-Content -LiteralPath ./Install-Fieldora-Complete-Linux.ps1 -Raw))
+      - name: Verify immutable refs and password-free transcript contract
+        shell: pwsh
+        run: |
+          $windows = Get-Content ./Install-Fieldora-Complete-Windows.ps1 -Raw
+          $linux = Get-Content ./Install-Fieldora-Complete-Linux.ps1 -Raw
+          foreach ($text in @($windows,$linux)) {
+            if ($text.Contains('$FieldoraRef = "security/native-update-trust-hardening"')) { throw 'Complete installer must not default to mutable Fieldora branch.' }
+            if ($text.Contains('$BastionRef = "main"')) { throw 'Complete installer must not default to mutable Bastion main.' }
+          }
+          if ($windows.Contains('Write-Host "Password: $AdminPassword"') -or $linux.Contains('Write-Host "Password: $AdminPassword"')) { throw 'Password console/log leak pattern found.' }
+          foreach ($needle in @('Start-Transcript','install-{0}.log','Stop-Transcript')) {
+            if (-not $windows.Contains($needle)) { throw "Windows sanitized logging contract missing: $needle" }
+          }
 
   linux-docker-server-clean-install:
     name: Linux Docker/server clean install

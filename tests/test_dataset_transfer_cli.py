@@ -9,7 +9,13 @@ import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
-from natureai_next.bootstrap.dataset_transfer_cli import DatasetTransferError, verify_dataset_transfer
+from natureai_next.bootstrap.dataset_transfer_cli import (
+    DatasetTransferError,
+    install_dataset_transfer,
+    verify_dataset_transfer,
+)
+from natureai_next.domain.access_control import Identity, IdentityKind, Policy, PolicyEffect, PolicySource
+from natureai_next.infrastructure.database.access_control import SqliteAccessControlRepository
 from natureai_next.domain.security_install import canonical_sha256
 
 
@@ -74,3 +80,44 @@ def test_rejects_tampered_artifact(tmp_path: Path) -> None:
     artifact.write_bytes(b"changed")
     with pytest.raises(DatasetTransferError, match="size mismatch|digest mismatch"):
         verify_dataset_transfer(artifact, evidence, signature, public)
+
+
+
+def _allow_install(database: Path, subject: str = "installer") -> None:
+    repository = SqliteAccessControlRepository(database)
+    repository.put_identity(Identity(subject, IdentityKind.SERVICE, "Dataset installer", "platform"))
+    repository.put_policy(Policy(
+        policy_id="allow-dataset-install", name="Allow dataset install",
+        effect=PolicyEffect.ALLOW, source=PolicySource.DIRECT, source_id="",
+        subject_id=subject, role_id="", actions=("install",),
+        resource_types=("security_install_release",), purposes=("security_install",),
+    ))
+
+
+def test_dataset_install_is_pbac_gated_and_atomic(tmp_path: Path) -> None:
+    artifact, evidence, signature, public = _transfer(tmp_path)
+    database = tmp_path / "access.sqlite3"
+    _allow_install(database)
+    verified, destination = install_dataset_transfer(
+        artifact, evidence, signature, public, tmp_path / "store",
+        security_install_subject="installer", access_control_database=database,
+    )
+    assert destination == tmp_path / "store" / "map_dataset" / "base" / "1"
+    assert (destination / artifact.name).read_bytes() == artifact.read_bytes()
+    receipt = json.loads((destination / "FIELDORA-INSTALL.json").read_text())
+    assert receipt["release_id"] == verified.release.release_id
+    assert receipt["network"] == "offline"
+
+
+def test_dataset_install_denied_by_pbac_does_not_activate(tmp_path: Path) -> None:
+    artifact, evidence, signature, public = _transfer(tmp_path)
+    database = tmp_path / "access.sqlite3"
+    repository = SqliteAccessControlRepository(database)
+    repository.put_identity(Identity("installer", IdentityKind.SERVICE, "Dataset installer", "platform"))
+    store = tmp_path / "store"
+    with pytest.raises(DatasetTransferError, match="business authorization denied"):
+        install_dataset_transfer(
+            artifact, evidence, signature, public, store,
+            security_install_subject="installer", access_control_database=database,
+        )
+    assert not (store / "map_dataset" / "base" / "1").exists()

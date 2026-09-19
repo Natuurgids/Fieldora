@@ -4,6 +4,7 @@ import base64
 import hashlib
 import json
 from pathlib import Path
+from zipfile import ZipFile, ZipInfo
 
 import pytest
 from cryptography.hazmat.primitives import serialization
@@ -198,3 +199,49 @@ def test_rejects_zip_payload_not_matching_signed_tree(tmp_path: Path) -> None:
             artifact, evidence, signature, public, tmp_path / "store",
             security_install_subject="installer", access_control_database=database,
         )
+
+
+
+@pytest.mark.parametrize("member_name", ["../escape.geojson", "/absolute.geojson", "C:/drive.geojson", "\\\\server\\share.geojson"])
+def test_rejects_unsafe_platform_zip_paths(
+    tmp_path: Path, member_name: str
+) -> None:
+    artifact, evidence, signature, public = _transfer(tmp_path)
+    with ZipFile(artifact, "w") as archive:
+        archive.writestr(member_name, b"{}")
+    with pytest.raises(DatasetTransferError, match="unsafe path"):
+        from natureai_next.bootstrap.dataset_transfer_cli import _verify_archive_payload
+        verified = verify_dataset_transfer.__annotations__
+        del verified
+        # Envelope authentication runs before archive inspection in production. Exercise
+        # the archive guard directly here so the adversarial member reaches that boundary.
+        from natureai_next.bootstrap.dataset_transfer_cli import VerifiedDatasetTransfer
+        from natureai_next.domain.security_install import AuthenticatedReleaseContext
+        bound = VerifiedDatasetTransfer(
+            "map_dataset", "base", "1", artifact.name, "0" * 64, 1,
+            AuthenticatedReleaseContext("fieldora-artifact:map_dataset:base:1", "0" * 64, "0" * 32),
+            {},
+        )
+        _verify_archive_payload(artifact, bound)
+
+
+def test_rejects_zip_special_file(tmp_path: Path) -> None:
+    artifact, evidence, signature, public = _transfer(tmp_path)
+    del evidence, signature, public
+    info = ZipInfo("device")
+    info.create_system = 3
+    info.external_attr = 0o020666 << 16
+    with ZipFile(artifact, "w") as archive:
+        archive.writestr(info, b"x")
+    from natureai_next.bootstrap.dataset_transfer_cli import (
+        VerifiedDatasetTransfer,
+        _verify_archive_payload,
+    )
+    from natureai_next.domain.security_install import AuthenticatedReleaseContext
+    bound = VerifiedDatasetTransfer(
+        "map_dataset", "base", "1", artifact.name, "0" * 64, 1,
+        AuthenticatedReleaseContext("fieldora-artifact:map_dataset:base:1", "0" * 64, "0" * 32),
+        {},
+    )
+    with pytest.raises(DatasetTransferError, match="special file"):
+        _verify_archive_payload(artifact, bound)

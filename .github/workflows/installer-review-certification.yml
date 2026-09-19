@@ -18,21 +18,59 @@ permissions:
 
 jobs:
   windows-desktop-packaging-contract:
-    name: Windows native desktop packaging contract
-    runs-on: ubuntu-24.04
+    name: Windows native desktop build certification
+    runs-on: windows-2025
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
-      - name: Parse native desktop review builder
-        shell: pwsh
-        run: '[void][scriptblock]::Create((Get-Content -LiteralPath ./scripts/build_fieldora_windows_installer.ps1 -Raw))'
-      - name: Verify native desktop builder uses repository root and version
+      - name: Install Miniconda and Inno Setup
         shell: pwsh
         run: |
-          $builder = Get-Content ./scripts/build_fieldora_windows_installer.ps1 -Raw
-          foreach ($needle in @("Join-Path `$PSScriptRoot '..'", 'pyproject.toml', "Version = ''", 'Fieldora-$Version-Setup.exe')) {
-            if (-not $builder.Contains($needle)) { throw "Windows native desktop builder contract missing: $needle" }
+          choco install miniconda3 innosetup -y --no-progress
+          $conda = Get-ChildItem @("$env:USERPROFILE\\miniconda3\\Scripts\\conda.exe","C:\\tools\\miniconda3\\Scripts\\conda.exe","C:\\ProgramData\\miniconda3\\Scripts\\conda.exe") -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $conda) { throw 'Miniconda installation was not found.' }
+          $condaDir = Split-Path (Split-Path $conda.FullName -Parent) -Parent
+          Add-Content $env:GITHUB_PATH $condaDir
+          Add-Content $env:GITHUB_PATH (Join-Path $condaDir 'Scripts')
+      - name: Build native Fieldora installer
+        shell: pwsh
+        run: |
+          ./scripts/build_fieldora_windows_installer.ps1 -BuildProfile GUI -Version 5.4.0 -EnvironmentName fieldora-ci -Clean
+      - name: Verify immutable installer artifact
+        shell: pwsh
+        run: |
+          $setup = Resolve-Path ./dist-installer/Fieldora-5.4.0-Setup.exe
+          $hashFile = Resolve-Path ./dist-installer/Fieldora-5.4.0-Setup.exe.sha256
+          $expected = ((Get-Content $hashFile -Raw) -split '\\s+')[0].Trim().ToLowerInvariant()
+          $actual = (Get-FileHash -Algorithm SHA256 $setup).Hash.ToLowerInvariant()
+          if ($actual -ne $expected) { throw "Installer SHA-256 mismatch." }
+          if ((Get-Item $setup).Length -lt 1MB) { throw "Installer artifact is unexpectedly small." }
+      - name: Silent install and uninstall smoke test
+        shell: pwsh
+        run: |
+          $setup = (Resolve-Path ./dist-installer/Fieldora-5.4.0-Setup.exe).Path
+          $install = Join-Path $env:RUNNER_TEMP 'FieldoraDesktop'
+          $proc = Start-Process -FilePath $setup -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/DIR=$install") -Wait -PassThru
+          if ($proc.ExitCode -ne 0) { throw "Installer exited $($proc.ExitCode)." }
+          foreach ($exe in @('Fieldora.exe','Fieldora-Updater.exe','Fieldora-Recovery.exe')) {
+            if (-not (Get-ChildItem -Path $install -Filter $exe -Recurse -File -ErrorAction SilentlyContinue)) { throw "Installed application missing $exe." }
           }
-          if ($builder.Contains('Install-Fieldora-Clean-Linux.ps1')) { throw 'Native desktop builder must not depend on the Linux Docker/server installer.' }
+          $uninstaller = Get-ChildItem -Path $install -Filter 'unins*.exe' -File | Select-Object -First 1
+          if (-not $uninstaller) { throw 'Uninstaller was not installed.' }
+          $proc = Start-Process -FilePath $uninstaller.FullName -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART') -Wait -PassThru
+          if ($proc.ExitCode -ne 0) { throw "Uninstaller exited $($proc.ExitCode)." }
+          if (Test-Path -LiteralPath $install) {
+            $remaining = Get-ChildItem -LiteralPath $install -Force -ErrorAction SilentlyContinue
+            if ($remaining) { throw 'Uninstall left application files behind.' }
+          }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Fieldora-5.4.0-Windows
+          path: |
+            dist-installer/Fieldora-5.4.0-Setup.exe
+            dist-installer/Fieldora-5.4.0-Setup.exe.sha256
+          if-no-files-found: error
+          retention-days: 14
 
   complete-installer-security-contract:
     name: Complete installer security and logging contract

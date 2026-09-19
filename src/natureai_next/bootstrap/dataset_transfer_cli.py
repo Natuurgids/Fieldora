@@ -28,6 +28,10 @@ from natureai_next.domain.security_install import (
 _ALLOWED_TYPES = {"map_dataset", "biodiversity_dataset"}
 _MAX_EVIDENCE_BYTES = 4 * 1024 * 1024
 _MAX_SIGNATURE_BYTES = 16 * 1024
+_MAX_ZIP_MEMBERS = 100_000
+_MAX_MEMBER_BYTES = 8 * 1024 * 1024 * 1024
+_MAX_TOTAL_UNCOMPRESSED_BYTES = 64 * 1024 * 1024 * 1024
+_MAX_COMPRESSION_RATIO = 200
 
 
 class DatasetTransferError(ValueError):
@@ -204,19 +208,42 @@ def _verify_archive_payload(artifact_path: Path, verified: VerifiedDatasetTransf
         with ZipFile(artifact_path, "r") as archive:
             files: list[tuple[str, int, str]] = []
             seen: set[str] = set()
-            for info in archive.infolist():
-                raw = info.filename.replace("\\", "/")
+            infos = archive.infolist()
+            if len(infos) > _MAX_ZIP_MEMBERS:
+                raise DatasetTransferError("dataset ZIP contains too many members")
+            total_uncompressed = 0
+            for info in infos:
+                raw_name = info.filename
+                raw = raw_name.replace("\\", "/")
                 path = PurePosixPath(raw)
-                if not raw or path.is_absolute() or any(part in {"", ".", ".."} for part in path.parts):
+                first = path.parts[0] if path.parts else ""
+                if (
+                    not raw
+                    or raw.startswith("//")
+                    or path.is_absolute()
+                    or (len(first) >= 2 and first[1] == ":" and first[0].isalpha())
+                    or any(part in {"", ".", ".."} for part in path.parts)
+                ):
                     raise DatasetTransferError("dataset ZIP contains an unsafe path")
                 name = path.as_posix()
                 if name in seen:
                     raise DatasetTransferError("dataset ZIP contains duplicate paths")
                 seen.add(name)
+                mode = (info.external_attr >> 16) & 0o170000
                 if _zip_member_is_symlink(info):
                     raise DatasetTransferError("dataset ZIP contains a symlink")
+                if mode not in {0, 0o100000, 0o040000}:
+                    raise DatasetTransferError("dataset ZIP contains a special file")
                 if info.is_dir():
                     continue
+                if info.file_size > _MAX_MEMBER_BYTES:
+                    raise DatasetTransferError("dataset ZIP member exceeds the size limit")
+                total_uncompressed += info.file_size
+                if total_uncompressed > _MAX_TOTAL_UNCOMPRESSED_BYTES:
+                    raise DatasetTransferError("dataset ZIP exceeds the total size limit")
+                compressed = max(info.compress_size, 1)
+                if info.file_size > 1024 * 1024 and info.file_size / compressed > _MAX_COMPRESSION_RATIO:
+                    raise DatasetTransferError("dataset ZIP member exceeds the compression ratio limit")
                 member_digest = hashlib.sha256()
                 size = 0
                 with archive.open(info, "r") as stream:

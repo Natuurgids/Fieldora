@@ -68,3 +68,43 @@ def test_acceptance_fails_closed_on_tampering(tmp_path, path, value, message) ->
 def test_required_evidence_cannot_be_omitted(tmp_path, field) -> None:
     payload = b"trusted release"; evidence = _evidence(payload); evidence.pop(field)
     with pytest.raises(SecurityInstallAcceptanceError): _accept(tmp_path, evidence, payload)
+
+
+def test_accepts_controlled_public_supply_chain_without_private_distribution_claim(tmp_path) -> None:
+    payload = b"trusted public dataset"
+    evidence = _evidence(payload)
+    evidence.pop("commercial_private_supply_chain")
+    evidence["controlled_supply_chain"] = {
+        "approved": True,
+        "bastion_verified": True,
+        "offline_transfer": True,
+    }
+    accepted = _accept(tmp_path, evidence, payload)
+    assert accepted.release_id == "release-42"
+
+
+@pytest.mark.parametrize("field", ["bastion_verified", "offline_transfer"])
+def test_controlled_supply_chain_fails_closed_when_control_missing(tmp_path, field) -> None:
+    payload = b"trusted public dataset"
+    evidence = _evidence(payload)
+    evidence.pop("commercial_private_supply_chain")
+    evidence["controlled_supply_chain"] = {
+        "approved": True,
+        "bastion_verified": True,
+        "offline_transfer": True,
+    }
+    evidence["controlled_supply_chain"][field] = False
+    with pytest.raises(SecurityInstallAcceptanceError, match="controlled supply-chain evidence is incomplete"):
+        _accept(tmp_path, evidence, payload)
+
+
+def test_rejects_ambiguous_private_and_controlled_supply_chain_claims(tmp_path) -> None:
+    payload = b"trusted release"
+    evidence = _evidence(payload)
+    evidence["controlled_supply_chain"] = {
+        "approved": True,
+        "bastion_verified": True,
+        "offline_transfer": True,
+    }
+    with pytest.raises(SecurityInstallAcceptanceError, match="multiple supply-chain evidence modes"):
+        _accept(tmp_path, evidence, payload)

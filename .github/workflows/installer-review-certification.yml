@@ -42,7 +42,7 @@ jobs:
         run: |
           $setup = Resolve-Path ./dist-installer/Fieldora-5.4.0-Setup.exe
           $hashFile = Resolve-Path ./dist-installer/Fieldora-5.4.0-Setup.exe.sha256
-          $expected = ((Get-Content $hashFile -Raw) -split '\\s+')[0].Trim().ToLowerInvariant()
+          $expected = ((Get-Content $hashFile -Raw) -split '\s+')[0].Trim().ToLowerInvariant()
           $actual = (Get-FileHash -Algorithm SHA256 $setup).Hash.ToLowerInvariant()
           if ($actual -ne $expected) { throw "Installer SHA-256 mismatch." }
           if ((Get-Item $setup).Length -lt 1MB) { throw "Installer artifact is unexpectedly small." }

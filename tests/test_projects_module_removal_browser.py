@@ -34,6 +34,7 @@ from natureai_next.server.web_module_contracts import (
 
 _PROJECT_MODULES = {
     "projects.core",
+    "portfolio",
     "capacity",
     "research.dossiers",
     "dossiers.workspace",
@@ -120,6 +121,7 @@ def _replacement_projects_registry() -> WebModuleRegistry:
         (
             replacement if spec.module_id == "projects.core" else spec
             for spec in FOUNDATION_WEB_MODULES
+            if spec.module_id not in (_PROJECT_MODULES - {"portfolio"})
         ),
         application_providers=FOUNDATION_APPLICATION_CONTRACT_PROVIDERS,
     )

@@ -34,7 +34,6 @@ from natureai_next.server.web_module_contracts import (
 
 _PROJECT_MODULES = {
     "projects.core",
-    "portfolio",
     "capacity",
     "research.dossiers",
     "dossiers.workspace",

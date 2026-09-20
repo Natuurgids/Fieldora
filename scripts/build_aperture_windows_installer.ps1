@@ -339,8 +339,10 @@ Source: "$($ApplicationDist.Replace('\','\\'))\Fieldora.Maintenance\*"; DestDir:
 Source: "$($ApplicationDist.Replace('\','\\'))\Fieldora.Manuals\*"; DestDir: "{app}\Manuals"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "$($ApplicationDist.Replace('\','\\'))\Fieldora.Server\*"; DestDir: "{app}\Server"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "$($ApplicationDist.Replace('\','\\'))\Fieldora.Worker\*"; DestDir: "{app}\Worker"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "$($ApplicationDist.Replace('\','\\'))\Fieldora.Updater\*"; DestDir: "{app}\Updater"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "$($ApplicationDist.Replace('\','\\'))\Fieldora.Recovery\*"; DestDir: "{app}\Recovery"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "$($ApplicationDist.Replace('\','\\'))\Fieldora.Updater\*"; DestDir: "{app}\Updater"; Excludes: "Fieldora.Updater.exe"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "$($ApplicationDist.Replace('\','\\'))\Fieldora.Updater\Fieldora.Updater.exe"; DestDir: "{app}\Updater"; DestName: "Fieldora-Updater.exe"; Flags: ignoreversion
+Source: "$($ApplicationDist.Replace('\','\\'))\Fieldora.Recovery\*"; DestDir: "{app}\Recovery"; Excludes: "Fieldora.Recovery.exe"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "$($ApplicationDist.Replace('\','\\'))\Fieldora.Recovery\Fieldora.Recovery.exe"; DestDir: "{app}\Recovery"; DestName: "Fieldora-Recovery.exe"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\Fieldora"; Filename: "{app}\Fieldora\Fieldora.exe"; IconFilename: "{app}\Fieldora\Fieldora.exe"

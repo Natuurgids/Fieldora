@@ -292,8 +292,14 @@ Build-App -Name 'Fieldora.Recovery' -Wrapper (Join-Path $WrapperRoot 'recovery_l
 Write-Step 'Finding Inno Setup compiler'
 $isccCandidates = @(
     "$env:ProgramFiles(x86)\Inno Setup 6\ISCC.exe",
-    "$env:ProgramFiles\Inno Setup 6\ISCC.exe"
+    "$env:ProgramFiles\Inno Setup 6\ISCC.exe",
+    "$env:ProgramData\chocolatey\bin\iscc.exe",
+    "$env:ChocolateyInstall\bin\iscc.exe"
 )
+$isccCommand = Get-Command ISCC.exe -ErrorAction SilentlyContinue
+if ($isccCommand) {
+    $isccCandidates += $isccCommand.Source
+}
 $Iscc = $isccCandidates | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
 if (-not $Iscc) {
     Fail 'Inno Setup 6 was not found. Install it with: winget install --id JRSoftware.InnoSetup -e'

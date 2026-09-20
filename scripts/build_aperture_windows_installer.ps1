@@ -90,6 +90,7 @@ if ($BuildProfile -eq 'FullAI') {
 if (-not $SkipTests) {
     Write-Step 'Running practical automated tests'
     Invoke-Conda @('run', '--no-capture-output', '-n', $EnvironmentName, 'python', '-m', 'pip', 'install', '-e', '.[dev,server-postgresql]')
+    Invoke-Conda @('run', '--no-capture-output', '-n', $EnvironmentName, 'python', '-m', 'playwright', 'install', 'chromium', 'firefox', 'webkit')
     Invoke-Conda @('run', '--no-capture-output', '-n', $EnvironmentName, 'python', '-m', 'pytest', '-m', 'not performance')
 }
 

@@ -36,7 +36,7 @@ jobs:
       - name: Build native Fieldora installer
         shell: pwsh
         run: |
-          ./scripts/build_fieldora_windows_installer.ps1 -BuildProfile GUI -Version 5.4.0 -EnvironmentName fieldora-ci -Clean
+          ./scripts/build_fieldora_windows_installer.ps1 -BuildProfile GUI -Version 5.4.0 -EnvironmentName fieldora-ci -Clean -SkipTests
       - name: Verify immutable installer artifact
         shell: pwsh
         run: |

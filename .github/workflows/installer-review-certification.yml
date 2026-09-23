@@ -23,7 +23,7 @@ jobs:
     runs-on: windows-2025
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Install Miniconda and Inno Setup
         shell: pwsh
         run: |
@@ -77,7 +77,7 @@ jobs:
     name: Complete installer security and logging contract
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Parse complete installers
         shell: pwsh
         run: |
@@ -102,7 +102,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Run Linux Docker/server clean installer at exact PR head
         shell: bash
         env:

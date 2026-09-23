@@ -112,6 +112,7 @@ def test_dataset_install_is_pbac_gated_and_atomic(tmp_path: Path) -> None:
     )
     assert destination == tmp_path / "store" / "map_dataset" / "base" / "1"
     assert (destination / artifact.name).read_bytes() == artifact.read_bytes()
+    assert (destination / "payload" / "base.geojson").read_bytes() == b'{"type":"FeatureCollection","features":[]}'
     receipt = json.loads((destination / "FIELDORA-INSTALL.json").read_text())
     assert receipt["release_id"] == verified.release.release_id
     assert receipt["network"] == "offline"
@@ -253,3 +254,24 @@ def test_rejects_zip_special_file(tmp_path: Path) -> None:
     )
     with pytest.raises(DatasetTransferError, match="special file"):
         _verify_archive_payload(artifact, bound)
+
+
+def test_dataset_install_rolls_back_if_verified_extraction_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    artifact, evidence, signature, public = _transfer(tmp_path)
+    database = tmp_path / "access.sqlite3"
+    _allow_install(database)
+    from natureai_next.bootstrap import dataset_transfer_cli as module
+
+    def fail_extract(_artifact: Path, _destination: Path) -> None:
+        raise DatasetTransferError("forced extraction failure")
+
+    monkeypatch.setattr(module, "_extract_verified_archive", fail_extract)
+    store = tmp_path / "store"
+    with pytest.raises(DatasetTransferError, match="forced extraction failure"):
+        install_dataset_transfer(
+            artifact, evidence, signature, public, store,
+            security_install_subject="installer", access_control_database=database,
+        )
+    assert not (store / "map_dataset" / "base" / "1").exists()
+    parent = store / "map_dataset" / "base"
+    assert not parent.exists() or not list(parent.glob(".fieldora-dataset-*"))

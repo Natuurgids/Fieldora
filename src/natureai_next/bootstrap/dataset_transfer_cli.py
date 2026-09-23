@@ -263,6 +263,33 @@ def _verify_archive_payload(artifact_path: Path, verified: VerifiedDatasetTransf
         raise DatasetTransferError("dataset ZIP payload does not match signed Bastion payload binding")
 
 
+def _extract_verified_archive(artifact_path: Path, destination: Path) -> None:
+    """Extract a previously verified ZIP without trusting archive paths or metadata."""
+    try:
+        with ZipFile(artifact_path, "r") as archive:
+            for info in archive.infolist():
+                raw = info.filename.replace("\\\\", "/")
+                path = PurePosixPath(raw)
+                target = destination.joinpath(*path.parts)
+                if info.is_dir():
+                    target.mkdir(parents=True, exist_ok=True)
+                    continue
+                target.parent.mkdir(parents=True, exist_ok=True)
+                size = 0
+                with archive.open(info, "r") as source, target.open("xb") as output:
+                    for chunk in iter(lambda: source.read(1024 * 1024), b""):
+                        size += len(chunk)
+                        if size > info.file_size or size > _MAX_MEMBER_BYTES:
+                            raise DatasetTransferError("dataset ZIP member changed during extraction")
+                        output.write(chunk)
+                if size != info.file_size:
+                    raise DatasetTransferError("dataset ZIP member changed during extraction")
+    except DatasetTransferError:
+        raise
+    except (BadZipFile, OSError, RuntimeError, ValueError) as exc:
+        raise DatasetTransferError("dataset ZIP extraction failed") from exc
+
+
 def install_dataset_transfer(
     artifact_path: Path,
     evidence_path: Path,
@@ -309,6 +336,9 @@ def install_dataset_transfer(
         shutil.copyfile(artifact_path, staged_artifact, follow_symlinks=False)
         if file_sha256(staged_artifact) != file_sha256(artifact_path):
             raise DatasetTransferError("dataset artifact changed during install staging")
+        payload_dir = staging / "payload"
+        payload_dir.mkdir()
+        _extract_verified_archive(staged_artifact, payload_dir)
         (staging / "FIELDORA-INSTALL.json").write_text(
             json.dumps(
                 {

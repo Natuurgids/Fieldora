@@ -1,0 +1,130 @@
+name: Fieldora installer review certification
+
+on:
+  pull_request:
+    paths:
+      - "scripts/build_fieldora_windows_installer.ps1"
+      - "scripts/build_aperture_windows_installer.ps1"
+      - "Install-Fieldora-Clean-Linux.ps1"
+      - "Install-Fieldora-Clean.ps1"
+      - "Install-Fieldora-Complete-Windows.ps1"
+      - "Install-Fieldora-Complete-Linux.ps1"
+      - "Install-Fieldora-Bootstrap-Handoff.ps1"
+      - "Install-Fieldora-Offline-Model.ps1"
+      - ".github/workflows/installer-review-certification.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows-desktop-packaging-contract:
+    name: Windows native desktop build certification
+    runs-on: windows-2025
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install Miniconda and Inno Setup
+        shell: pwsh
+        run: |
+          choco install miniconda3 innosetup -y --no-progress
+          $conda = Get-ChildItem @("$env:USERPROFILE\\miniconda3\\Scripts\\conda.exe","C:\\tools\\miniconda3\\Scripts\\conda.exe","C:\\ProgramData\\miniconda3\\Scripts\\conda.exe") -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $conda) { throw 'Miniconda installation was not found.' }
+          $condaDir = Split-Path (Split-Path $conda.FullName -Parent) -Parent
+          Add-Content $env:GITHUB_PATH $condaDir
+          Add-Content $env:GITHUB_PATH (Join-Path $condaDir 'Scripts')
+      - name: Build native Fieldora installer
+        shell: pwsh
+        run: |
+          ./scripts/build_fieldora_windows_installer.ps1 -BuildProfile GUI -Version 5.4.0 -EnvironmentName fieldora-ci -Clean -SkipTests
+      - name: Verify immutable installer artifact
+        shell: pwsh
+        run: |
+          $setup = Resolve-Path ./dist-installer/Fieldora-5.4.0-Setup.exe
+          $hashFile = Resolve-Path ./dist-installer/Fieldora-5.4.0-Setup.exe.sha256
+          $expected = ((Get-Content $hashFile -Raw) -split '\s+')[0].Trim().ToLowerInvariant()
+          $actual = (Get-FileHash -Algorithm SHA256 $setup).Hash.ToLowerInvariant()
+          if ($actual -ne $expected) { throw "Installer SHA-256 mismatch." }
+          if ((Get-Item $setup).Length -lt 1MB) { throw "Installer artifact is unexpectedly small." }
+      - name: Silent install and uninstall smoke test
+        shell: pwsh
+        run: |
+          $setup = (Resolve-Path ./dist-installer/Fieldora-5.4.0-Setup.exe).Path
+          $install = Join-Path $env:RUNNER_TEMP 'FieldoraDesktop'
+          $proc = Start-Process -FilePath $setup -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART',"/DIR=$install") -Wait -PassThru
+          if ($proc.ExitCode -ne 0) { throw "Installer exited $($proc.ExitCode)." }
+          foreach ($exe in @('Fieldora.exe','Fieldora-Updater.exe','Fieldora-Recovery.exe')) {
+            if (-not (Get-ChildItem -Path $install -Filter $exe -Recurse -File -ErrorAction SilentlyContinue)) { throw "Installed application missing $exe." }
+          }
+          $uninstaller = Get-ChildItem -Path $install -Filter 'unins*.exe' -File | Select-Object -First 1
+          if (-not $uninstaller) { throw 'Uninstaller was not installed.' }
+          $proc = Start-Process -FilePath $uninstaller.FullName -ArgumentList @('/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART') -Wait -PassThru
+          if ($proc.ExitCode -ne 0) { throw "Uninstaller exited $($proc.ExitCode)." }
+          if (Test-Path -LiteralPath $install) {
+            $remaining = Get-ChildItem -LiteralPath $install -Force -ErrorAction SilentlyContinue
+            if ($remaining) { throw 'Uninstall left application files behind.' }
+          }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Fieldora-5.4.0-Windows
+          path: |
+            dist-installer/Fieldora-5.4.0-Setup.exe
+            dist-installer/Fieldora-5.4.0-Setup.exe.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+  complete-installer-security-contract:
+    name: Complete installer security and logging contract
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Parse complete installers
+        shell: pwsh
+        run: |
+          [void][scriptblock]::Create((Get-Content -LiteralPath ./Install-Fieldora-Complete-Windows.ps1 -Raw))
+          [void][scriptblock]::Create((Get-Content -LiteralPath ./Install-Fieldora-Complete-Linux.ps1 -Raw))
+      - name: Verify immutable refs and password-free transcript contract
+        shell: pwsh
+        run: |
+          $windows = Get-Content ./Install-Fieldora-Complete-Windows.ps1 -Raw
+          $linux = Get-Content ./Install-Fieldora-Complete-Linux.ps1 -Raw
+          foreach ($text in @($windows,$linux)) {
+            if ($text.Contains('$FieldoraRef = "security/native-update-trust-hardening"')) { throw 'Complete installer must not default to mutable Fieldora branch.' }
+            if ($text.Contains('$BastionRef = "main"')) { throw 'Complete installer must not default to mutable Bastion main.' }
+          }
+          if ($windows.Contains('Write-Host "Password: $AdminPassword"') -or $linux.Contains('Write-Host "Password: $AdminPassword"')) { throw 'Password console/log leak pattern found.' }
+          foreach ($needle in @('Start-Transcript','install-{0}.log','Stop-Transcript')) {
+            if (-not $windows.Contains($needle)) { throw "Windows sanitized logging contract missing: $needle" }
+          }
+
+  linux-docker-server-clean-install:
+    name: Linux Docker/server clean install
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Run Linux Docker/server clean installer at exact PR head
+        shell: bash
+        env:
+          FIELDORA_PR_HEAD: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/fieldora-linux-server-review"
+          printf 'CLEAN\n' | pwsh -NoLogo -NoProfile -File ./Install-Fieldora-Clean-Linux.ps1 -InstallRoot "$root" -FieldoraRef "$FIELDORA_PR_HEAD" -AdminPassword 'FieldoraReview-Only-2026!'
+      - name: Verify installed server runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/fieldora-linux-server-review"
+          test -f "$root/compose.yaml"
+          test -f "$root/service-trust/ca-certificate.pem"
+          test -f "$root/bootstrap-handoff/ADMIN-CREDENTIALS.txt"
+          docker compose -f "$root/compose.yaml" -f "$root/compose.override.yaml" ps
+          curl --fail --silent --show-error --cacert "$root/service-trust/ca-certificate.pem" https://127.0.0.1:8765/health/live >/dev/null
+          curl --fail --silent --show-error --cacert "$root/service-trust/ca-certificate.pem" https://127.0.0.1:8765/health/ready >/dev/null
+      - name: Capture failure diagnostics
+        if: failure()
+        shell: bash
+        run: |
+          root="$RUNNER_TEMP/fieldora-linux-server-review"
+          if [ -f "$root/compose.yaml" ]; then docker compose -f "$root/compose.yaml" -f "$root/compose.override.yaml" ps || true; docker compose -f "$root/compose.yaml" -f "$root/compose.override.yaml" logs --tail 200 || true; fi

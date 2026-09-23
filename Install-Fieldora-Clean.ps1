@@ -22,7 +22,8 @@ param(
     [string]$AdminUsername = "admin",
     [string]$AdminName = "Administrator",
     [string]$Organization = "local",
-    [string]$AdminPassword = ""
+    [string]$AdminPassword = "",
+    [string]$AdminPasswordFile = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -99,6 +100,11 @@ if ((Read-Host "Type CLEAN to continue").Trim().ToUpperInvariant() -ne "CLEAN") 
     exit 0
 }
 
+if ($AdminPassword -and $AdminPasswordFile) { throw "Use either AdminPassword or AdminPasswordFile, not both." }
+if ($AdminPasswordFile) {
+    if (-not (Test-Path -LiteralPath $AdminPasswordFile -PathType Leaf)) { throw "Administrator password file was not found." }
+    $AdminPassword = [IO.File]::ReadAllText($AdminPasswordFile).TrimEnd("`r","`n")
+}
 if ([string]::IsNullOrWhiteSpace($AdminPassword)) { $AdminPassword = New-Password }
 if ($AdminPassword.Length -lt 12) { throw "Administrator password must be at least 12 characters." }
 $PostgresPassword = New-Password
@@ -155,8 +161,9 @@ foreach ($p in @($InstallRoot,$SourceRoot,$PgDataRoot,$FieldoraData,$SecretsRoot
 
 Step "Downloading Fieldora source"
 $encodedRef = [Uri]::EscapeDataString($FieldoraRef)
-$zip = Join-Path $env:TEMP "fieldora-source.zip"
-$extract = Join-Path $env:TEMP "fieldora-source-extract"
+$tempRoot = [IO.Path]::GetTempPath()
+$zip = Join-Path $tempRoot "fieldora-source.zip"
+$extract = Join-Path $tempRoot "fieldora-source-extract"
 Remove-Item $zip -Force -ErrorAction SilentlyContinue
 Remove-Item $extract -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $extract | Out-Null
@@ -230,6 +237,7 @@ $dsns = @{
 }
 foreach ($k in $dsns.Keys) { Set-Content (Join-Path $SecretsRoot $k) -Encoding ascii -NoNewline -Value $dsns[$k] }
 Set-Content (Join-Path $SecretsRoot "postgres-password") -Encoding ascii -NoNewline -Value $PostgresPassword
+Set-Content (Join-Path $SecretsRoot "admin-bootstrap-password") -Encoding utf8NoBOM -NoNewline -Value $AdminPassword
 
 Step "Creating Docker Compose stack"
 $compose = @'
@@ -454,7 +462,8 @@ try {
     Assert-Exit "Fieldora image build failed"
 
     Step "Verifying staged-intake malware scanner"
-    & docker run --rm fieldora-v5-rocky:local sh -lc "command -v clamscan >/dev/null && clamscan --version >/dev/null && test -n \"`$(find /var/lib/clamav -maxdepth 1 -type f \\( -name '*.cvd' -o -name '*.cld' \\) -print -quit)\""
+    $clamavProbe = 'command -v clamscan >/dev/null && clamscan --version >/dev/null && find /var/lib/clamav -maxdepth 1 -type f \( -name ''*.cvd'' -o -name ''*.cld'' \) -print -quit | grep -q .'
+    & docker run --rm fieldora-v5-rocky:local sh -lc $clamavProbe
     Assert-Exit "Fieldora image does not contain a usable ClamAV scanner and signature database"
 
     $FieldoraUid = [int](Docker-Output { docker run --rm fieldora-v5-rocky:local id -u fieldora })
@@ -573,8 +582,10 @@ try {
     Assert-Exit "Certificate renewer activation failed"
 
     Step "Bootstrapping Fieldora administrator"
-    & docker compose run --rm --no-deps fieldora-server fieldora-server --data-root /var/lib/fieldora --access-backend postgresql --postgres-access-dsn-file /run/secrets/fieldora-access-dsn init-user --organization $Organization --name $AdminName --username $AdminUsername --password $AdminPassword
+    $AdminPasswordFile = Join-Path $SecretsRoot "admin-bootstrap-password"
+    & docker compose run --rm --no-deps -v "${AdminPasswordFile}:/run/secrets/admin-bootstrap-password:ro" fieldora-server fieldora-server --data-root /var/lib/fieldora --access-backend postgresql --postgres-access-dsn-file /run/secrets/fieldora-access-dsn init-user --organization $Organization --name $AdminName --username $AdminUsername --password-file /run/secrets/admin-bootstrap-password
     Assert-Exit "Administrator bootstrap failed"
+    Remove-Item -LiteralPath (Join-Path $SecretsRoot "admin-bootstrap-password") -Force
 
     Set-Content (Join-Path $InstallRoot "ADMIN-CREDENTIALS.txt") -Encoding utf8NoBOM -Value @"
 Fieldora local Docker administrator
@@ -669,7 +680,7 @@ Internal root CA: $TrustRoot\ca-certificate.pem
     Write-Host "Fieldora: https://127.0.0.1:8765"
     Write-Host "Docs:     https://127.0.0.1:8765/docs"
     Write-Host "User:     $AdminUsername"
-    Write-Host "Password: $AdminPassword"
+    Write-Host "Password: stored only in the protected credential handoff file (not written to console/log output)"
     Write-Host "Credentials: $InstallRoot\ADMIN-CREDENTIALS.txt"
     Write-Host "API service:       $ApiServiceId"
     Write-Host "Worker service:    $WorkerServiceId"

@@ -20,7 +20,10 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
 from natureai_next.application.security_install import require_security_install
-from natureai_next.domain.security_install import SecurityInstallAcceptanceError
+from natureai_next.domain.security_install import (
+    AuthenticatedReleaseContext,
+    SecurityInstallAcceptanceError,
+)
 
 _MODEL_EXTENSIONS = {".safetensors", ".onnx", ".gguf"}
 _SUPPORT_EXTENSIONS = {
@@ -435,24 +438,64 @@ def _verify_security_install_archive(
         raise ModelBundleError("Security Install artifact must be a readable ZIP") from exc
 
 
+def _authenticated_manifest_release(
+    bundle_dir: Path,
+    verified: VerifiedModelBundle,
+) -> AuthenticatedReleaseContext:
+    """Derive release identity only from the already verified signed manifest."""
+    if not verified.signature_verified or not verified.signing_key_id:
+        raise ModelBundleError(
+            "model installation requires a manifest authenticated by a trusted signing key"
+        )
+    manifest_path = bundle_dir.resolve() / "manifest.json"
+    manifest_bytes = manifest_path.read_bytes()
+    return AuthenticatedReleaseContext(
+        release_id=f"fieldora-model:{verified.model_id}:{verified.version}",
+        release_digest=hashlib.sha256(manifest_bytes).hexdigest(),
+        signer_key_id=verified.signing_key_id,
+    )
+
+
 def _require_model_security_install(
     evidence: Mapping[str, object],
     *,
     artifact_path: Path,
-    access_control_database: Path,
+    access_control_database: Path | None,
+    access_control_repository: object | None,
     subject_id: str,
     actual_target_version: str,
     verified: VerifiedModelBundle,
+    authenticated_release: AuthenticatedReleaseContext,
 ) -> None:
+    # Receiver-owned attestations are deliberately created only after Fieldora has
+    # independently verified the transferred ZIP and its trusted manifest signature.
+    # Bastion cannot assert that the receiving Fieldora instance accepted or verified it.
+    receiver_evidence = dict(evidence)
+    artifact_sha256 = _file_sha256(artifact_path)
+    receiver_evidence["transfer_receipt"] = {
+        "package_id": artifact_path.name,
+        "collector_id": "fieldora-offline-installer",
+        "expected_sha256": artifact_sha256,
+        "observed_sha256": artifact_sha256,
+        "status": "accepted",
+    }
+    receiver_evidence["independent_verification"] = {
+        "verified": True,
+        "package_id": artifact_path.name,
+        "release_digest": authenticated_release.release_digest,
+        "sha256": artifact_sha256,
+    }
     try:
         accepted = require_security_install(
-            evidence,
+            receiver_evidence,
             artifact_path=artifact_path,
             access_control_database=access_control_database,
+            access_control_repository=access_control_repository,
             subject_id=subject_id,
             expected_package_id=artifact_path.name,
             expected_target_component=f"fieldora-model:{verified.model_id}",
             actual_target_version=actual_target_version,
+            authenticated_release=authenticated_release,
         )
     except SecurityInstallAcceptanceError as exc:
         raise ModelBundleError(f"Security Install acceptance failed: {exc}") from exc
@@ -494,9 +537,11 @@ def install_model_bundle(
     *,
     security_install_artifact: Path,
     security_install_evidence: Mapping[str, object],
-    access_control_database: Path,
     security_install_subject: str,
     actual_target_version: str,
+    access_control_database: Path | None = None,
+    access_control_repository: object | None = None,
+    authenticated_release: AuthenticatedReleaseContext | None = None,
     max_total_bytes: int = _DEFAULT_MAX_BYTES,
     trusted_signing_key: Path | None = None,
     require_signature: bool = False,
@@ -509,14 +554,17 @@ def install_model_bundle(
         require_signature=require_signature,
         require_clean_scan=require_clean_scan,
     )
+    release_context = authenticated_release or _authenticated_manifest_release(bundle_dir, verified)
     _verify_security_install_archive(security_install_artifact, bundle_dir, verified)
     _require_model_security_install(
         security_install_evidence,
         artifact_path=security_install_artifact,
         access_control_database=access_control_database,
+        access_control_repository=access_control_repository,
         subject_id=security_install_subject,
         actual_target_version=actual_target_version,
         verified=verified,
+        authenticated_release=release_context,
     )
 
     destination = model_store / verified.model_id / verified.version
@@ -542,9 +590,11 @@ def install_model_bundle(
             security_install_evidence,
             artifact_path=security_install_artifact,
             access_control_database=access_control_database,
+            access_control_repository=access_control_repository,
             subject_id=security_install_subject,
             actual_target_version=actual_target_version,
             verified=verified,
+            authenticated_release=release_context,
         )
         if destination.exists():
             raise ModelBundleError(f"model version is already installed: {verified.artifact_storage_id}")
@@ -588,7 +638,9 @@ def _parser() -> argparse.ArgumentParser:
             command.add_argument("--store", type=Path, required=True)
             command.add_argument("--security-install-artifact", type=Path, required=True)
             command.add_argument("--security-install-evidence", type=Path, required=True)
-            command.add_argument("--access-control-database", type=Path, required=True)
+            access = command.add_mutually_exclusive_group(required=True)
+            access.add_argument("--access-control-database", type=Path)
+            access.add_argument("--postgres-access-dsn-file", type=Path)
             command.add_argument("--security-install-subject", required=True)
             command.add_argument("--actual-target-version", required=True)
     return parser
@@ -617,6 +669,27 @@ def main(argv: list[str] | None = None) -> int:
                 "malware_scan": verified.malware_scan,
             }
         else:
+            access_repository = None
+            if args.postgres_access_dsn_file is not None:
+                if (
+                    not args.postgres_access_dsn_file.is_file()
+                    or args.postgres_access_dsn_file.stat().st_size > 16_384
+                ):
+                    raise ModelBundleError("PostgreSQL access DSN file is invalid")
+                access_dsn = args.postgres_access_dsn_file.read_text(encoding="utf-8").strip()
+                if not access_dsn:
+                    raise ModelBundleError("PostgreSQL access DSN file is empty")
+                try:
+                    import psycopg
+                except ImportError as exc:
+                    raise ModelBundleError(
+                        "PostgreSQL Security Install requires the server-postgresql dependency"
+                    ) from exc
+                from natureai_next.server.postgres_access import PostgresAccessControlRepository
+
+                access_repository = PostgresAccessControlRepository(
+                    lambda: psycopg.connect(access_dsn, connect_timeout=10)
+                )
             verified, _destination = install_model_bundle(
                 args.bundle,
                 args.store,
@@ -625,6 +698,7 @@ def main(argv: list[str] | None = None) -> int:
                     args.security_install_evidence
                 ),
                 access_control_database=args.access_control_database,
+                access_control_repository=access_repository,
                 security_install_subject=args.security_install_subject,
                 actual_target_version=args.actual_target_version,
                 **kwargs,

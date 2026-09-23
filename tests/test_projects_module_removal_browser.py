@@ -121,6 +121,7 @@ def _replacement_projects_registry() -> WebModuleRegistry:
         (
             replacement if spec.module_id == "projects.core" else spec
             for spec in FOUNDATION_WEB_MODULES
+            if spec.module_id not in (_PROJECT_MODULES - {"projects.core", "portfolio"})
         ),
         application_providers=FOUNDATION_APPLICATION_CONTRACT_PROVIDERS,
     )
@@ -360,9 +361,9 @@ def test_replacement_projects_provider_drives_unchanged_portfolio_consumer(
             ) == "projects.replacement"
         assert page.evaluate("FieldoraModuleContracts.unresolved('portfolio')") == []
 
-        page.locator('.nav[data-page="projects"]').click()
+        page.evaluate("showPage('projects')")
         page.wait_for_selector("#page-projects:not([hidden])")
-        page.evaluate("FieldoraPortfolio.mount()")
+        assert page.evaluate("FieldoraModules.activate('/portfolio')?.module_id") == "portfolio"
         replacement = page.locator(
             '#portfolio-list [data-portfolio-id="replacement-1"][data-kind="project"]'
         )

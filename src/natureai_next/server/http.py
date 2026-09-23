@@ -272,6 +272,34 @@ def handler_for(
     return Handler
 
 
+
+def create_server(
+    application: FieldoraApi,
+    host: str,
+    port: int,
+    *,
+    certificate: Path | None = None,
+    private_key: Path | None = None,
+    web_module_registry: WebModuleRegistry | None = None,
+) -> ThreadingHTTPServer:
+    """Create the configured HTTP/TLS server without entering its serve loop."""
+    if (certificate is None) != (private_key is None):
+        raise ValueError("TLS certificate and private key must be configured together")
+    handler = handler_for(
+        application,
+        tls_enabled=certificate is not None,
+        web_module_registry=web_module_registry,
+    )
+    if certificate is not None and private_key is not None:
+        server: ThreadingHTTPServer = ReloadingTLSServer(
+            (host, port), handler, certificate, private_key
+        )
+    else:
+        server = ThreadingHTTPServer((host, port), handler)
+    server.daemon_threads = True
+    server.timeout = 0.5
+    return server
+
 def serve(
     application: FieldoraApi,
     host: str,
@@ -289,19 +317,14 @@ def serve(
     if not 0 <= shutdown_grace_seconds <= 300:
         raise ValueError("shutdown grace period must be between 0 and 300 seconds")
 
-    handler = handler_for(
+    server = create_server(
         application,
-        tls_enabled=certificate is not None,
+        host,
+        port,
+        certificate=certificate,
+        private_key=private_key,
         web_module_registry=web_module_registry,
     )
-    if certificate is not None and private_key is not None:
-        server: ThreadingHTTPServer = ReloadingTLSServer(
-            (host, port), handler, certificate, private_key
-        )
-    else:
-        server = ThreadingHTTPServer((host, port), handler)
-    server.daemon_threads = True
-    server.timeout = 0.5
 
     shutdown = ShutdownCoordinator(() if on_shutdown is None else (on_shutdown,))
     with shutdown.installed():

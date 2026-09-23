@@ -46,7 +46,7 @@ function Resolve-Conda {
 function Invoke-Conda([string[]]$Arguments) {
     & $script:Conda @Arguments
     if ($LASTEXITCODE -ne 0) {
-        Fail "conda command failed with exit code $LASTEXITCODE: conda $($Arguments -join ' ')"
+        Fail "conda command failed with exit code ${LASTEXITCODE}: conda $($Arguments -join ' ')"
     }
 }
 
@@ -89,7 +89,8 @@ if ($BuildProfile -eq 'FullAI') {
 
 if (-not $SkipTests) {
     Write-Step 'Running practical automated tests'
-    Invoke-Conda @('run', '--no-capture-output', '-n', $EnvironmentName, 'python', '-m', 'pip', 'install', '-e', '.[dev]')
+    Invoke-Conda @('run', '--no-capture-output', '-n', $EnvironmentName, 'python', '-m', 'pip', 'install', '-e', '.[dev,server-postgresql]')
+    Invoke-Conda @('run', '--no-capture-output', '-n', $EnvironmentName, 'python', '-m', 'playwright', 'install', 'chromium', 'firefox', 'webkit')
     Invoke-Conda @('run', '--no-capture-output', '-n', $EnvironmentName, 'python', '-m', 'pytest', '-m', 'not performance')
 }
 
@@ -291,8 +292,14 @@ Build-App -Name 'Fieldora.Recovery' -Wrapper (Join-Path $WrapperRoot 'recovery_l
 Write-Step 'Finding Inno Setup compiler'
 $isccCandidates = @(
     "$env:ProgramFiles(x86)\Inno Setup 6\ISCC.exe",
-    "$env:ProgramFiles\Inno Setup 6\ISCC.exe"
+    "$env:ProgramFiles\Inno Setup 6\ISCC.exe",
+    "$env:ProgramData\chocolatey\bin\iscc.exe",
+    "$env:ChocolateyInstall\bin\iscc.exe"
 )
+$isccCommand = Get-Command ISCC.exe -ErrorAction SilentlyContinue
+if ($isccCommand) {
+    $isccCandidates += $isccCommand.Source
+}
 $Iscc = $isccCandidates | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
 if (-not $Iscc) {
     Fail 'Inno Setup 6 was not found. Install it with: winget install --id JRSoftware.InnoSetup -e'
@@ -332,8 +339,10 @@ Source: "$($ApplicationDist.Replace('\','\\'))\Fieldora.Maintenance\*"; DestDir:
 Source: "$($ApplicationDist.Replace('\','\\'))\Fieldora.Manuals\*"; DestDir: "{app}\Manuals"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "$($ApplicationDist.Replace('\','\\'))\Fieldora.Server\*"; DestDir: "{app}\Server"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "$($ApplicationDist.Replace('\','\\'))\Fieldora.Worker\*"; DestDir: "{app}\Worker"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "$($ApplicationDist.Replace('\','\\'))\Fieldora.Updater\*"; DestDir: "{app}\Updater"; Flags: ignoreversion recursesubdirs createallsubdirs
-Source: "$($ApplicationDist.Replace('\','\\'))\Fieldora.Recovery\*"; DestDir: "{app}\Recovery"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "$($ApplicationDist.Replace('\','\\'))\Fieldora.Updater\*"; DestDir: "{app}\Updater"; Excludes: "Fieldora.Updater.exe"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "$($ApplicationDist.Replace('\','\\'))\Fieldora.Updater\Fieldora.Updater.exe"; DestDir: "{app}\Updater"; DestName: "Fieldora-Updater.exe"; Flags: ignoreversion
+Source: "$($ApplicationDist.Replace('\','\\'))\Fieldora.Recovery\*"; DestDir: "{app}\Recovery"; Excludes: "Fieldora.Recovery.exe"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "$($ApplicationDist.Replace('\','\\'))\Fieldora.Recovery\Fieldora.Recovery.exe"; DestDir: "{app}\Recovery"; DestName: "Fieldora-Recovery.exe"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\Fieldora"; Filename: "{app}\Fieldora\Fieldora.exe"; IconFilename: "{app}\Fieldora\Fieldora.exe"

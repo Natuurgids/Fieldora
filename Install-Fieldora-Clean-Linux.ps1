@@ -92,6 +92,19 @@ if ($dockerOs -ne "linux") { throw "Fieldora requires Linux containers." }
     $core = $core.Replace($windowsDocker, $linuxDocker)
     $core = $core.Replace('--node docker-desktop', '--node linux-docker')
 
+    # Linux bind mounts are created with host ownership that the non-root Fieldora
+    # account cannot safely assume. Keep application state in a Docker-managed named
+    # volume so Docker initializes it from the image's fieldora-owned /var/lib/fieldora.
+    $dataBindMarker = '      - ./fieldora-data:/var/lib/fieldora'
+    Require-Marker $core $dataBindMarker
+    $core = $core.Replace($dataBindMarker, '      - fieldora-data:/var/lib/fieldora')
+    $volumeMarker = "volumes:`n  fieldora-api-trust:"
+    Require-Marker $core $volumeMarker
+    $core = $core.Replace($volumeMarker, "volumes:`n  fieldora-data:`n    name: fieldora-data`n  fieldora-api-trust:")
+    $cleanupMarker = "foreach (`$volume in @(`n    `"fieldora-api-trust`","
+    Require-Marker $core $cleanupMarker
+    $core = $core.Replace($cleanupMarker, "foreach (`$volume in @(`n    `"fieldora-data`",`n    `"fieldora-api-trust`",")
+
     $trustStartMarker = '    Step "Trusting the local Fieldora HTTPS certificate for the current Windows user"'
     $trustEndMarker = '    Step "Starting complete Fieldora stack"'
     Require-Marker $core $trustStartMarker

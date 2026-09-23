@@ -6,8 +6,8 @@ separate FieldoraBastion tool containers without collapsing security domains.
 [CmdletBinding()]
 param(
     [string]$InstallRoot = "D:\FDTEST",
-    [string]$FieldoraRef = "0074a2967e57988601e6d7e438e969f88a8a0f0f",
-    [string]$BastionRef = "d91923e4f5d743d199daaae822744d102f6d0da1",
+    [string]$FieldoraRef = "f0146218d736d4579f50f4f6444ff3fd90e47574",
+    [string]$BastionRef = "76163ab751630d2f1839dcad160cbd3276d82714",
     [string]$AdminUsername = "admin",
     [string]$AdminName = "Administrator",
     [string]$Organization = "local",

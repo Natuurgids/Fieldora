@@ -38,7 +38,9 @@ $RenewerServiceId = "fieldora-cert-renewer-local"
 $CertificateHours = 168
 $RenewBeforeHours = 48
 if ([string]::IsNullOrWhiteSpace($PublicHostname)) { throw "PublicHostname is required." }
-if ($PublicHostname -notmatch '^[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?
+if ($PublicHostname -notmatch '^[A-Za-z0-9](?:[A-Za-z0-9.-]{0,251}[A-Za-z0-9])?$') { throw "PublicHostname must be a DNS hostname." }
+$listenIp = $null
+if (-not [Net.IPAddress]::TryParse($ListenAddress,[ref]$listenIp)) { throw "ListenAddress must be a valid IP address." }
 function Step([string]$Text) {
     Write-Host ""
     Write-Host "============================================================" -ForegroundColor DarkCyan

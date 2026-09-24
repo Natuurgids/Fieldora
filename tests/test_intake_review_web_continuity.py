@@ -86,3 +86,36 @@ def test_system_health_is_separate_from_governance_workspace() -> None:
     assert 'legacyRefresh.remove()' in script
     assert 'page==="system-health"' in script
     assert '["system-health","System health"]' in script
+
+
+def test_desktop_sidebar_preserves_whiteboards_destination() -> None:
+    from natureai_next.server.desktop_alignment_web import (
+        patch_desktop_alignment_web_response,
+    )
+    from natureai_next.server.excalidraw_web import ExcalidrawWebMixin
+
+    html = ApiResponse(200, b"<nav></nav>", "text/html")
+    shell = ExcalidrawWebMixin._excalidraw_shell_link(html).body.decode("utf-8")
+    assert 'id="whiteboards-link"' in shell
+    assert 'data-fieldora-external-route="/whiteboards/"' in shell
+
+    response = patch_desktop_alignment_web_response(
+        "/app.js",
+        ApiResponse(200, b"const fieldora=true;", "application/javascript"),
+    )
+    script = response.body.decode("utf-8")
+    assert 'document.getElementById("whiteboards-link")' in script
+    assert "sidebar.appendChild(whiteboards)" in script
+
+
+def test_whiteboards_uses_canonical_project_context() -> None:
+    from natureai_next.server.excalidraw_web import ExcalidrawWebMixin
+
+    response = ExcalidrawWebMixin._excalidraw_shell_script(
+        ApiResponse(200, b"", "application/javascript")
+    )
+    script = response.body.decode("utf-8")
+    assert 'resolve?.("projects.context.select")' in script
+    assert "projectContext?.current?.()" in script
+    assert "selectedProject" not in script
+    assert "projects[0]" not in script

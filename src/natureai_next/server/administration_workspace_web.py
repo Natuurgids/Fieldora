@@ -61,12 +61,12 @@ _ADMINISTRATION_WORKSPACE_PATCH = bytes(
  };
 
  const groups=[
-  ["Governance & review",["administration","audit","intake-review","reference"]],
+  ["Governance & review",["administration","audit","reference"]],
   ["Integrations",["connectors"]],
   ["Platform services",["aiadmin","operator","platform"]],
  ];
  const groupedTargets=new Set(groups.flatMap(([,targets])=>targets));
- const adminPages=["administration","audit","intake-review","aiadmin","reference","connectors","operator","platform"];
+ const adminPages=["administration","audit","aiadmin","reference","connectors","operator","platform"];
  const existingAdminNav=governance?.querySelector(".workspace-subnav");
  if(auditPage&&existingAdminNav&&!auditPage.querySelector(".workspace-subnav")){
   const cloned=existingAdminNav.cloneNode(true);

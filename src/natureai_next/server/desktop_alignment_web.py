@@ -45,11 +45,11 @@ _DESKTOP_ALIGNMENT_PATCH = bytes(
   ["research","Research records"],
   ["dossiers","Dossiers"],
   ["capacity","Capacity"],
+  ["intake-review","Intake & Expert Review"],
  ];
  const adminPages=[
   ["administration","Governance"],
   ["operations","Assets & Facilities"],
-  ["intake-review","Intake & Review"],
   ["aiadmin","AI Platform"],
   ["reference","Reference Data"],
   ["connectors","Connectors"],

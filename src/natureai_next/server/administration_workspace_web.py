@@ -66,6 +66,8 @@ _ADMINISTRATION_WORKSPACE_PATCH = bytes(
   ["Platform services",["aiadmin","operator","platform"]],
  ];
  const groupedTargets=new Set(groups.flatMap(([,targets])=>targets));
+ /* Facilities is a first-class workspace and must never be folded into Administration extensions. */
+ groupedTargets.add("operations");
  const adminPages=["administration","audit","aiadmin","reference","connectors","operator","platform"];
  const existingAdminNav=governance?.querySelector(".workspace-subnav");
  if(auditPage&&existingAdminNav&&!auditPage.querySelector(".workspace-subnav")){

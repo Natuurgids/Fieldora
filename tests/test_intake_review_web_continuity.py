@@ -64,3 +64,25 @@ def test_intake_review_is_owned_by_research_workspace_navigation() -> None:
     administration = script.split("const adminPages=[", 1)[1].split("];", 1)[0]
     assert '["intake-review","Intake & Expert Review"]' in research
     assert '"intake-review"' not in administration
+
+
+def test_system_health_is_separate_from_governance_workspace() -> None:
+    from natureai_next.server.administration_workspace_web import (
+        patch_administration_workspace_web_response,
+    )
+    from natureai_next.server.desktop_alignment_web import (
+        patch_desktop_alignment_web_response,
+    )
+
+    response = patch_administration_workspace_web_response(
+        "/app.js",
+        ApiResponse(200, b"const fieldora=true;", "application/javascript"),
+    )
+    response = patch_desktop_alignment_web_response("/app.js", response)
+    script = response.body.decode("utf-8")
+
+    assert 'healthPage.id="page-system-health"' in script
+    assert "healthPage.appendChild(runtimeCard)" in script
+    assert 'legacyRefresh.remove()' in script
+    assert 'page==="system-health"' in script
+    assert '["system-health","System health"]' in script

@@ -61,3 +61,22 @@ def test_folder_submission_id_is_saved_before_upload_and_never_recreated_on_refr
     assert refresh in script
     assert "rememberBackgroundImport(sid,{state:created.submission.state" in script
     assert "encodeURIComponent(submissionId)" in script
+
+
+def test_folder_upload_uses_bounded_hash_and_blob_chunks() -> None:
+    script = _patched_app()
+
+    assert 'typeof window.fieldoraBoundedSha256==="function"' in script
+    assert "window.fieldoraBoundedSha256(file)" in script
+    assert "body:file.slice(start,end)" in script
+    assert "{bytes,hash}=await digestFileForFolder(file)" not in script
+    assert "body:bytes.slice(start,end)" not in script
+
+
+def test_network_disconnect_is_recoverable_not_false_failure() -> None:
+    script = _patched_app()
+
+    assert "NETWORK_ERROR_PATTERN" in script
+    assert 'state:"connection-lost"' in script
+    assert "remains recoverable" in script
+    assert "Refresh it after connectivity returns" in script

@@ -112,7 +112,9 @@ def test_dead_knowledge_pseudo_tabs_are_removed_and_survivors_have_action_contra
 
         inventory = page.evaluate("window.__fieldoraAuditVisibleButtons()")
         assert inventory
-        assert all(item["contract"] for item in inventory), inventory\n        assert next(item for item in inventory if item["text"] == "Schedules")["contract"] == "delegated:button[data-capacity-view]"\n        assert next(item for item in inventory if item["text"] == "Register absence")["contract"] == "delegated:button[data-capacity-availability-create]"
+        assert all(item["contract"] for item in inventory), inventory
+        assert next(item for item in inventory if item["text"] == "Schedules")["contract"] == "delegated:button[data-capacity-view]"
+        assert next(item for item in inventory if item["text"] == "Register absence")["contract"] == "delegated:button[data-capacity-availability-create]"
         assert next(item for item in inventory if item["id"] == "direct-control")[
             "contract"
         ] == "direct-handler"

@@ -7,7 +7,7 @@ separate FieldoraBastion tool containers without collapsing security domains.
 param(
     [string]$InstallRoot = "",
     [switch]$NonInteractive,
-    [string]$FieldoraRef = "f0146218d736d4579f50f4f6444ff3fd90e47574",
+    [string]$FieldoraRef = "df67f6fffe56fc87540e4b8fa2fa6c46ad95b455",
     [string]$BastionRef = "76163ab751630d2f1839dcad160cbd3276d82714",
     [string]$AdminUsername = "admin",
     [string]$AdminName = "Administrator",

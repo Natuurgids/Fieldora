@@ -50,7 +50,7 @@ _ADMINISTRATION_WORKSPACE_PATCH = bytes(
  /* Governance must not implicitly fetch Audit. The Audit workspace invokes the
     already-governed /api/v1/audit contract only when that destination is opened. */
  if(typeof loadAdministration==="function"){
-  loadAdministration=async function(){await Promise.all([loadRuntime(),loadContracts("contracts")])};
+  loadAdministration=async function(){await loadContracts("contracts")};
  }
  const administrationShowPage=showPage;
  showPage=function(page){

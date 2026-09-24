@@ -59,8 +59,9 @@ if (-not (Get-Command docker -ErrorAction SilentlyContinue)) { throw "Docker CLI
 & docker compose version *> $null; Assert-Exit "Docker Compose v2 is unavailable"
 $os = (& docker info --format '{{.OSType}}').Trim(); Assert-Exit "Unable to determine Docker container mode"; if ($os -ne 'linux') { throw "Docker Desktop must be using Linux containers; detected '$os'." }
 $InstallRoot = [IO.Path]::GetFullPath($InstallRoot); $BastionRoot = Join-Path $InstallRoot "bastion"
-$logRoot = Join-Path $InstallRoot "logs"; New-Item -ItemType Directory -Force -Path $logRoot | Out-Null
-$installLog = Join-Path $logRoot ("install-{0}.log" -f (Get-Date -Format "yyyyMMdd-HHmmss"))
+$logName = "install-{0}.log" -f (Get-Date -Format "yyyyMMdd-HHmmss")
+$tempLogRoot = Join-Path ([IO.Path]::GetTempPath()) "Fieldora-Installer-Logs"; New-Item -ItemType Directory -Force -Path $tempLogRoot | Out-Null
+$installLog = Join-Path $tempLogRoot $logName
 Start-Transcript -LiteralPath $installLog -Force | Out-Null
 Write-Host "Fieldora Complete Windows Docker Installer" -ForegroundColor Green
 Write-Host "Fieldora : Natuurgids/Fieldora@$FieldoraRef"; Write-Host "Bastion  : Natuurgids/FieldoraBastion@$BastionRef"; Write-Host "Root     : $InstallRoot"
@@ -121,4 +122,4 @@ try {
     Write-Host "FieldoraBastion root : $BastionRoot" -ForegroundColor Green
     Write-Host "Bastion scanner and bundle-builder are hardened on-demand tool containers; they are built but not left running as idle services." -ForegroundColor Green
     Write-Host "Bootstrap credentials: $(Join-Path $InstallRoot 'bootstrap-handoff\ADMIN-CREDENTIALS.txt')" -ForegroundColor Yellow
-} finally { Remove-Item -LiteralPath $core -Force -ErrorAction SilentlyContinue; Remove-Item -LiteralPath $handoff -Force -ErrorAction SilentlyContinue; Remove-Item -LiteralPath $cleanInput -Force -ErrorAction SilentlyContinue; if ($ownedPasswordFile) { Remove-Item -LiteralPath $ownedPasswordFile -Force -ErrorAction SilentlyContinue }; try { Stop-Transcript | Out-Null } catch {} ; Write-Host "Sanitized installation log: $installLog" -ForegroundColor Green }
+} finally { Remove-Item -LiteralPath $core -Force -ErrorAction SilentlyContinue; Remove-Item -LiteralPath $handoff -Force -ErrorAction SilentlyContinue; Remove-Item -LiteralPath $cleanInput -Force -ErrorAction SilentlyContinue; if ($ownedPasswordFile) { Remove-Item -LiteralPath $ownedPasswordFile -Force -ErrorAction SilentlyContinue }; try { Stop-Transcript | Out-Null } catch {}; $finalLog = $installLog; if (Test-Path -LiteralPath $InstallRoot) { $finalLogRoot = Join-Path $InstallRoot 'logs'; New-Item -ItemType Directory -Force -Path $finalLogRoot | Out-Null; $finalLog = Join-Path $finalLogRoot $logName; Copy-Item -LiteralPath $installLog -Destination $finalLog -Force; Remove-Item -LiteralPath $installLog -Force -ErrorAction SilentlyContinue }; Write-Host "Sanitized installation log: $finalLog" -ForegroundColor Green }

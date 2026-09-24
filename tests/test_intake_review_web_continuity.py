@@ -24,7 +24,7 @@ def test_intake_review_patch_connects_submission_to_review_and_acceptance() -> N
     assert 'byId("review-accept").click()' in script
 
 
-def test_intake_review_refreshes_real_lists_when_administration_subnav_opens() -> None:
+def test_intake_review_refreshes_real_lists_when_research_subnav_opens() -> None:
     script = _script()
 
     assert 'api("/api/v1/submissions?limit=100")' in script
@@ -49,3 +49,18 @@ def test_review_selection_loads_determinations_and_keeps_case_selected() -> None
 def test_intake_review_patch_only_changes_the_app_bundle() -> None:
     untouched = ApiResponse.json(200, {"ok": True})
     assert patch_intake_review_web_response("/api/v1/me", untouched) is untouched
+
+
+def test_intake_review_is_owned_by_research_workspace_navigation() -> None:
+    from natureai_next.server.desktop_alignment_web import patch_desktop_alignment_response
+
+    response = patch_desktop_alignment_response(
+        "/app.js",
+        ApiResponse(200, b"const fieldora=true;", "application/javascript"),
+    )
+    script = response.body.decode("utf-8")
+
+    research = script.split("const researchPages=[", 1)[1].split("];", 1)[0]
+    administration = script.split("const adminPages=[", 1)[1].split("];", 1)[0]
+    assert '["intake-review","Intake & Expert Review"]' in research
+    assert '"intake-review"' not in administration

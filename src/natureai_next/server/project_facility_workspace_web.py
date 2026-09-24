@@ -57,15 +57,9 @@ _PROJECT_FACILITY_WORKSPACE_PATCH = bytes(
  const facilityNav=document.querySelector('.sidebar .nav[data-page="operations"]');
  if(facilityNav){
   facilityNav.innerHTML='<span class="nav-icon">⌂</span>Facilities';
-  const platformHeading=[...document.querySelectorAll(".sidebar *")].find(node=>node.textContent?.trim()==="PLATFORM MANAGEMENT");
-  if(platformHeading){
-   let scienceHeading=[...document.querySelectorAll(".sidebar *")].find(node=>node.textContent?.trim()==="SCIENCE WORKSPACE");
-   const navHost=facilityNav.parentElement;
-   const adminNav=navHost?.querySelector('.nav[data-page="administration"]');
-   if(adminNav&&facilityNav.compareDocumentPosition(adminNav)&Node.DOCUMENT_POSITION_FOLLOWING){
-    navHost.insertBefore(facilityNav,platformHeading);
-   }
-  }
+  /* Sidebar composition is owned by desktop_alignment_web.  Keep this adapter
+     limited to Facilities naming and content; cross-workspace DOM placement
+     here made ordering depend on patch execution order. */
  }
  const facilityTop=facilityPage?.querySelector(".top h1");if(facilityTop)facilityTop.textContent="Facilities";
  facilityPage?.querySelectorAll(".workspace-subnav [data-workspace-target]").forEach(button=>button.remove());

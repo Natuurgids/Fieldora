@@ -608,10 +608,19 @@ Internal root CA: $TrustRoot\ca-certificate.pem
 
     Step "Trusting the local Fieldora HTTPS certificate for the current Windows user"
     try {
-        $existing = Get-ChildItem Cert:\CurrentUser\Root | Where-Object { $_.Subject -eq "CN=Fieldora Internal Service CA - $Organization" }
-        foreach ($certificate in $existing) { Remove-Item -LiteralPath $certificate.PSPath -Force }
-        Import-Certificate -FilePath (Join-Path $TrustRoot "ca-certificate.pem") -CertStoreLocation Cert:\CurrentUser\Root | Out-Null
-        Write-Host "Fieldora internal root CA trusted for CurrentUser." -ForegroundColor Green
+        $caPem = Join-Path $TrustRoot "ca-certificate.pem"
+        $caDer = Join-Path $TrustRoot "ca-certificate.cer"
+        $caCertificate = [Security.Cryptography.X509Certificates.X509Certificate2]::CreateFromPemFile($caPem)
+        [IO.File]::WriteAllBytes($caDer, $caCertificate.Export([Security.Cryptography.X509Certificates.X509ContentType]::Cert))
+        $thumbprint = $caCertificate.Thumbprint
+        $existing = Get-ChildItem Cert:\CurrentUser\Root | Where-Object { $_.Thumbprint -eq $thumbprint }
+        if (-not $existing) {
+            & certutil.exe -user -addstore -f Root $caDer *> $null
+            Assert-Exit "Windows rejected the Fieldora root CA"
+        }
+        $trusted = Get-ChildItem Cert:\CurrentUser\Root | Where-Object { $_.Thumbprint -eq $thumbprint }
+        if (-not $trusted) { throw "Fieldora root CA was not present in CurrentUser Root after installation." }
+        Write-Host "Fieldora internal root CA trusted for CurrentUser ($thumbprint)." -ForegroundColor Green
     } catch {
         Write-Warning "Could not add the Fieldora CA to CurrentUser trust. The server still uses TLS; your browser may require manual trust. $($_.Exception.Message)"
     }

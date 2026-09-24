@@ -74,6 +74,23 @@ def test_facilities_are_promoted_to_first_class_sidebar_workspace() -> None:
     assert 'data-page="operations"' in text
     assert ">Facilities<" in text
     assert 'facilityTop.textContent="Facilities"' in text
-    assert '"PLATFORM MANAGEMENT"' in text
-    assert 'insertBefore(facilityNav,platformHeading)' in text
+    assert "insertBefore(facilityNav" not in text
     assert 'querySelectorAll(".workspace-subnav [data-workspace-target]")' in text
+
+
+def test_desktop_shell_owns_facilities_science_navigation() -> None:
+    from natureai_next.server.desktop_alignment_web import (
+        patch_desktop_alignment_web_response,
+    )
+
+    response = patch_desktop_alignment_web_response(
+        "/app.js",
+        ApiResponse(200, b"const fieldora=true;", "application/javascript"),
+    )
+    script = response.body.decode("utf-8")
+    main = script.split("const desktopMain=[", 1)[1].split("];", 1)[0]
+    administration = script.split("const adminPages=[", 1)[1].split("];", 1)[0]
+
+    assert '["operations","⌂","Facilities"]' in main
+    assert '"operations"' not in administration
+    assert "desktopMain.slice(0,6)" in script

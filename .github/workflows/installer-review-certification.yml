@@ -85,11 +85,25 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Parse complete installers
+      - name: Parse complete and core installers
         shell: pwsh
         run: |
-          [void][scriptblock]::Create((Get-Content -LiteralPath ./Install-Fieldora-Complete-Windows.ps1 -Raw))
-          [void][scriptblock]::Create((Get-Content -LiteralPath ./Install-Fieldora-Complete-Linux.ps1 -Raw))
+          foreach ($path in @(
+            './Install-Fieldora-Clean.ps1',
+            './Install-Fieldora-Clean-Linux.ps1',
+            './Install-Fieldora-Complete-Windows.ps1',
+            './Install-Fieldora-Complete-Linux.ps1'
+          )) {
+            [void][scriptblock]::Create((Get-Content -LiteralPath $path -Raw))
+          }
+      - name: Verify clean installer is singular
+        shell: pwsh
+        run: |
+          $core = Get-Content ./Install-Fieldora-Clean.ps1 -Raw
+          foreach ($needle in @('function Step(', 'FIELDORA CLEAN INSTALL PASSED', 'PublicHostname -notmatch')) {
+            $count = ([regex]::Matches($core, [regex]::Escape($needle))).Count
+            if ($count -ne 1) { throw "Clean installer must contain exactly one '$needle' marker; found $count." }
+          }
       - name: Verify immutable refs and password-free transcript contract
         shell: pwsh
         run: |

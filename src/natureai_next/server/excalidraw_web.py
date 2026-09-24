@@ -80,8 +80,9 @@ class ExcalidrawWebMixin:
         if marker not in text or 'id="whiteboards-link"' in text:
             return response
         link = (
-            '<a class="nav" id="whiteboards-link" href="/whiteboards/">'
-            '<span class="nav-icon">✎</span>Whiteboards</a>'
+            '<button class="nav" id="whiteboards-link" type="button" '
+            'data-fieldora-external-route="/whiteboards/">'
+            '<span class="nav-icon">✎</span>Whiteboards</button>'
         )
         text = text.replace(marker, f"{link}{marker}", 1)
         return ApiResponse(response.status, text.encode("utf-8"), response.content_type, response.headers)
@@ -95,7 +96,8 @@ document.addEventListener("click",event=>{
   const link=event.target.closest?.("#whiteboards-link");
   if(!link)return;
   event.preventDefault();
-  const projectId=selectedProject||(projects[0]?.id||"");
+  const projectContext=window.FieldoraModuleContracts?.resolve?.("projects.context.select");
+  const projectId=projectContext?.current?.()||"";
   if(!projectId){window.alert("Create or select a Fieldora project before opening a whiteboard.");return;}
   window.location.assign(`/whiteboards/?project_id=${encodeURIComponent(projectId)}`);
 });

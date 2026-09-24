@@ -5,7 +5,8 @@ separate FieldoraBastion tool containers without collapsing security domains.
 #>
 [CmdletBinding()]
 param(
-    [string]$InstallRoot = "D:\FDTEST",
+    [string]$InstallRoot = "",
+    [switch]$NonInteractive,
     [string]$FieldoraRef = "f0146218d736d4579f50f4f6444ff3fd90e47574",
     [string]$BastionRef = "76163ab751630d2f1839dcad160cbd3276d82714",
     [string]$AdminUsername = "admin",
@@ -51,6 +52,20 @@ function Download-Archive([string]$Repository,[string]$Ref,[string]$Destination)
         Remove-Item -LiteralPath $Destination -Recurse -Force -ErrorAction SilentlyContinue; New-Item -ItemType Directory -Force -Path $Destination | Out-Null
         Get-ChildItem -LiteralPath $source.FullName -Force | ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination $Destination -Recurse -Force }
     } finally { Remove-Item -LiteralPath $zip -Force -ErrorAction SilentlyContinue; Remove-Item -LiteralPath $extract -Recurse -Force -ErrorAction SilentlyContinue }
+}
+if ([string]::IsNullOrWhiteSpace($InstallRoot)) {
+    if ($NonInteractive) { throw "-InstallRoot is required with -NonInteractive." }
+    $defaultRoot = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'Fieldora'
+    $chosen = Read-Host "Installation directory [$defaultRoot]"
+    $InstallRoot = if ([string]::IsNullOrWhiteSpace($chosen)) { $defaultRoot } else { $chosen.Trim().Trim('"') }
+}
+$InstallRoot = [IO.Path]::GetFullPath($InstallRoot)
+$rootPath = [IO.Path]::GetPathRoot($InstallRoot).TrimEnd('\')
+if ($InstallRoot.TrimEnd('\').Equals($rootPath,[StringComparison]::OrdinalIgnoreCase)) { throw 'Refusing to install directly into a drive root.' }
+if (Test-Path -LiteralPath $InstallRoot) {
+    $entries = @(Get-ChildItem -LiteralPath $InstallRoot -Force -ErrorAction Stop)
+    $isFieldora = (Test-Path -LiteralPath (Join-Path $InstallRoot 'compose.yaml')) -or (Test-Path -LiteralPath (Join-Path $InstallRoot 'service-trust'))
+    if ($entries.Count -gt 0 -and -not $isFieldora) { throw "Installation directory is not empty and is not an existing Fieldora installation: $InstallRoot" }
 }
 if (-not $IsWindows) { throw "Use the Linux complete installer on Linux hosts." }
 if ($PSVersionTable.PSVersion.Major -lt 7) { throw "PowerShell 7 or newer is required." }

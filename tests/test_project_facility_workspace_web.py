@@ -65,3 +65,15 @@ def test_project_facility_cockpit_only_patches_successful_app_javascript() -> No
 
     failed = ApiResponse(404, b"missing", "text/javascript")
     assert patch_project_facility_workspace_response("/app.js", failed) is failed
+
+
+def test_facilities_are_promoted_to_first_class_sidebar_workspace() -> None:
+    original = ApiResponse(200, b"const fieldora=true;", "text/javascript")
+    text = patch_project_facility_workspace_response("/app.js", original).body.decode("utf-8")
+
+    assert 'data-page="operations"' in text
+    assert ">Facilities<" in text
+    assert 'facilityTop.textContent="Facilities"' in text
+    assert '"PLATFORM MANAGEMENT"' in text
+    assert 'insertBefore(facilityNav,platformHeading)' in text
+    assert 'querySelectorAll(".workspace-subnav [data-workspace-target]")' in text

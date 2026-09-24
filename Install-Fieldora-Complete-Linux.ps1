@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([string]$InstallRoot="$HOME/fieldora-server",[string]$FieldoraRef="0074a2967e57988601e6d7e438e969f88a8a0f0f",[string]$BastionRef="d91923e4f5d743d199daaae822744d102f6d0da1",[string]$AdminUsername="admin",[string]$AdminName="Administrator",[string]$Organization="local",[string]$AdminPassword="")
+param([string]$InstallRoot="$HOME/fieldora-server",[string]$FieldoraRef="564c369dc9198604bfa79b4e3c5810e3cbbfff18",[string]$BastionRef="76163ab751630d2f1839dcad160cbd3276d82714",[string]$AdminUsername="admin",[string]$AdminName="Administrator",[string]$Organization="local",[string]$AdminPassword="")
 Set-StrictMode -Version Latest
 $ErrorActionPreference="Stop";$ProgressPreference="SilentlyContinue"
 function Step([string]$Text){Write-Host "`n============================================================" -ForegroundColor DarkCyan;Write-Host "==> $Text" -ForegroundColor Cyan;Write-Host "============================================================" -ForegroundColor DarkCyan}

@@ -53,6 +53,22 @@ _PROJECT_FACILITY_WORKSPACE_PATCH = bytes(
  }
 
  const facilityPage=q("page-operations");
+ /* Facilities is a first-class science workspace, not an Administration extension. */
+ const facilityNav=document.querySelector('.sidebar .nav[data-page="operations"]');
+ if(facilityNav){
+  facilityNav.innerHTML='<span class="nav-icon">⌂</span>Facilities';
+  const platformHeading=[...document.querySelectorAll(".sidebar *")].find(node=>node.textContent?.trim()==="PLATFORM MANAGEMENT");
+  if(platformHeading){
+   let scienceHeading=[...document.querySelectorAll(".sidebar *")].find(node=>node.textContent?.trim()==="SCIENCE WORKSPACE");
+   const navHost=facilityNav.parentElement;
+   const adminNav=navHost?.querySelector('.nav[data-page="administration"]');
+   if(adminNav&&facilityNav.compareDocumentPosition(adminNav)&Node.DOCUMENT_POSITION_FOLLOWING){
+    navHost.insertBefore(facilityNav,platformHeading);
+   }
+  }
+ }
+ const facilityTop=facilityPage?.querySelector(".top h1");if(facilityTop)facilityTop.textContent="Facilities";
+ facilityPage?.querySelectorAll(".workspace-subnav [data-workspace-target]").forEach(button=>button.remove());
  let facilityView="assets";
  let facilityWorkspaceHost=null;
  let facilitySelectedRecordId="";

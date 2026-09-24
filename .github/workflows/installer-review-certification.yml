@@ -1,6 +1,13 @@
 name: Fieldora installer review certification
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - "Install-Fieldora-Clean.ps1"
+      - "Install-Fieldora-Complete-Windows.ps1"
+      - ".github/workflows/installer-review-certification.yml"
   pull_request:
     paths:
       - "scripts/build_fieldora_windows_installer.ps1"

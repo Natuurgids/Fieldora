@@ -9,7 +9,9 @@ on:
       - 'src/natureai_next/server/administration_workspace_web.py'
       - 'src/natureai_next/server/excalidraw_web.py'
       - 'src/natureai_next/server/capacity_availability_module_web.py'
+      - 'src/natureai_next/server/project_facility_workspace_web.py'
       - 'tests/test_capacity_availability_module_web.py'
+      - 'tests/test_project_facility_workspace_web.py'
       - 'tests/test_intake_review_web_continuity.py'
       - '.github/workflows/intake-review-continuity-certification.yml'
   pull_request:
@@ -48,8 +50,10 @@ jobs:
           src/natureai_next/server/administration_workspace_web.py
           src/natureai_next/server/excalidraw_web.py
           src/natureai_next/server/capacity_availability_module_web.py
+          src/natureai_next/server/project_facility_workspace_web.py
           src/natureai_next/server/linked_storage_browser_api.py
           tests/test_capacity_availability_module_web.py
+          tests/test_project_facility_workspace_web.py
           tests/test_intake_review_web_continuity.py
       - name: Workspace navigation and Capacity controls
         run: >-

@@ -7,6 +7,7 @@ on:
       - 'src/natureai_next/server/intake_review_web.py'
       - 'src/natureai_next/server/desktop_alignment_web.py'
       - 'src/natureai_next/server/administration_workspace_web.py'
+      - 'src/natureai_next/server/excalidraw_web.py'
       - 'tests/test_intake_review_web_continuity.py'
       - '.github/workflows/intake-review-continuity-certification.yml'
   pull_request:
@@ -43,6 +44,7 @@ jobs:
           src/natureai_next/server/intake_review_web.py
           src/natureai_next/server/desktop_alignment_web.py
           src/natureai_next/server/administration_workspace_web.py
+          src/natureai_next/server/excalidraw_web.py
           src/natureai_next/server/linked_storage_browser_api.py
           tests/test_intake_review_web_continuity.py
       - name: Intake review continuity

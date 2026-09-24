@@ -258,3 +258,19 @@ def test_capacity_availability_mixin_is_composed_inside_shell() -> None:
     mro = OfflineFirstFieldoraApi.__mro__
     assert mro[1].__name__ == "ModularShellWebApiMixin"
     assert CapacityAvailabilityModuleWebApiMixin in mro[2:]
+
+
+def test_visible_capacity_controls_are_owned_and_wired() -> None:
+    original = ApiResponse(200, b"const baseApp=true;", "text/javascript; charset=utf-8")
+    script = CapacityAvailabilityModuleWebApiMixin._patch_browser(
+        "/app.js", original
+    ).body.decode("utf-8")
+
+    assert 'data-capacity-view="schedule"' in script
+    assert 'data-capacity-view="absence"' in script
+    assert 'data-capacity-view="allocation"' in script
+    assert 'button.dataset.capacityView' in script
+    assert 'if(kind==="allocation")' in script
+    assert 'q("capacity-project-context")?.scrollIntoView' in script
+    assert "if(state.canEdit)openEditor(kind)" in script
+    assert 'legacyRefresh.hidden=true' in script

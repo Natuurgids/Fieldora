@@ -49,6 +49,7 @@ _DESKTOP_ALIGNMENT_PATCH = bytes(
  ];
  const adminPages=[
   ["administration","Governance"],
+  ["system-health","System health"],
   ["operations","Assets & Facilities"],
   ["aiadmin","AI Platform"],
   ["reference","Reference Data"],

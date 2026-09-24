@@ -67,6 +67,7 @@ _DESKTOP_ALIGNMENT_PATCH = bytes(
   desktopMain.slice(0,5).forEach(([page,icon,label])=>{
    const b=existing.get(page)||document.createElement("button");b.className="nav";b.dataset.page=page;b.innerHTML=`<span class="nav-icon">${icon}</span>${label}`;b.onclick=()=>showPage(page);sidebar.appendChild(b);
   });
+  const whiteboards=document.getElementById("whiteboards-link");if(whiteboards)sidebar.appendChild(whiteboards);
   const management=document.createElement("div");management.className="nav-section-label";management.textContent="Platform management";sidebar.appendChild(management);
   desktopMain.slice(5).forEach(([page,icon,label])=>{
    const b=existing.get(page)||document.createElement("button");b.className="nav";b.dataset.page=page;b.innerHTML=`<span class="nav-icon">${icon}</span>${label}`;b.onclick=()=>showPage(page);sidebar.appendChild(b);

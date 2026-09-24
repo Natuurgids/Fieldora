@@ -12,6 +12,8 @@ param(
     [string]$AdminUsername = "admin",
     [string]$AdminName = "Administrator",
     [string]$Organization = "local",
+    [string]$PublicHostname = "",
+    [string]$ListenAddress = "",
     [string]$AdminPassword = "",
     [string]$AdminPasswordFile = "",
     [ValidateRange(1,90)][int]$CredentialHandoffRetentionDays = 7
@@ -67,6 +69,25 @@ if (Test-Path -LiteralPath $InstallRoot) {
     $isFieldora = (Test-Path -LiteralPath (Join-Path $InstallRoot 'compose.yaml')) -or (Test-Path -LiteralPath (Join-Path $InstallRoot 'service-trust'))
     if ($entries.Count -gt 0 -and -not $isFieldora) { throw "Installation directory is not empty and is not an existing Fieldora installation: $InstallRoot" }
 }
+if ([string]::IsNullOrWhiteSpace($PublicHostname)) {
+    if ($NonInteractive) { throw "-PublicHostname is required with -NonInteractive." }
+    $defaultHostname = [Net.Dns]::GetHostName()
+    $answer = Read-Host "Fieldora hostname [$defaultHostname]"
+    $PublicHostname = if ([string]::IsNullOrWhiteSpace($answer)) { $defaultHostname } else { $answer.Trim() }
+}
+if ([string]::IsNullOrWhiteSpace($ListenAddress)) {
+    if ($NonInteractive) { throw "-ListenAddress is required with -NonInteractive." }
+    $candidates = @([Net.Dns]::GetHostAddresses([Net.Dns]::GetHostName()) | Where-Object { $_.AddressFamily -eq [Net.Sockets.AddressFamily]::InterNetwork -and -not [Net.IPAddress]::IsLoopback($_) })
+    $defaultAddress = if ($candidates.Count) { $candidates[0].IPAddressToString } else { '127.0.0.1' }
+    $answer = Read-Host "Fieldora listen address [$defaultAddress]"
+    $ListenAddress = if ([string]::IsNullOrWhiteSpace($answer)) { $defaultAddress } else { $answer.Trim() }
+}
+$listenIp = $null
+if (-not [Net.IPAddress]::TryParse($ListenAddress,[ref]$listenIp)) { throw "ListenAddress must be a valid IP address." }
+if (-not [Net.IPAddress]::IsLoopback($listenIp)) {
+    $localAddresses = @([Net.NetworkInformation.NetworkInterface]::GetAllNetworkInterfaces() | ForEach-Object { $_.GetIPProperties().UnicastAddresses } | ForEach-Object { $_.Address.IPAddressToString })
+    if ($ListenAddress -notin $localAddresses) { throw "ListenAddress is not assigned to this Windows host: $ListenAddress" }
+}
 if (-not $IsWindows) { throw "Use the Linux complete installer on Linux hosts." }
 if ($PSVersionTable.PSVersion.Major -lt 7) { throw "PowerShell 7 or newer is required." }
 if (-not (Get-Command docker -ErrorAction SilentlyContinue)) { throw "Docker CLI was not found. Install/start Docker Desktop first." }
@@ -79,7 +100,7 @@ $tempLogRoot = Join-Path ([IO.Path]::GetTempPath()) "Fieldora-Installer-Logs"; N
 $installLog = Join-Path $tempLogRoot $logName
 Start-Transcript -LiteralPath $installLog -Force | Out-Null
 Write-Host "Fieldora Complete Windows Docker Installer" -ForegroundColor Green
-Write-Host "Fieldora : Natuurgids/Fieldora@$FieldoraRef"; Write-Host "Bastion  : Natuurgids/FieldoraBastion@$BastionRef"; Write-Host "Root     : $InstallRoot"
+Write-Host "Fieldora : Natuurgids/Fieldora@$FieldoraRef"; Write-Host "Bastion  : Natuurgids/FieldoraBastion@$BastionRef"; Write-Host "Root     : $InstallRoot"; Write-Host "Hostname : $PublicHostname"; Write-Host "Listen   : $ListenAddress"
 Write-Host "This is a destructive clean installation of the Fieldora server stack. Bastion remains a separate container security boundary." -ForegroundColor Yellow
 $confirm = Read-Host "Type CLEAN to continue"; if ($confirm.Trim().ToUpperInvariant() -ne 'CLEAN') { Write-Host "Installation cancelled."; exit 0 }
 $ownedPasswordFile = $null
@@ -99,7 +120,7 @@ try {
     Set-Content -LiteralPath $core -Value $coreText -Encoding utf8NoBOM
     Step "Installing Fieldora server containers"
     Set-Content -LiteralPath $cleanInput -Value 'CLEAN' -Encoding ascii
-    $coreArgs = @('-NoLogo','-NoProfile','-File',$core,'-InstallRoot',$InstallRoot,'-FieldoraRef',$FieldoraRef,'-AdminUsername',$AdminUsername,'-AdminName',$AdminName,'-Organization',$Organization)
+    $coreArgs = @('-NoLogo','-NoProfile','-File',$core,'-InstallRoot',$InstallRoot,'-FieldoraRef',$FieldoraRef,'-AdminUsername',$AdminUsername,'-AdminName',$AdminName,'-Organization',$Organization,'-PublicHostname',$PublicHostname,'-ListenAddress',$ListenAddress)
     if ($AdminPassword -and $AdminPasswordFile) { throw "Use either AdminPassword or AdminPasswordFile, not both." }
     $forwardPasswordFile = $AdminPasswordFile
     $ownedPasswordFile = $null
@@ -130,8 +151,8 @@ try {
     # unavailable revocation status as an error even when --cacert validates the chain.
     # Keep peer/hostname/CA verification enabled; suppress only that inapplicable lookup.
     $curlTls = @('--fail','--silent','--show-error','--ssl-no-revoke','--cacert',$ca)
-    & curl.exe @curlTls https://127.0.0.1:8765/health/live | Out-Null; Assert-Exit "Fieldora live health check failed"
-    & curl.exe @curlTls https://127.0.0.1:8765/health/ready | Out-Null; Assert-Exit "Fieldora readiness check failed"
+    & curl.exe @curlTls https://${PublicHostname}:8765/health/live | Out-Null; Assert-Exit "Fieldora live health check failed"
+    & curl.exe @curlTls https://${PublicHostname}:8765/health/ready | Out-Null; Assert-Exit "Fieldora readiness check failed"
     Step "Complete Docker environment installed"
     Write-Host "Fieldora root        : $InstallRoot" -ForegroundColor Green
     Write-Host "FieldoraBastion root : $BastionRoot" -ForegroundColor Green

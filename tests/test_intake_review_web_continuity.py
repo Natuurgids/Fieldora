@@ -52,9 +52,9 @@ def test_intake_review_patch_only_changes_the_app_bundle() -> None:
 
 
 def test_intake_review_is_owned_by_research_workspace_navigation() -> None:
-    from natureai_next.server.desktop_alignment_web import patch_desktop_alignment_response
+    from natureai_next.server.desktop_alignment_web import patch_desktop_alignment_web_response
 
-    response = patch_desktop_alignment_response(
+    response = patch_desktop_alignment_web_response(
         "/app.js",
         ApiResponse(200, b"const fieldora=true;", "application/javascript"),
     )

@@ -22,6 +22,15 @@ _ADMINISTRATION_WORKSPACE_PATCH = bytes(
  document.head.appendChild(style);
 
  const governance=document.getElementById("page-administration");
+ const runtimeCard=document.getElementById("runtime-detail")?.closest(".card");
+ let healthPage=document.getElementById("page-system-health");
+ if(governance&&runtimeCard&&!healthPage){
+  healthPage=document.createElement("section");healthPage.className="page";healthPage.id="page-system-health";healthPage.hidden=true;
+  const top=document.createElement("div");top.className="top";top.innerHTML='<h1>System health</h1><button id="system-health-refresh" class="primary" type="button">Run health check</button>';
+  healthPage.appendChild(top);healthPage.appendChild(runtimeCard);governance.before(healthPage);
+  document.getElementById("system-health-refresh").onclick=()=>loadRuntime();
+  const legacyRefresh=document.getElementById("health-refresh");if(legacyRefresh)legacyRefresh.remove();
+ }
  const auditCard=document.getElementById("audit-list")?.closest(".card");
  let auditPage=document.getElementById("page-audit");
  if(governance&&auditCard&&!auditPage){
@@ -46,6 +55,7 @@ _ADMINISTRATION_WORKSPACE_PATCH = bytes(
  const administrationShowPage=showPage;
  showPage=function(page){
   administrationShowPage(page);
+  if(page==="system-health"&&healthPage&&!healthPage.hidden)loadRuntime();
   if(page!=="audit"||!auditPage||auditPage.hidden||auditPage.dataset.fieldoraAuthorizationHidden==="true")return;
   const auditList=document.getElementById("audit-list");
   if(auditList&&!auditList.childElementCount){

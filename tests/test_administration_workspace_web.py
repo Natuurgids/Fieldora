@@ -208,3 +208,12 @@ def test_administration_navigation_hides_and_blocks_unauthorized_audit(
         assert not page.locator("#page-audit").is_visible()
         assert audit_requests == 0
         browser.close()
+
+
+def test_governance_does_not_fetch_system_health() -> None:
+    original = ApiResponse(200, b"const baseApp=true;", "text/javascript; charset=utf-8")
+    script = patch_administration_workspace_web_response("/app.js", original).body.decode("utf-8")
+
+    assert 'loadAdministration=async function(){await loadContracts("contracts")}' in script
+    assert 'loadAdministration=async function(){await Promise.all([loadRuntime()' not in script
+    assert 'if(page==="system-health"&&healthPage&&!healthPage.hidden)loadRuntime()' in script

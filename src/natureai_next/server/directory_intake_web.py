@@ -15,6 +15,7 @@ _DIRECTORY_INTAKE_PATCH = bytes(
  const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
  const BACKGROUND_IMPORTS_KEY="fieldora.background-folder-imports.v1";
  const TERMINAL_IMPORT_STATES=new Set(["published","failed","rejected"]);
+ const NETWORK_ERROR_PATTERN=/failed to fetch|networkerror|network request failed|load failed|server could not be reached/i;
  class BackgroundImportContinues extends Error{
   constructor(message){super(message);this.name="BackgroundImportContinues";this.background=true;}
  }
@@ -133,9 +134,10 @@ _DIRECTORY_INTAKE_PATCH = bytes(
   });
  }
  async function digestFileForFolder(file){
+  if(typeof window.fieldoraBoundedSha256==="function")return {hash:await window.fieldoraBoundedSha256(file)};
   const bytes=await file.arrayBuffer();
   const digest=await crypto.subtle.digest("SHA-256",bytes);
-  return {bytes,hash:[...new Uint8Array(digest)].map(x=>x.toString(16).padStart(2,"0")).join("")};
+  return {hash:[...new Uint8Array(digest)].map(x=>x.toString(16).padStart(2,"0")).join("")};
  }
  async function waitForValidation(submissionId,total){
   for(let attempt=0;attempt<600;attempt++){
@@ -173,12 +175,12 @@ _DIRECTORY_INTAKE_PATCH = bytes(
    sid=created.submission.submission_id;
    rememberBackgroundImport(sid,{state:created.submission.state||"uploading",expected_files:files.length,completed_files:0});
    for(let i=0;i<files.length;i++){
-    const file=files[i],relative=file.webkitRelativePath||file.name,{bytes,hash}=await digestFileForFolder(file);
+    const file=files[i],relative=file.webkitRelativePath||file.name,{hash}=await digestFileForFolder(file);
     status("upload-status",`Folder ${i+1}/${files.length} · ${relative} · submission ${sid}`);
     const begun=await api(`/api/v1/staged-submissions/${sid}/files`,{method:"POST",body:JSON.stringify({filename:file.name,relative_path:relative,mime_type:file.type||"application/octet-stream",size_bytes:file.size,sha256:hash})});
     for(let start=0;start<file.size;start+=4*1024*1024){
      const end=Math.min(file.size,start+4*1024*1024);
-     await api(`/api/v1/staged-files/${begun.staged_file_id}`,{method:"PUT",headers:{"Content-Range":`bytes ${start}-${end-1}/${file.size}`},body:bytes.slice(start,end)});
+     await api(`/api/v1/staged-files/${begun.staged_file_id}`,{method:"PUT",headers:{"Content-Range":`bytes ${start}-${end-1}/${file.size}`},body:file.slice(start,end)});
     }
    }
    await api(`/api/v1/staged-submissions/${sid}/seal`,{method:"POST",body:"{}"});
@@ -195,6 +197,10 @@ _DIRECTORY_INTAKE_PATCH = bytes(
    if(sid&&e?.background){
     rememberBackgroundImport(sid,{state:"running",expected_files:files.length});
     status("upload-status",e.message||String(e),false);
+   }else if(sid&&NETWORK_ERROR_PATTERN.test(String(e?.message||e))){
+    /* A lost browser connection does not prove the durable server-side submission failed. */
+    rememberBackgroundImport(sid,{state:"connection-lost",expected_files:files.length});
+    status("upload-status",`Connection lost; submission ${sid} remains recoverable. Refresh it after connectivity returns.`,true);
    }else{
     if(sid)rememberBackgroundImport(sid,{state:"failed",expected_files:files.length});
     status("upload-status",e.message||String(e),true);

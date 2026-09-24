@@ -7,6 +7,7 @@ on:
     paths:
       - "Install-Fieldora-Clean.ps1"
       - "Install-Fieldora-Complete-Windows.ps1"
+      - "Install-Fieldora-Complete-Linux.ps1"
       - ".github/workflows/installer-review-certification.yml"
   pull_request:
     paths:

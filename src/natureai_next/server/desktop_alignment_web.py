@@ -37,6 +37,7 @@ _DESKTOP_ALIGNMENT_PATCH = bytes(
   ["observations","◎","Observations"],
   ["research","⚗","Research"],
   ["knowledge","◫","Knowledge & AI"],
+  ["operations","⌂","Facilities"],
   ["administration","⚙","Administration"],
   ["help","?","Help & Guides"],
  ];
@@ -50,7 +51,6 @@ _DESKTOP_ALIGNMENT_PATCH = bytes(
  const adminPages=[
   ["administration","Governance"],
   ["system-health","System health"],
-  ["operations","Assets & Facilities"],
   ["aiadmin","AI Platform"],
   ["reference","Reference Data"],
   ["connectors","Connectors"],
@@ -64,12 +64,12 @@ _DESKTOP_ALIGNMENT_PATCH = bytes(
   const existing=new Map([...sidebar.querySelectorAll(".nav[data-page]")].map(b=>[b.dataset.page,b]));
   sidebar.replaceChildren();
   const science=document.createElement("div");science.className="nav-section-label";science.textContent="Science workspace";sidebar.appendChild(science);
-  desktopMain.slice(0,5).forEach(([page,icon,label])=>{
+  desktopMain.slice(0,6).forEach(([page,icon,label])=>{
    const b=existing.get(page)||document.createElement("button");b.className="nav";b.dataset.page=page;b.innerHTML=`<span class="nav-icon">${icon}</span>${label}`;b.onclick=()=>showPage(page);sidebar.appendChild(b);
   });
   const whiteboards=document.getElementById("whiteboards-link");if(whiteboards)sidebar.appendChild(whiteboards);
   const management=document.createElement("div");management.className="nav-section-label";management.textContent="Platform management";sidebar.appendChild(management);
-  desktopMain.slice(5).forEach(([page,icon,label])=>{
+  desktopMain.slice(6).forEach(([page,icon,label])=>{
    const b=existing.get(page)||document.createElement("button");b.className="nav";b.dataset.page=page;b.innerHTML=`<span class="nav-icon">${icon}</span>${label}`;b.onclick=()=>showPage(page);sidebar.appendChild(b);
   });
  }

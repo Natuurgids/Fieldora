@@ -39,7 +39,7 @@ def _fixture(tmp_path: Path):
       <button data-task-view="review">Review knowledge</button>
       <button data-task-view="add">Add identification</button>
     </div>
-    <button id="direct-control">Direct action</button>
+    <button id="direct-control">Direct action</button>\n    <button data-capacity-view="schedule">Schedules</button>\n    <button data-capacity-availability-create="absence">Register absence</button>
     <script src="/app.js"></script>
     </body></html>"""
     (tmp_path / "index.html").write_text(html, encoding="utf-8")
@@ -112,7 +112,7 @@ def test_dead_knowledge_pseudo_tabs_are_removed_and_survivors_have_action_contra
 
         inventory = page.evaluate("window.__fieldoraAuditVisibleButtons()")
         assert inventory
-        assert all(item["contract"] for item in inventory), inventory
+        assert all(item["contract"] for item in inventory), inventory\n        assert next(item for item in inventory if item["text"] == "Schedules")["contract"] == "delegated:button[data-capacity-view]"\n        assert next(item for item in inventory if item["text"] == "Register absence")["contract"] == "delegated:button[data-capacity-availability-create]"
         assert next(item for item in inventory if item["id"] == "direct-control")[
             "contract"
         ] == "direct-handler"

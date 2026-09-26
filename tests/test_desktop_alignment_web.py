@@ -9,6 +9,9 @@ from pathlib import Path
 import pytest
 from playwright.sync_api import Route, sync_playwright
 
+from natureai_next.server.administration_workspace_web import (
+    patch_administration_workspace_web_response,
+)
 from natureai_next.server.api import ApiResponse
 from natureai_next.server.browser_functionality_web import (
     patch_browser_functionality_response,
@@ -31,7 +34,7 @@ def _web_fixture(tmp_path: Path):
     resource = Path("src/natureai_next/resources/server_web")
     (tmp_path / "index.html").write_bytes((resource / "index.html").read_bytes())
     response = ApiResponse(200, (resource / "app.js").read_bytes(), "text/javascript; charset=utf-8")
-    for patch in (patch_browser_functionality_response, patch_web_response, patch_facility_web_response, patch_navigation_web_response, patch_linked_storage_web_response, patch_desktop_alignment_web_response, patch_library_collections_web_response, patch_science_workflow_web_response):
+    for patch in (patch_browser_functionality_response, patch_web_response, patch_facility_web_response, patch_navigation_web_response, patch_linked_storage_web_response, patch_administration_workspace_web_response, patch_desktop_alignment_web_response, patch_library_collections_web_response, patch_science_workflow_web_response):
         response = patch("/app.js", response)
     (tmp_path / "app.js").write_bytes(response.body)
     class Handler(SimpleHTTPRequestHandler):

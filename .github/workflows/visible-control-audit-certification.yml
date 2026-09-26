@@ -10,6 +10,7 @@ on:
       - "src/natureai_next/server/offline_first_api.py"
       - "tests/test_web040_visible_control_audit.py"
       - "tests/test_administration_control_wiring.py"
+      - "tests/test_desktop_alignment_web.py"
       - ".github/workflows/visible-control-audit-certification.yml"
   pull_request:
     paths:
@@ -19,6 +20,7 @@ on:
       - "src/natureai_next/server/offline_first_api.py"
       - "tests/test_web040_visible_control_audit.py"
       - "tests/test_administration_control_wiring.py"
+      - "tests/test_desktop_alignment_web.py"
       - ".github/workflows/visible-control-audit-certification.yml"
   workflow_dispatch:
 

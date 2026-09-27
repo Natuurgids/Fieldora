@@ -31,6 +31,27 @@ _VISIBLE_CONTROL_AUDIT_PATCH = bytes(
   if(labels.length===2&&labels.includes("Review queue")&&labels.includes("Accepted knowledge"))tabs.remove();
  });
 
+ /* Whiteboards is injected by the self-hosted Excalidraw server seam before final
+    workspace composition. Keep it as an explicit final-shell destination even when
+    later navigation composition rebuilds the sidebar. This is idempotent and does
+    not duplicate the Excalidraw click handler or project-governance contract. */
+ function preserveWhiteboardsLink(){
+  if(document.getElementById("whiteboards-link"))return;
+  const nav=document.querySelector("nav");
+  if(!nav)return;
+  const button=document.createElement("button");
+  button.className="nav";
+  button.id="whiteboards-link";
+  button.type="button";
+  button.dataset.fieldoraExternalRoute="/whiteboards/";
+  button.innerHTML='<span class="nav-icon">✎</span>Whiteboards';
+  const help=[...nav.querySelectorAll("button")].find(candidate=>
+   (candidate.textContent||"").trim()==="Help & Guides"
+  );
+  nav.insertBefore(button,help||null);
+ }
+ preserveWhiteboardsLink();
+
  /* Keep the inventory attached to the final composed DOM. Most shipped controls own
     a direct onclick handler. The remaining selectors are deliberate delegated or
     addEventListener-owned controls introduced by later workspace patches. Dynamic
@@ -59,6 +80,7 @@ _VISIBLE_CONTROL_AUDIT_PATCH = bytes(
   "button[data-contract]",
   "button[data-collection-action]",
   "button[data-collection-id]",
+  "button[data-fieldora-external-route]",
   "#library-collections-parity button[data-action]",
  ];
  const listenerOwnedIds=new Set([

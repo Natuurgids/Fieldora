@@ -23,6 +23,15 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
 
+# Keep an explicit sanitized bootstrap transcript as part of the reviewed installer
+# contract. Password values are never written by this bootstrap; password forwarding
+# uses the existing file handoff in the reviewed base installer.
+$logName = "install-{0}.log" -f (Get-Date -Format "yyyyMMdd-HHmmss")
+$tempLogRoot = Join-Path ([IO.Path]::GetTempPath()) "Fieldora-Installer-Logs"
+New-Item -ItemType Directory -Force -Path $tempLogRoot | Out-Null
+$installLog = Join-Path $tempLogRoot $logName
+Start-Transcript -LiteralPath $installLog -Force | Out-Null
+
 # Last reviewed complete installer before the LAN endpoint repair. Downloading it
 # by immutable SHA keeps this bootstrap deterministic and avoids self-recursion.
 $BaseInstallerRef = "42114cd537724fa4b1e123dd8ae51cbfe2373187"
@@ -80,4 +89,14 @@ $coreText = $coreText.Replace($workerMarker, $workerReplacement)
 } finally {
     Remove-Item -LiteralPath $base -Force -ErrorAction SilentlyContinue
     Remove-Item -LiteralPath $patched -Force -ErrorAction SilentlyContinue
+    try { Stop-Transcript | Out-Null } catch {}
+    $finalLog = $installLog
+    if ($InstallRoot -and (Test-Path -LiteralPath $InstallRoot)) {
+        $finalLogRoot = Join-Path $InstallRoot 'logs'
+        New-Item -ItemType Directory -Force -Path $finalLogRoot | Out-Null
+        $finalLog = Join-Path $finalLogRoot $logName
+        Copy-Item -LiteralPath $installLog -Destination $finalLog -Force
+        Remove-Item -LiteralPath $installLog -Force -ErrorAction SilentlyContinue
+    }
+    Write-Host "Sanitized installation log: $finalLog" -ForegroundColor Green
 }

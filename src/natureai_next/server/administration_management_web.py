@@ -17,6 +17,36 @@ _ADMINISTRATION_MANAGEMENT_WEB_PATCH = bytes(
  const html=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
  let selectedUser="";
 
+ function installManagementStyles(){
+  if(byId("administration-management-layout-style"))return;
+  const style=document.createElement("style");
+  style.id="administration-management-layout-style";
+  style.textContent=`
+   #administration-organisation-management{width:100%;max-width:none;min-width:0}
+   #administration-organisation-management .top{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:16px}
+   #administration-organisation-management .top>div{min-width:0}
+   #administration-organisation-management .top .muted{max-width:72ch}
+   #administration-users-list{width:100%;min-width:0}
+   #administration-users-list .administration-user-row{width:100%;grid-template-columns:minmax(150px,1.4fr) minmax(120px,1fr) minmax(90px,.55fr) minmax(220px,1.6fr);text-align:left;align-items:center}
+   #administration-users-list .administration-user-row>*{min-width:0}
+   #administration-users-list .administration-user-role{overflow-wrap:anywhere;word-break:normal;line-height:1.35}
+   #administration-users-list .pill{justify-self:start;white-space:nowrap}
+   #administration-users-panel .form-grid{grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr))}
+   @media(max-width:1050px){
+    #administration-users-list .administration-user-row{grid-template-columns:minmax(0,1fr) auto;gap:8px 16px}
+    #administration-users-list .administration-user-username{grid-column:1}
+    #administration-users-list .pill{grid-column:2;grid-row:1}
+    #administration-users-list .administration-user-role{grid-column:1/-1;padding-top:2px}
+    #administration-users-list .administration-user-role::before{content:"Roles: ";color:var(--muted);font-weight:600}
+   }
+   @media(max-width:650px){
+    #administration-organisation-management .top{grid-template-columns:1fr;align-items:start}
+    #administration-users-list .administration-user-row{grid-template-columns:minmax(0,1fr) auto}
+   }
+  `;
+  document.head.appendChild(style);
+ }
+
  function showManagementPanel(name){
   ["users","storage"].forEach(item=>{
    const panel=byId(`administration-${item}-panel`),button=byId(`administration-${item}-tab`);
@@ -29,7 +59,7 @@ _ADMINISTRATION_MANAGEMENT_WEB_PATCH = bytes(
 
  function renderUsers(items){
   const target=byId("administration-users-list");if(!target)return;
-  target.innerHTML=items.length?items.map(user=>`<button class="row" type="button" data-administration-user="${html(user.identity_id)}"><strong>${html(user.display_name)}</strong><span>${html(user.username||"No local sign-in")}</span><span class="pill">${user.enabled?"Active":"Inactive"}</span><span>${html((user.roles||[]).join(", ")||"No direct role")}</span></button>`).join(""):'<div class="empty">No user accounts in this organisation.</div>';
+  target.innerHTML=items.length?items.map(user=>`<button class="row administration-user-row" type="button" data-administration-user="${html(user.identity_id)}"><strong>${html(user.display_name)}</strong><span class="administration-user-username">${html(user.username||"No local sign-in")}</span><span class="pill">${user.enabled?"Active":"Inactive"}</span><span class="administration-user-role">${html((user.roles||[]).join(", ")||"No direct role")}</span></button>`).join(""):'<div class="empty">No user accounts in this organisation.</div>';
   target.querySelectorAll("[data-administration-user]").forEach(button=>button.onclick=()=>selectAdministrationUser(button.dataset.administrationUser||""));
  }
 
@@ -103,6 +133,7 @@ _ADMINISTRATION_MANAGEMENT_WEB_PATCH = bytes(
  function enhanceAdministration(){
   const page=byId("page-administration");if(!page)return false;
   if(byId("administration-organisation-management"))return true;
+  installManagementStyles();
   const section=document.createElement("section");section.className="card section";section.id="administration-organisation-management";
   section.innerHTML=`<h2>Organisation management</h2><p class="muted">The everyday administrator tools for a small organisation.</p><div class="workspace-subnav" id="administration-simple-menu"><button id="administration-users-tab" type="button" aria-selected="true">Users & access</button><button id="administration-storage-tab" type="button" aria-selected="false">Storage & archives</button></div>
   <div id="administration-users-panel" class="section"><div class="top"><div><h3>Users & access</h3><p class="muted">Create accounts, activate or deactivate users, reset passwords and assign direct organisation roles.</p></div><button id="administration-users-refresh" type="button">Refresh</button></div><div id="administration-users-list" class="list"></div><h3>Add user</h3><div class="form-grid"><label>Name<input id="administration-user-name" autocomplete="name"></label><label>Username<input id="administration-user-username" autocomplete="username"></label><label>Temporary password<input id="administration-user-create-password" type="password" autocomplete="new-password"></label><label>Roles (comma separated)<input id="administration-user-create-roles" placeholder="researcher"></label></div><div class="actions section"><button id="administration-user-create" class="primary" type="button">Create user</button></div><p id="administration-user-create-status" class="status"></p><section id="administration-user-editor" class="section" hidden><h3 id="administration-user-editor-title">User</h3><p id="administration-user-editor-account" class="muted"></p><label>Roles (comma separated)<input id="administration-user-roles"></label><div class="actions section"><button id="administration-user-save-roles" type="button">Save roles</button><button id="administration-user-toggle" type="button">Deactivate user</button></div><label>New password<input id="administration-user-password" type="password" autocomplete="new-password"></label><div class="actions section"><button id="administration-user-reset-password" type="button">Reset password</button></div><p id="administration-user-edit-status" class="status"></p></section></div>

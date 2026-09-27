@@ -8,7 +8,7 @@ renewal SANs, and hostname-verified health checks.
 param(
     [string]$InstallRoot = "",
     [switch]$NonInteractive,
-    [string]$FieldoraRef = "17801cb62215b5645f51acde8ea7544f215429d7",
+    [string]$FieldoraRef = "03a015a28438946b33032bc4523cfc152fef2797",
     [string]$BastionRef = "76163ab751630d2f1839dcad160cbd3276d82714",
     [string]$AdminUsername = "admin",
     [string]$AdminName = "Administrator",

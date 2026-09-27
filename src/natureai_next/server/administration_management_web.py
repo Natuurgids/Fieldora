@@ -22,12 +22,12 @@ _ADMINISTRATION_MANAGEMENT_WEB_PATCH = bytes(
   const style=document.createElement("style");
   style.id="administration-management-layout-style";
   style.textContent=`
-   #administration-organisation-management{width:100%;max-width:none;min-width:0}
+   #administration-organisation-management{width:100%;max-width:none;min-width:0;grid-column:1/-1;box-sizing:border-box}
    #administration-organisation-management .top{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:16px}
    #administration-organisation-management .top>div{min-width:0}
    #administration-organisation-management .top .muted{max-width:72ch}
    #administration-users-list{width:100%;min-width:0}
-   #administration-users-list .administration-user-row{width:100%;grid-template-columns:minmax(150px,1.4fr) minmax(120px,1fr) minmax(90px,.55fr) minmax(220px,1.6fr);text-align:left;align-items:center}
+   #administration-users-list .administration-user-row{width:100%;max-width:100%;box-sizing:border-box;grid-template-columns:minmax(150px,1.4fr) minmax(120px,1fr) minmax(90px,.55fr) minmax(220px,1.6fr);text-align:left;align-items:center}
    #administration-users-list .administration-user-row>*{min-width:0}
    #administration-users-list .administration-user-role{overflow-wrap:anywhere;word-break:normal;line-height:1.35}
    #administration-users-list .pill{justify-self:start;white-space:nowrap}

@@ -1,7 +1,7 @@
 from pathlib import Path
 
 INSTALLER = Path("Install-Fieldora-Complete-Windows.ps1")
-CERTIFIED_FIELDORA = "7c49b936cb06273e98526c2f7060a064b502804f"
+CERTIFIED_FIELDORA = "7480e9fc63e64e06e8ebc0159aa76ca16c92393f"
 
 
 def test_complete_installer_pins_certified_whiteboards_runtime():

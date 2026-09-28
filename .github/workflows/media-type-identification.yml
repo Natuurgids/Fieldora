@@ -20,6 +20,6 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version: '3.11'
       - run: python -m pip install -e . pytest
       - run: python -m pytest -q tests/test_media_types.py tests/test_media_type_api.py tests/test_linked_media_mime_convergence.py

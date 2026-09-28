@@ -18,6 +18,7 @@ from natureai_next.server.linked_storage import (
 )
 from natureai_next.server.media import GovernedMediaStore, MediaRecord
 from natureai_next.server.media_links import new_association
+from natureai_next.server.media_types import canonical_media_type
 
 
 class LinkedMediaConvergenceService:
@@ -62,7 +63,7 @@ class LinkedMediaConvergenceService:
         canonical = self._governed.attach_referenced(
             organization_id=record.organization_id,
             project_id=record.project_id,
-            mime_type=record.mime_type,
+            mime_type=canonical_media_type(record.relative_path, record.mime_type),
             size_bytes=record.size_bytes,
             sha256=digest,
             source_ref=_opaque_source_ref(record),

@@ -31,6 +31,7 @@ from natureai_next.server.linked_storage_api import LinkedStorageApiMixin, Linke
 from natureai_next.server.linked_storage_browser_api import LinkedStorageBrowserFieldoraApi
 from natureai_next.server.linked_storage_operator_api import LinkedStorageOperatorApiMixin
 from natureai_next.server.linked_storage_sources_api import LinkedStorageSourcesApiMixin
+from natureai_next.server.media_type_api import CanonicalMediaTypeApiMixin
 from natureai_next.server.modular_shell_web import ModularShellWebApiMixin
 from natureai_next.server.observation_actions_api import ObservationActionsApiMixin
 from natureai_next.server.observation_parity_api import ObservationParityApiMixin
@@ -78,6 +79,7 @@ from natureai_next.server.visible_control_audit_api import VisibleControlAuditAp
 class OfflineFirstFieldoraApi(
     ModularShellWebApiMixin,
     BoundedUploadWebApiMixin,
+    CanonicalMediaTypeApiMixin,
     ExcalidrawWebMixin,
     ExcalidrawApiMixin,
     OperationsModuleCompositionApiMixin,

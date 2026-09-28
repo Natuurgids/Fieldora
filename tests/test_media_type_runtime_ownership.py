@@ -1,0 +1,7 @@
+from natureai_next.server.media_type_api import CanonicalMediaTypeApiMixin
+from natureai_next.server.offline_first_api import OfflineFirstFieldoraApi
+
+
+def test_composed_runtime_owns_server_side_media_type_normalization():
+    assert CanonicalMediaTypeApiMixin in OfflineFirstFieldoraApi.__mro__
+    assert OfflineFirstFieldoraApi._begin_upload is CanonicalMediaTypeApiMixin._begin_upload

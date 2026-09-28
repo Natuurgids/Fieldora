@@ -4,9 +4,10 @@ from pathlib import Path
 INDEX = Path("src/natureai_next/resources/server_web/index.html")
 
 
-def test_canonical_shell_exposes_whiteboards_navigation():
+def test_canonical_shell_exposes_single_governed_whiteboards_navigation():
     html = INDEX.read_text(encoding="utf-8")
-    marker = 'data-page="whiteboards"'
-    assert html.count(marker) == 1
-    assert '>Whiteboards</button>' in html
-    assert 'id="page-whiteboards"' in html
+    assert html.count('id="whiteboards-link"') == 1
+    assert html.count('>Whiteboards</button>') == 1
+    assert 'data-fieldora-external-route="/whiteboards/"' in html
+    assert 'data-page="whiteboards"' not in html
+    assert 'href="/excalidraw/"' not in html

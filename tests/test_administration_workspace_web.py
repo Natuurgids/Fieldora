@@ -150,7 +150,7 @@ def test_administration_navigation_projects_authorized_audit_without_eager_fetch
         facilities = page.locator('.sidebar .nav[data-page="operations"]')
         assert facilities.count() == 1
         assert facilities.is_visible()
-        assert facilities.inner_text().strip().endswith("Assets & Facilities")
+        assert facilities.inner_text().strip().endswith("Facilities")
         assert audit_requests == 0
 
         nav.get_by_role("button", name="Audit", exact=True).click()

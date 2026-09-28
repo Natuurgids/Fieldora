@@ -4,12 +4,26 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from natureai_next.application.access_control import PolicyDecisionService
+from natureai_next.application.authentication import AuthenticationService
+from natureai_next.infrastructure.database.access_control import SqliteAccessControlRepository
+from natureai_next.server.api import ScienceReadProjection
 from natureai_next.server.offline_first_api import OfflineFirstFieldoraApi
 
 
 def _api(tmp_path: Path) -> OfflineFirstFieldoraApi:
     web_root = Path("src/natureai_next/resources/server_web").resolve()
-    return OfflineFirstFieldoraApi(tmp_path / "fieldora.db", web_root=web_root)
+    access = SqliteAccessControlRepository(tmp_path / "access.sqlite3")
+    authentication = AuthenticationService(access)
+    decisions = PolicyDecisionService(access)
+    science = ScienceReadProjection(tmp_path / "science.sqlite3")
+    return OfflineFirstFieldoraApi(
+        authentication,
+        decisions,
+        science,
+        web_root,
+        audit_repository=access,
+    )
 
 
 def test_clean_composed_server_renders_one_actionable_whiteboards_link(tmp_path):
@@ -18,6 +32,7 @@ def test_clean_composed_server_renders_one_actionable_whiteboards_link(tmp_path)
     assert response.status == 200
     html = response.body.decode("utf-8")
     assert html.count('id="whiteboards-link"') == 1
+    assert html.count(">Whiteboards</button>") == 1
     match = re.search(r'<button[^>]*id="whiteboards-link"[^>]*>', html)
     assert match
     button = match.group(0)

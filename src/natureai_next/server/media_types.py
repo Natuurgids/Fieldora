@@ -1,8 +1,9 @@
 """Canonical media-type inference for Fieldora evidence.
 
-Client/browser MIME declarations are hints, not authoritative metadata.  In
-particular Qt/WebView and some OS integrations report an empty type for ordinary
-files, which previously became application/octet-stream throughout the Library.
+Client/browser MIME declarations are hints, not authoritative metadata. In
+particular Qt/WebView and some OS integrations report an empty or generic type
+for ordinary files, which previously became application/octet-stream throughout
+the Library.
 """
 from __future__ import annotations
 
@@ -14,6 +15,9 @@ _OVERRIDES = {
     ".csv": "text/csv",
     ".json": "application/json",
     ".geojson": "application/geo+json",
+    ".gpx": "application/gpx+xml",
+    ".kml": "application/vnd.google-earth.kml+xml",
+    ".kmz": "application/vnd.google-earth.kmz",
     ".pdf": "application/pdf",
     ".svg": "image/svg+xml",
     ".tif": "image/tiff",

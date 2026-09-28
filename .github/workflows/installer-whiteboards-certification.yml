@@ -1,0 +1,27 @@
+name: Installer Whiteboards certification
+
+on:
+  pull_request:
+    paths:
+      - "Install-Fieldora-Complete-Windows.ps1"
+      - "tests/test_installer_whiteboards_pin.py"
+      - "tests/test_whiteboards_clean_runtime.py"
+      - "tests/test_whiteboards_navigation.py"
+      - ".github/workflows/installer-whiteboards-certification.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  certify-pin-and-runtime:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install Fieldora
+        run: python -m pip install -e .
+      - name: Certify exact installer pin and composed Whiteboards runtime
+        run: python -m pytest -q tests/test_installer_whiteboards_pin.py tests/test_whiteboards_navigation.py tests/test_whiteboards_clean_runtime.py

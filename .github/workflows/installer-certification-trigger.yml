@@ -1,0 +1,10 @@
+name: Installer certification trigger
+on:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  marker:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Installer certification PR checks triggered"

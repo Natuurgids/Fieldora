@@ -9,7 +9,7 @@ from natureai_next.server.media_types import canonical_media_type
         ("photo.jpg", "image/jpeg"),
         ("photo.png", "image/png"),
         ("report.pdf", "application/pdf"),
-        ("recording.wav", "audio/x-wav"),
+        ("recording.wav", "audio/wav"),
         ("recording.mp3", "audio/mpeg"),
         ("clip.mp4", "video/mp4"),
         ("table.csv", "text/csv"),

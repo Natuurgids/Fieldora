@@ -96,7 +96,7 @@ jobs:
       - name: Ruff server web and parity compatibility
         run: >-
           python -m ruff check
-          --per-file-ignores "src/natureai_next/server/linked_storage.py:UP035,src/natureai_next/server/desktop_alignment_web.py:E701,src/natureai_next/server/desktop_alignment_web.py:E702"
+          --per-file-ignores "src/natureai_next/server/linked_storage.py:UP035,tests/test_desktop_alignment_web.py:E701,tests/test_desktop_alignment_web.py:E702"
           src/natureai_next/application/platform_features.py
           src/natureai_next/server/http.py
           src/natureai_next/server/help.py

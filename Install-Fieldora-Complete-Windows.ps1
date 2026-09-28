@@ -8,7 +8,7 @@ renewal SANs, and hostname-verified health checks.
 param(
     [string]$InstallRoot = "",
     [switch]$NonInteractive,
-    [string]$FieldoraRef = "7c49b936cb06273e98526c2f7060a064b502804f",
+    [string]$FieldoraRef = "7480e9fc63e64e06e8ebc0159aa76ca16c92393f",
     [string]$BastionRef = "76163ab751630d2f1839dcad160cbd3276d82714",
     [string]$AdminUsername = "admin",
     [string]$AdminName = "Administrator",
@@ -23,17 +23,12 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 $ProgressPreference = "SilentlyContinue"
 
-# Keep an explicit sanitized bootstrap transcript as part of the reviewed installer
-# contract. Password values are never written by this bootstrap; password forwarding
-# uses the existing file handoff in the reviewed base installer.
 $logName = "install-{0}.log" -f (Get-Date -Format "yyyyMMdd-HHmmss")
 $tempLogRoot = Join-Path ([IO.Path]::GetTempPath()) "Fieldora-Installer-Logs"
 New-Item -ItemType Directory -Force -Path $tempLogRoot | Out-Null
 $installLog = Join-Path $tempLogRoot $logName
 Start-Transcript -LiteralPath $installLog -Force | Out-Null
 
-# Last reviewed complete installer before the LAN endpoint repair. Downloading it
-# by immutable SHA keeps this bootstrap deterministic and avoids self-recursion.
 $BaseInstallerRef = "42114cd537724fa4b1e123dd8ae51cbfe2373187"
 $temp = [IO.Path]::GetTempPath()
 $base = Join-Path $temp "Fieldora-Complete-Base-$([Guid]::NewGuid().ToString('N')).ps1"
@@ -64,8 +59,6 @@ $coreText = $coreText.Replace($workerMarker, $workerReplacement)
 '@
     $text = $text.Replace($anchor, $lanPatch.TrimEnd())
 
-    # Resolve the selected hostname directly to the selected interface for installer
-    # verification. This validates the hostname SAN without requiring DNS to exist yet.
     $curlMarker = '$curlTls = @(''--fail'',''--silent'',''--show-error'',''--ssl-no-revoke'',''--cacert'',$ca)'
     if (-not $text.Contains($curlMarker)) { throw "Base installer TLS verification contract changed; refusing an unreviewed LAN rewrite." }
     $curlReplacement = '$curlTls = @(''--fail'',''--silent'',''--show-error'',''--ssl-no-revoke'',''--cacert'',$ca,''--resolve'',"${PublicHostname}:8765:${ListenAddress}")'

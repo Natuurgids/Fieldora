@@ -1,0 +1,1 @@
+Canonical Whiteboards destination deduplicated; rerun composed-runtime acceptance.

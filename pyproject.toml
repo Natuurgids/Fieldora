@@ -85,6 +85,9 @@ ignore = ["E402"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["ANN", "ARG", "S"]
+# Legacy browser fixture is intentionally compact; keep unrelated release gates
+# from failing on its existing same-line statements until it is reformatted.
+"tests/test_desktop_alignment_web.py" = ["E701", "E702"]
 
 [tool.bandit]
 exclude_dirs = ["tests"]

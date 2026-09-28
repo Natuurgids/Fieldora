@@ -137,7 +137,6 @@ def test_administration_navigation_projects_authorized_audit_without_eager_fetch
         assert groups.nth(0).locator("button").all_inner_texts() == [
             "Governance",
             "Audit",
-            "Intake & Review",
             "Reference Data",
         ]
         assert groups.nth(1).locator("button").all_inner_texts() == ["Connectors"]
@@ -146,7 +145,7 @@ def test_administration_navigation_projects_authorized_audit_without_eager_fetch
             "Operator",
             "Platform",
         ]
-        assert nav.locator("button").count() == 8
+        assert nav.locator("button").count() == 7
         assert nav.get_by_role("button", name="Assets & Facilities").count() == 0
         facilities = page.locator('.sidebar .nav[data-page="operations"]')
         assert facilities.count() == 1
@@ -165,7 +164,7 @@ def test_administration_navigation_projects_authorized_audit_without_eager_fetch
             == "true"
         )
         audit_nav = page.locator("#page-audit .administration-workspace-nav")
-        assert audit_nav.locator("button").count() == 8
+        assert audit_nav.locator("button").count() == 7
         assert audit_nav.get_by_role("button", name="Assets & Facilities").count() == 0
         assert (
             audit_nav.get_by_role("button", name="Audit", exact=True).get_attribute(

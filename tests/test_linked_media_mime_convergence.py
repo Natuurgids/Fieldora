@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 from natureai_next.server.linked_media_convergence import LinkedMediaConvergenceService
@@ -24,13 +25,9 @@ def test_linked_media_convergence_recovers_type_from_relative_filename(tmp_path:
     list(LinkedStorageCatalogue(repository).scan("nas-1", project_id="project-1"))
     linked = repository.media_in_path("nas-1")[0]
 
-    # Reproduce the generic media identity that triggered the Library preview bug.
-    with repository._connect() as connection:
-        connection.execute(
-            "UPDATE linked_media SET mime_type = ? WHERE media_id = ?",
-            ("application/octet-stream", linked.media_id),
-        )
-        connection.commit()
+    # Reproduce a previously catalogued generic media identity through the public
+    # repository boundary, rather than depending on repository internals.
+    repository.upsert_media(replace(linked, mime_type="application/octet-stream"))
 
     governed = GovernedMediaStore(tmp_path / "media.sqlite3", tmp_path / "managed")
     canonical = LinkedMediaConvergenceService(repository, governed).converge(

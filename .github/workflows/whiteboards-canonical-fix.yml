@@ -1,0 +1,46 @@
+name: Apply canonical Whiteboards navigation repair
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/whiteboards-canonical-fix.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Put Whiteboards in canonical server sidebar and add runtime regression
+        shell: python
+        run: |
+          from pathlib import Path
+
+          index = Path("src/natureai_next/resources/server_web/index.html")
+          text = index.read_text(encoding="utf-8")
+          whiteboards = '<button class="nav" id="whiteboards-link" type="button" data-fieldora-external-route="/whiteboards/"><span class="nav-icon">✎</span>Whiteboards</button>'
+          help_button = '<button class="nav" data-page="help"><span class="nav-icon">?</span>Help &amp; Guides</button>'
+          if 'id="whiteboards-link"' not in text:
+              if help_button not in text:
+                  raise SystemExit("canonical Help navigation marker changed")
+              text = text.replace(help_button, whiteboards + help_button, 1)
+              index.write_text(text, encoding="utf-8")
+
+          test = Path("tests/test_whiteboards_clean_runtime.py")
+          test.write_text('''from __future__ import annotations\n\nfrom pathlib import Path\n\nfrom natureai_next.server.api import ApiResponse\nfrom natureai_next.server.excalidraw_web import ExcalidrawWebMixin\n\n\ndef test_canonical_server_sidebar_contains_whiteboards_destination() -> None:\n    html = Path("src/natureai_next/resources/server_web/index.html").read_text(encoding="utf-8")\n    assert html.count('id="whiteboards-link"') == 1\n    assert 'data-fieldora-external-route="/whiteboards/"' in html\n    assert html.index('id="whiteboards-link"') < html.index("Help &amp; Guides")\n\n\ndef test_excalidraw_shell_does_not_duplicate_canonical_whiteboards_link() -> None:\n    html = Path("src/natureai_next/resources/server_web/index.html").read_bytes()\n    response = ExcalidrawWebMixin._excalidraw_shell_link(\n        ApiResponse(200, html, "text/html; charset=utf-8")\n    )\n    assert response.body.count(b'id="whiteboards-link"') == 1\n\ndef test_whiteboards_click_contract_carries_selected_project() -> None:\n    response = ExcalidrawWebMixin._excalidraw_shell_script(\n        ApiResponse(200, b"", "text/javascript; charset=utf-8")\n    )\n    script = response.body.decode("utf-8")\n    assert 'closest?.("#whiteboards-link")' in script\n    assert 'resolve?.("projects.context.select")' in script\n    assert '/whiteboards/?project_id=${encodeURIComponent(projectId)}' in script\n''', encoding="utf-8")
+      - name: Commit canonical repair
+        run: |
+          if git diff --quiet; then
+            echo "Canonical Whiteboards repair already present."
+            exit 0
+          fi
+          git config user.name "fieldora-certification-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add src/natureai_next/resources/server_web/index.html tests/test_whiteboards_clean_runtime.py
+          git commit -m "fix(web): render Whiteboards in canonical sidebar"
+          git push origin HEAD:main

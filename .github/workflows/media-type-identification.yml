@@ -1,0 +1,24 @@
+name: Media type identification
+
+on:
+  pull_request:
+    paths:
+      - 'src/natureai_next/server/media_types.py'
+      - 'src/natureai_next/server/media_type_api.py'
+      - 'src/natureai_next/server/linked_media_convergence.py'
+      - 'src/natureai_next/server/offline_first_api.py'
+      - 'tests/test_media_types.py'
+      - 'tests/test_media_type_api.py'
+      - '.github/workflows/media-type-identification.yml'
+  workflow_dispatch:
+
+jobs:
+  media-types:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -e . pytest
+      - run: python -m pytest -q tests/test_media_types.py tests/test_media_type_api.py

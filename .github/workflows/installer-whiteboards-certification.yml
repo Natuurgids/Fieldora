@@ -21,7 +21,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Install Fieldora
-        run: python -m pip install -e .
+      - name: Install Fieldora and certification runner
+        run: python -m pip install -e . pytest
       - name: Certify exact installer pin and composed Whiteboards runtime
         run: python -m pytest -q tests/test_installer_whiteboards_pin.py tests/test_whiteboards_navigation.py tests/test_whiteboards_clean_runtime.py

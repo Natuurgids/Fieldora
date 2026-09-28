@@ -1,0 +1,21 @@
+name: Whiteboards runtime ownership
+on:
+  pull_request:
+    paths:
+      - "src/natureai_next/resources/server_web/index.html"
+      - "src/natureai_next/server/excalidraw_web.py"
+      - "src/natureai_next/server/visible_control_audit_web.py"
+      - "docs/whiteboards-runtime-architecture.md"
+      - "tests/test_whiteboards_runtime_ownership.py"
+      - ".github/workflows/whiteboards-runtime-ownership.yml"
+permissions:
+  contents: read
+jobs:
+  ownership:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pytest -q tests/test_whiteboards_runtime_ownership.py

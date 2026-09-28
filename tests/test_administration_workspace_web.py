@@ -128,12 +128,11 @@ def test_administration_navigation_projects_authorized_audit_without_eager_fetch
         nav = page.locator("#page-administration .administration-workspace-nav")
         assert nav.is_visible()
         groups = nav.locator(".administration-nav-group")
-        assert groups.count() == 4
+        assert groups.count() == 3
         assert groups.locator(".administration-nav-group-label").all_text_contents() == [
             "Governance & review",
             "Integrations",
             "Platform services",
-            "Extensions",
         ]
         assert groups.nth(0).locator("button").all_inner_texts() == [
             "Governance",
@@ -147,11 +146,12 @@ def test_administration_navigation_projects_authorized_audit_without_eager_fetch
             "Operator",
             "Platform",
         ]
-        assert groups.nth(3).locator("button").all_inner_texts() == [
-            "Assets & Facilities"
-        ]
-        assert groups.nth(3).get_attribute("aria-label") == "Extensions"
-        assert nav.locator("button").count() == 9
+        assert nav.locator("button").count() == 8
+        assert nav.get_by_role("button", name="Assets & Facilities").count() == 0
+        facilities = page.locator('.sidebar .nav[data-page="operations"]')
+        assert facilities.count() == 1
+        assert facilities.is_visible()
+        assert facilities.inner_text().strip().endswith("Assets & Facilities")
         assert audit_requests == 0
 
         nav.get_by_role("button", name="Audit", exact=True).click()
@@ -165,7 +165,8 @@ def test_administration_navigation_projects_authorized_audit_without_eager_fetch
             == "true"
         )
         audit_nav = page.locator("#page-audit .administration-workspace-nav")
-        assert audit_nav.locator("button").count() == 9
+        assert audit_nav.locator("button").count() == 8
+        assert audit_nav.get_by_role("button", name="Assets & Facilities").count() == 0
         assert (
             audit_nav.get_by_role("button", name="Audit", exact=True).get_attribute(
                 "aria-selected"

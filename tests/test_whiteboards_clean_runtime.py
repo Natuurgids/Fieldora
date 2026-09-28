@@ -1,30 +1,43 @@
+"""Acceptance coverage for Whiteboards on the real composed server."""
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
-from natureai_next.server.api import ApiResponse
-from natureai_next.server.excalidraw_web import ExcalidrawWebMixin
+from natureai_next.server.offline_first_api import OfflineFirstFieldoraApi
 
 
-def test_canonical_server_sidebar_contains_whiteboards_destination() -> None:
-    html = Path("src/natureai_next/resources/server_web/index.html").read_text(encoding="utf-8")
+def _api(tmp_path: Path) -> OfflineFirstFieldoraApi:
+    web_root = Path("src/natureai_next/resources/server_web").resolve()
+    return OfflineFirstFieldoraApi(tmp_path / "fieldora.db", web_root=web_root)
+
+
+def test_clean_composed_server_renders_one_actionable_whiteboards_link(tmp_path):
+    api = _api(tmp_path)
+    response = api.dispatch("GET", "/", {}, b"")
+    assert response.status == 200
+    html = response.body.decode("utf-8")
     assert html.count('id="whiteboards-link"') == 1
-    assert 'data-fieldora-external-route="/whiteboards/"' in html
-    assert html.index('id="whiteboards-link"') < html.index("Help &amp; Guides")
+    match = re.search(r'<button[^>]*id="whiteboards-link"[^>]*>', html)
+    assert match
+    button = match.group(0)
+    assert "hidden" not in button
+    assert "disabled" not in button
+    assert 'data-fieldora-external-route="/whiteboards/"' in button
 
 
-def test_excalidraw_shell_does_not_duplicate_canonical_whiteboards_link() -> None:
-    html = Path("src/natureai_next/resources/server_web/index.html").read_bytes()
-    response = ExcalidrawWebMixin._excalidraw_shell_link(
-        ApiResponse(200, html, "text/html; charset=utf-8")
-    )
-    assert response.body.count(b'id="whiteboards-link"') == 1
+def test_clean_composed_server_serves_whiteboards_application(tmp_path):
+    api = _api(tmp_path)
+    response = api.dispatch("GET", "/whiteboards/?project_id=acceptance-project", {}, b"")
+    assert response.status == 200
+    assert "Fieldora Whiteboards" in response.body.decode("utf-8")
 
-def test_whiteboards_click_contract_carries_selected_project() -> None:
-    response = ExcalidrawWebMixin._excalidraw_shell_script(
-        ApiResponse(200, b"", "text/javascript; charset=utf-8")
-    )
-    script = response.body.decode("utf-8")
-    assert 'closest?.("#whiteboards-link")' in script
-    assert 'resolve?.("projects.context.select")' in script
-    assert '/whiteboards/?project_id=${encodeURIComponent(projectId)}' in script
+
+def test_runtime_click_handler_preserves_selected_project_contract(tmp_path):
+    api = _api(tmp_path)
+    response = api.dispatch("GET", "/app.js", {}, b"")
+    assert response.status == 200
+    js = response.body.decode("utf-8")
+    assert 'closest?.("#whiteboards-link")' in js
+    assert 'resolve?.("projects.context.select")' in js
+    assert 'window.location.assign(`/whiteboards/?project_id=${encodeURIComponent(projectId)}`)' in js

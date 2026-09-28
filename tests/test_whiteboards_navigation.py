@@ -11,3 +11,5 @@ def test_canonical_shell_exposes_single_governed_whiteboards_navigation():
     assert 'data-fieldora-external-route="/whiteboards/"' in html
     assert 'data-page="whiteboards"' not in html
     assert 'href="/excalidraw/"' not in html
+
+# This test intentionally gates the clean canonical navigation path.

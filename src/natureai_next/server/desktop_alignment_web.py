@@ -62,12 +62,15 @@ _DESKTOP_ALIGNMENT_PATCH = bytes(
  const sidebar=document.querySelector(".sidebar nav");
  if(sidebar){
   const existing=new Map([...sidebar.querySelectorAll(".nav[data-page]")].map(b=>[b.dataset.page,b]));
+  // Capture external-route controls before replaceChildren() detaches them from
+  // the document; getElementById() cannot rediscover a detached Whiteboards node.
+  const whiteboards=document.getElementById("whiteboards-link");
   sidebar.replaceChildren();
   const science=document.createElement("div");science.className="nav-section-label";science.textContent="Science workspace";sidebar.appendChild(science);
   desktopMain.slice(0,6).forEach(([page,icon,label])=>{
    const b=existing.get(page)||document.createElement("button");b.className="nav";b.dataset.page=page;b.innerHTML=`<span class="nav-icon">${icon}</span>${label}`;b.onclick=()=>showPage(page);sidebar.appendChild(b);
   });
-  const whiteboards=document.getElementById("whiteboards-link");if(whiteboards)sidebar.appendChild(whiteboards);
+  if(whiteboards)sidebar.appendChild(whiteboards);
   const management=document.createElement("div");management.className="nav-section-label";management.textContent="Platform management";sidebar.appendChild(management);
   desktopMain.slice(6).forEach(([page,icon,label])=>{
    const b=existing.get(page)||document.createElement("button");b.className="nav";b.dataset.page=page;b.innerHTML=`<span class="nav-icon">${icon}</span>${label}`;b.onclick=()=>showPage(page);sidebar.appendChild(b);

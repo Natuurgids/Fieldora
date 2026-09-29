@@ -1,0 +1,66 @@
+name: Fieldora platform bootstrap certification
+
+on:
+  pull_request:
+    paths:
+      - "src/natureai_next/bootstrap/platform_manifest.py"
+      - "tests/test_platform_manifest.py"
+      - "docs/architecture/platform-bootstrap.md"
+      - ".github/workflows/platform-bootstrap-certification.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  platform-bootstrap:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install test dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -e ".[dev]"
+      - name: Ruff bootstrap contract
+        run: python -m ruff check src/natureai_next/bootstrap/platform_manifest.py tests/test_platform_manifest.py
+      - name: Bootstrap contract tests
+        run: python -m pytest -q tests/test_platform_manifest.py
+      - name: Certify architecture boundaries
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          source = Path("src/natureai_next/bootstrap/platform_manifest.py").read_text()
+          docs = Path("docs/architecture/platform-bootstrap.md").read_text()
+
+          for target in (
+              "windows-desktop",
+              "linux-desktop",
+              "windows-docker",
+              "linux-docker",
+              "kubernetes",
+              "openshift",
+          ):
+              if target not in source:
+                  raise SystemExit(f"missing deployment target: {target}")
+
+          for component in ("fieldora", "bastion", "keycloak", "wazuh", "openkat"):
+              if component not in source:
+                  raise SystemExit(f"missing component contract: {component}")
+
+          for tool in ("renovate", "trivy", "syft", "osv"):
+              if tool not in source:
+                  raise SystemExit(f"missing supply-chain control: {tool}")
+
+          for required in (
+              "Fieldora remains authoritative for PBAC",
+              "manifest is not a permanent plaintext secret database",
+              "commercial-private",
+              "must not create an obligation to publish unrelated proprietary Fieldora",
+          ):
+              if required not in docs:
+                  raise SystemExit(f"missing platform trust boundary: {required}")
+          PY

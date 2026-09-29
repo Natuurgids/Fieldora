@@ -265,7 +265,7 @@ def test_administration_buttons_are_wired_in_final_managed_ui(
         # Sweep every visible top-level workspace. This turns wiring into a final-DOM
         # contract: a newly introduced visible button fails CI unless its owning module
         # has configured a direct, listener-owned or delegated action contract.
-        visible_pages = page.locator(".sidebar .nav").evaluate_all(
+        visible_pages = page.locator(".sidebar .nav[data-page]").evaluate_all(
             "nodes => nodes.filter(node => node.getClientRects().length > 0)"
             ".map(node => node.dataset.page)"
         )
